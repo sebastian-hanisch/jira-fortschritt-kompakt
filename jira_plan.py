@@ -190,3 +190,17 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     if bad_points:
         report.notes.append(f"Nicht lesbare Story Points (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
     return tuple(issues), report
+
+
+def drop_titles(issues, keep_epics: bool = True) -> tuple[Issue, ...]:
+    """Verwirft die Titel der Tickets (außer den der Epics, wenn `keep_epics`: sie benennen die Gruppen und stehen oft schon im Projektplan). Der Titel wird für keine
+    Rechnung gebraucht; Titel enthalten erfahrungsgemäß am ehesten Namen von Kunden und Personen."""
+    return tuple(i if (keep_epics and i.is_epic) else replace(i, summary="") for i in issues)
+
+
+def pseudonymize_assignees(issues) -> tuple[Issue, ...]:
+    """Ersetzt die Namen der Bearbeiter durch „Person 1“, „Person 2“ ... (nach Namen sortiert, also unabhängig von der Ticketreihenfolge). Ein leerer Name bleibt leer.
+    Das betrifft nur die Anzeige und die Tabellen der App; die hochgeladene Datei hat den Server da schon erreicht."""
+    names = sorted({i.assignee for i in issues if i.assignee})
+    number = {name: f"Person {k}" for k, name in enumerate(names, start=1)}
+    return tuple(replace(i, assignee=number.get(i.assignee, "")) for i in issues)

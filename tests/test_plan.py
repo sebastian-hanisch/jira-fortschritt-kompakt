@@ -163,3 +163,19 @@ def test_rollup_cells_of_the_epic_are_sums_of_its_children_by_hand():
     assert epic["Story Points (hochrechnen)"] == "3,5" and epic["Releases (hochrechnen)"] == "R1" and epic["Team (hochrechnen)"] == "T1, T2" and epic["Sprint (hochrechnen)"] == "S1, S2"
     story = dict(zip(header, rows[2].split(";")))
     assert story["Story Points (hochrechnen)"] == "" and story["Story Points"] == "2"
+
+
+# ---------------------------------------------------------------- Datenschutz beim Laden
+
+def test_drop_titles_keeps_the_titles_of_epics_and_higher_levels_only():
+    issues = (Issue(key="I", type="Initiative", summary="Programm"), Issue(key="E", type="Epic", summary="Kundenprojekt Alpha", parent="I"),
+              Issue(key="S", summary="Geheimer Kundenname", parent="E"), Issue(key="T", type="Thema", summary="Thema X"))
+    assert [i.summary for i in J.drop_titles(issues)] == ["Programm", "Kundenprojekt Alpha", "", "Thema X"]
+    assert [i.summary for i in J.drop_titles(issues, keep_epics=False)] == ["", "", "", ""]
+    assert J.drop_titles(()) == ()
+
+
+def test_pseudonymize_assignees_numbers_by_sorted_name_and_keeps_empty_names():
+    issues = (Issue(key="A", assignee="Zoe"), Issue(key="B", assignee="Anna"), Issue(key="C"), Issue(key="D", assignee="Zoe"))
+    assert [i.assignee for i in J.pseudonymize_assignees(issues)] == ["Person 2", "Person 1", "", "Person 2"]          # unabhängig von der Reihenfolge der Tickets
+    assert [i.assignee for i in J.pseudonymize_assignees(tuple(reversed(issues)))] == ["Person 2", "", "Person 1", "Person 2"]

@@ -129,3 +129,51 @@ def test_server_config_limits_the_upload_size_and_disables_usage_statistics():
     assert config["server"]["maxUploadSize"] == C.MAX_UPLOAD_MB == 50
     assert config["browser"]["gatherUsageStats"] is False
     assert TIMEOUT > 0
+
+
+# ---------------------------------------------------------------- Upload-Lebenslauf, Titel, Bearbeiter
+
+TITLES = ("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Titel;Übergeordnetes Element;Story Points;Zugewiesene Person\n"
+          "E-1;In Arbeit;Epic;Kundenprojekt Alpha;;;\nE-2;To Do;Story;Geheimer Kundenname;E-1;;Erika Mustermann\nE-3;Done;Story;Noch ein Titel;E-1;3;Max Beispiel\n").encode("utf-8")
+
+
+def test_upload_lifecycle_loads_once_resets_the_uploader_and_can_be_deleted():
+    at = _open(plan_csv(make_mini()), name="projekt.csv")
+    _ok(at)
+    assert any("Geladen: projekt.csv mit 9 Tickets" in s.value for s in at.success)
+    assert not at.get("file_uploader") and at.button(key="clear_loaded")           # nach dem Laden gibt es kein Upload-Feld mit der Datei mehr
+    assert at.checkbox(key="pseudo").disabled and at.checkbox(key="drop_titles").disabled and at.metric[0].value == "44,4 %"
+    at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.get("file_uploader") and not at.metric and any("Bitte den CSV-Export" in i.value for i in at.info)
+    assert not at.checkbox(key="pseudo").disabled and "loaded" not in at.session_state
+
+
+def test_titles_are_dropped_by_default_but_epic_titles_stay():
+    at = _open(TITLES)
+    _ok(at)
+    assert at.checkbox(key="drop_titles").value is True and at.checkbox(key="pseudo").value is True
+    tables = " ".join(t.value.to_string() for t in at.dataframe)
+    page = " ".join(str(m.value) for m in at.markdown) + " ".join(c.value for c in at.caption) + tables
+    assert "Geheimer Kundenname" not in page and "Noch ein Titel" not in page and "Kundenprojekt Alpha" in tables
+    assert not any("Titel" in t.value.columns for t in at.dataframe if "Schlüssel" in t.value.columns)          # Liste der Tickets ohne Story Points ohne Titelspalte
+
+
+def test_titles_and_names_can_be_kept_when_switched_off_before_loading():
+    at = _open()
+    at.checkbox(key="drop_titles").set_value(False)
+    at.checkbox(key="pseudo").set_value(False)
+    at.file_uploader(key="upload_0").set_value(("plan.csv", TITLES, "text/csv")).run(timeout=TIMEOUT)
+    _ok(at)
+    unest = next(t.value for t in at.dataframe if "Schlüssel" in t.value.columns)
+    assert list(unest["Titel"]) == ["Geheimer Kundenname"]
+    at.sidebar.selectbox(key="dimension").set_value(C.DIM_ASSIGNEE).run(timeout=TIMEOUT)
+    assert "Erika Mustermann" in " ".join(t.value.to_string() for t in at.dataframe)
+
+
+def test_assignee_names_are_replaced_by_numbers_by_default():
+    at = _open(TITLES)
+    at.sidebar.selectbox(key="dimension").set_value(C.DIM_ASSIGNEE).run(timeout=TIMEOUT)
+    _ok(at)
+    tables = " ".join(t.value.to_string() for t in at.dataframe)
+    assert "Erika Mustermann" not in tables and "Max Beispiel" not in tables and "Person 1" in tables and "Person 2" in tables

@@ -17,7 +17,7 @@ def _open(data=None, name="plan.csv"):
     at = AppTest.from_file(APP_PATH, default_timeout=TIMEOUT)
     at.run(timeout=TIMEOUT)
     if data is not None:
-        at.file_uploader(key="upload").set_value((name, data, "text/csv")).run(timeout=TIMEOUT)
+        at.file_uploader(key="upload_0").set_value((name, data, "text/csv")).run(timeout=TIMEOUT)
     return at
 
 

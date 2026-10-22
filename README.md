@@ -58,6 +58,8 @@ Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma
 * **Hochgeladene Dateien liegen für die Sitzung im Arbeitsspeicher des Servers, auf dem die App läuft** (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA). Das Werkzeug speichert und cached sie nicht
   (kein `st.cache_data`, kein Schreiben auf die Platte), gibt sie nicht weiter und hat keine Anbindung an die Jira-Schnittstelle und kein Eingabefeld für Zugangsdaten. Die Plattform kann die Datei bis zum
   Sitzungsende im Speicher halten; den Server betreibt, wer die App bereitstellt.
+* Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Beim Laden lassen sich die Namen der Bearbeiter durch Nummern ersetzen und die Titel der Tickets (außer Epics) verwerfen (beides ist voreingestellt); „Daten jetzt löschen“
+  verwirft die geladenen Tickets der Sitzung und stellt das Upload-Feld zurück. Das betrifft nur Anzeige und Tabellen: Die Datei hat den Server beim Hochladen schon erreicht.
 * Fehlermeldungen nennen nur den Fehlertyp, und ein Filter ersetzt die Meldung unbehandelter Ausnahmen im Protokoll durch den Typ (sie könnte Ticketdaten enthalten). Das ist nur gegen die eigene Testsuite
   geprüft, nicht gegen die Server einer Plattform.
 * Obergrenzen: 50 MB (`server.maxUploadSize`) und 5000 Tickets je Datei. Vor dem Hochladen weist die App darauf hin, nur die gebrauchten Spalten zu exportieren.
@@ -73,14 +75,14 @@ Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`htt
 ## Bewusst nicht enthalten
 
 Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
-Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren sowie die Optionen, Bearbeiternamen zu ersetzen und Titel zu verwerfen, und „Daten jetzt löschen“.
+Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
 
 ## Aufbau
 
 | Datei | Inhalt |
 |---|---|
 | `app.py` | Oberfläche (Streamlit) |
-| `jira_plan.py` | Einlesen des Plan-Exports |
+| `jira_plan.py` | Einlesen des Plan-Exports, Titel verwerfen, Bearbeiter ersetzen |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Hierarchiegraph |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen und Ausgabe als CSV, Wiki-Markup, HTML |
