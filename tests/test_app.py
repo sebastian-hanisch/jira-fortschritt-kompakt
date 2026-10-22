@@ -43,9 +43,19 @@ def test_the_headline_numbers_of_the_mini_project():
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
     at = _open(plan_csv(make_mini()))
     labels = [s.label for s in at.sidebar.selectbox]
-    assert labels == ["Teilprojekt (Wurzel)", "Zusammenfassen nach"]
+    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Zusammenfassen nach"]
     assert not at.sidebar.toggle and not at.sidebar.radio and not at.sidebar.slider
     assert not at.radio or [r.label for r in at.radio] == ["Kennzahl je Zelle"]
+
+
+def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
+    at = _open(plan_csv(make_mini()))
+    assert at.sidebar.selectbox(key="unest_rule").value == C.UNEST_MEDIAN and at.sidebar.selectbox(key="unest_rule").options == list(C.UNEST_RULES)
+    expected = {C.UNEST_MEDIAN: "44,4 %", C.UNEST_ONE: "40,0 %", C.UNEST_IGNORE: "36,4 %"}          # 6 / 13,5; 4,8 / 12; 4 / 11
+    for rule, value in expected.items():
+        at.sidebar.selectbox(key="unest_rule").set_value(rule).run(timeout=TIMEOUT)
+        _ok(at, rule)
+        assert at.metric[0].value == value and any(f"Regel: {rule}" in w.value for w in at.warning)
 
 
 def test_every_dimension_runs_without_error():

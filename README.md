@@ -32,7 +32,7 @@ Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gele
 ## Was zählt
 
 * **Zählende Tickets:** Story, Task und Bug. Epics, Initiativen, Themen und Sub-Tasks fassen zusammen und zählen nicht selbst.
-* **Gewicht:** die Story Points des Tickets; fehlen sie, der Median der Tickets mit Story Points (im gewählten Teilbaum).
+* **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der Tickets mit Story Points (im gewählten Teilbaum, Voreinstellung), 1 Story Point oder nicht zählen.
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %.
 * **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
@@ -44,6 +44,7 @@ Sonst gibt es nichts einzustellen.
 ## Auswahl (Seitenleiste)
 
 * **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
+* **Tickets ohne Story Points:** Median der geschätzten Tickets, als 1 Story Point oder nicht zählen. Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
 * **Zusammenfassen nach:** Epic, Hierarchiestufe, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Ticket-Typ oder Status.
 
 ## Ausgabe
@@ -54,7 +55,7 @@ Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtung, Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren, Datenschutzoptionen (die App läuft lokal).
 
 ## Aufbau

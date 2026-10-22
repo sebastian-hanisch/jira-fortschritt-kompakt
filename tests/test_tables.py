@@ -2,6 +2,7 @@
 
 import pytest
 
+import jira_constants as C
 import jira_evaluation as ev
 import jira_tables as T
 from jira_core import Issue, scope_issues
@@ -51,6 +52,14 @@ def test_epic_two_uses_the_median_of_the_counted_tickets_for_the_unestimated_one
     assert row["Backlog"] == 5.0 and row["Ready4Prod (1,0)"] == 4.0 and row["In Progress"] == 6.0       # Median der gezählten Tickets: 5 (das 7er-Rejected zählt nicht mit)
     assert row[T.TOTAL_NET_COL] == 15.0 and row[T.TOTAL_COL] == 15.0 and row[T.EPIC_COL] is None and row[T.EPIC_CHECK_COL] == ""
     assert row[COMPLETED] == pytest.approx(4 / 15) and row[T.PROGRESS_COL] == pytest.approx(4 / 15)
+
+
+def test_the_rule_for_unestimated_tickets_reaches_the_matrix():
+    by, _, completed, _ = _matrix(unest_rule=C.UNEST_IGNORE)
+    row = by["E2: Zwei"]
+    assert row["Backlog"] == 0.0 and row[T.TOTAL_NET_COL] == 10.0 and row[T.PROGRESS_COL] == pytest.approx(4 / 10)           # S12 wiegt nichts
+    one = _matrix(unest_rule=C.UNEST_ONE)[0]["E2: Zwei"]
+    assert one["Backlog"] == 1.0 and one[T.TOTAL_NET_COL] == 11.0
 
 
 def test_a_parent_that_is_rejected_puts_its_tickets_into_the_rejected_column():

@@ -1,4 +1,4 @@
-"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Ebene und geänderten Status-Gewichten."""
+"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets, Ebene und geänderten Status-Gewichten."""
 
 from dataclasses import dataclass
 
@@ -11,6 +11,7 @@ import jira_core as A
 @dataclass(frozen=True, kw_only=True)
 class Settings:
     dimension: str = C.DEFAULT_DIM
+    unest_rule: str = C.DEFAULT_UNEST                    # Gewicht eines Tickets ohne Story Points
     level: int = 1                                       # Hierarchiestufe der Ebene „Hierarchiestufe“ (1 = oberste)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
@@ -60,7 +61,7 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     every = A.select_atoms(issues)
     atoms = [i for i in every if i not in rejected]
     rejected_atoms = tuple(i for i in every if i in rejected)
-    w = A.atom_weights(issues, atoms)
+    w = A.atom_weights(issues, atoms, settings.unest_rule)
     c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
     unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
@@ -71,14 +72,16 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first)
 
 
-def unestimated_note(n_unestimated: int, n_atoms: int) -> tuple[str, str]:
-    """Wie viele Tickets haben keine Story Points? Sie wiegen den Median der geschätzten Tickets."""
+def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:
+    """Wie viele Tickets haben keine Story Points, und was macht die gewählte Regel daraus?"""
     if n_atoms == 0:
         return "warning", "Es gibt keine zählenden Tickets."
     if n_unestimated == 0:
-        return "success", f"Alle {n_atoms} Tickets sind geschätzt."
+        return "success", f"Alle {n_atoms} Tickets haben Story Points."
     share = 100 * n_unestimated / n_atoms
-    text = f"{n_unestimated} von {n_atoms} Tickets ({de(share)} %) haben keine Story Points und wiegen den Median der geschätzten Tickets."
+    text = f"{n_unestimated} von {n_atoms} Tickets ({de(share)} %) haben keine Story Points; Regel: {rule}."
+    if rule == C.UNEST_IGNORE:
+        text += " Diese Tickets tauchen im Fortschritt nicht auf, auch wenn sie noch offen sind."
     return ("warning" if share >= 20 else "info"), text
 
 

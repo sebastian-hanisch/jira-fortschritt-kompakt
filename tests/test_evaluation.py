@@ -23,6 +23,16 @@ def test_progress_of_the_mini_project_by_hand(mini):
     assert ev.check_consistency(a) == [] and [mini[i].key for i in a.atoms] == ["S1", "S2", "S3", "S4", "B1"]
 
 
+def test_the_rule_for_unestimated_tickets_changes_the_progress_by_hand(mini):
+    ignore = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_IGNORE))
+    assert (ignore.n_atoms, ignore.weight, ignore.n_unestimated) == (5, 11.0, 1) and ignore.progress == pytest.approx(4 / 11)         # S4 wiegt 0: 3 + 1 von 11
+    one = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_ONE))
+    assert one.weight == 12.0 and one.progress == pytest.approx((3 + 0.8 + 1) / 12)
+    assert ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_MEDIAN)).progress == pytest.approx(6 / 13.5)
+    for a in (ignore, one):
+        assert ev.check_consistency(a) == []
+
+
 def test_changed_status_weights_change_the_progress_by_hand(mini):
     a = ev.analyse(mini, ev.Settings(overrides=(("In Review", 0.5), ("In Progress", 0.4))))
     assert a.progress == pytest.approx((3 + 5 * 0.4 + 0 + 2.5 * 0.5 + 1) / 13.5)
@@ -101,7 +111,7 @@ def test_subproject_equals_the_full_analysis_restricted_to_its_atoms_when_everyt
 def test_random_projects_pass_the_internal_consistency_check_in_every_dimension(seed):
     project = random_project(seed, n_epics=2 + seed % 6)
     for dim in C.DIMENSIONS:
-        a = ev.analyse(project, ev.Settings(dimension=dim, level=1 + seed % 3))
+        a = ev.analyse(project, ev.Settings(dimension=dim, level=1 + seed % 3, unest_rule=C.UNEST_RULES[seed % 3]))
         assert ev.check_consistency(a) == [], (seed, dim)
         assert math.isnan(a.progress) or 0.0 <= a.progress <= 1.0
         assert a.progress_done <= a.progress + 1e-12 or math.isnan(a.progress)                 # fertig zählt 100 %: nie mehr als der gewichtete Fortschritt
@@ -116,7 +126,9 @@ def test_consistency_check_reports_a_broken_analysis(mini):
 
 
 def test_unestimated_note():
-    assert ev.unestimated_note(0, 0)[0] == "warning" and ev.unestimated_note(0, 5) == ("success", "Alle 5 Tickets sind geschätzt.")
+    assert ev.unestimated_note(0, 0)[0] == "warning" and ev.unestimated_note(0, 5) == ("success", "Alle 5 Tickets haben Story Points.")
     kind, text = ev.unestimated_note(1, 10)
     assert kind == "info" and "1 von 10 Tickets (10,0 %)" in text and "Median" in text
     assert ev.unestimated_note(2, 10)[0] == "warning"                                      # ab 20 % ein Warnhinweis
+    assert "Regel: als 1 Story Point" in ev.unestimated_note(1, 10, C.UNEST_ONE)[1] and "im Fortschritt nicht auf" not in ev.unestimated_note(1, 10, C.UNEST_ONE)[1]
+    assert "Regel: nicht zählen" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1] and "im Fortschritt nicht auf" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1]

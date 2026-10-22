@@ -80,6 +80,9 @@ with st.sidebar:
         "Teilprojekt (Wurzel)", root_options, key="root", format_func=root_label, disabled=not root_depth,
         help="Macht dieses Ticket zur Wurzel: Alles Weitere (Status, Ebenen, Kennzahlen, Diagramme, Tabellen) gilt wie für einen eigenständigen Datensatz aus diesem Ticket und allem darunter.")
     issues = A.scope_issues(issues_all, root)
+    unest_rule = st.selectbox(
+        "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
+        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es offen ist).")
     dimension = st.selectbox("Zusammenfassen nach", C.DIMENSIONS, index=C.DIMENSIONS.index(C.DEFAULT_DIM), key="dimension",
                              help="Wonach die Tickets zusammengefasst werden. Tickets mit mehreren Werten (Stichwörter, Komponenten) zählen anteilig.")
     level = 1
@@ -111,7 +114,7 @@ with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Name
 # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
 unit = C.UNIT
-settings = Settings(dimension=dimension, level=level, root=root, overrides=overrides)
+settings = Settings(dimension=dimension, level=level, root=root, unest_rule=unest_rule, overrides=overrides)
 a = analyse(issues, settings)
 
 st.markdown("## 🎯 Ergebnis")
@@ -137,7 +140,7 @@ m2.metric("Nur Done, nach Gewicht", na(a.progress_done, pct),
 m3.metric("Nur Done, nach Ticketzahl", na(a.progress_count, pct),
           delta=None if a.progress != a.progress or a.progress_count != a.progress_count else f"{de(100 * (a.progress_count - a.progress), sign=True)} Punkte", delta_color="off")
 m4.metric(f"Offenes Gewicht ({unit}, gesamt {de(a.weight)})", de(a.weight * (1 - a.progress) if a.progress == a.progress else 0.0))
-kind, text = unestimated_note(a.n_unestimated, a.n_atoms)
+kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
 getattr(st, kind)(text)
 
 st.markdown(f"### Fortschritt je {dimension}" if dimension != C.DIM_ALL else "### Fortschritt des gesamten Plans")
@@ -212,7 +215,7 @@ with st.expander("📐 So wird gerechnet"):
 **Zählende Tickets.** Story, Task und Bug; Epics, Initiativen, Themen und Sub-Tasks fassen zusammen und zählen nicht selbst. Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
 Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl.
 
-**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, wiegt es den Median der geschätzten Tickets (ohne geschätztes Ticket 1).
+**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der geschätzten Tickets (ohne geschätztes Ticket 1), 1 Story Point oder nicht zählen (Gewicht 0).
 
 **Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;
@@ -226,7 +229,7 @@ Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern
         """
 Ein Ticket mit mehreren Werten (Stichwörter, Komponenten, Releases) teilt sich gleichmäßig auf seine Gruppen auf, damit die Summe über alle Gruppen die Gesamtsumme bleibt.
 
-**Teilprojekt.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets, die Status der Gewichtstabelle, die Sprints und die
+**Teilprojekt.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets (falls gewählt), die Status der Gewichtstabelle, die Sprints und die
 Hierarchiestufen beziehen sich nur auf diesen Teilbaum.
 
 **Grenzen.** Die Gutschriften sind Annahmen. Der Plan-Export enthält weder einen Statusverlauf noch ein Lösungsdatum, deshalb gibt es keinen Verlauf über die Zeit und keine Prognose.

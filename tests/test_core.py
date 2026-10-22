@@ -30,6 +30,17 @@ def test_weights_use_the_median_of_the_estimated_atoms_for_the_unestimated_one(m
     assert A.atom_weights(mini, [3, 4]).tolist() == [5.0, 2.0]
 
 
+def test_the_rule_for_unestimated_atoms_sets_their_weight(mini):
+    atoms = A.select_atoms(mini)
+    assert [A.unestimated_fill(mini, atoms, rule) for rule in C.UNEST_RULES] == [2.5, 1.0, 0.0]
+    assert A.atom_weights(mini, atoms, C.UNEST_ONE).tolist() == [3.0, 5.0, 2.0, 1.0, 1.0]
+    assert A.atom_weights(mini, atoms, C.UNEST_IGNORE).tolist() == [3.0, 5.0, 2.0, 0.0, 1.0]
+    assert A.atom_weights(mini, atoms, C.UNEST_IGNORE, fill=4.0).tolist() == [3.0, 5.0, 2.0, 4.0, 1.0]       # ein ausdrücklicher Ersatzwert geht vor
+    assert A.unestimated_fill(mini, [], C.UNEST_MEDIAN) == 1.0 and A.unestimated_fill(mini, [], C.UNEST_IGNORE) == 0.0
+    with pytest.raises(KeyError):
+        A.unestimated_fill(mini, atoms, "Unsinn")
+
+
 def test_epic_of_follows_the_parent_chain_and_survives_cycles(mini):
     assert A.epic_of(mini) == ["E1", "E2", "E1", "E1", "E2", "E2", "", "E1", "E1"]
     loop = (Issue(key="A", parent="B"), Issue(key="B", parent="A"))

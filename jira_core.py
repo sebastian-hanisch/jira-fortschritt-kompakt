@@ -1,7 +1,7 @@
 """Kern (nur numpy/Standardbibliothek): gewichteter Fortschritt aus Status, Story Points und Aggregationsebenen.
 
 Modell: Ein *Atom* ist ein Ticket unterhalb der Behälter (Story, Task, Bug; Epics, Initiativen und Sub-Tasks zählen nicht selbst). Es hat ein Gewicht w (die Story Points;
-fehlt sie, der Median der geschätzten Atome) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
+fehlt sie, nach der gewählten Regel: Median der geschätzten Atome, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
 P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sind keine Atome."""
 
 import re
@@ -254,17 +254,17 @@ def root_choices(issues) -> list[tuple[str, int]]:
 
 # ---------------------------------------------------------------- Gewichte
 
-def unestimated_fill(issues, atoms) -> float:
-    """Gewicht eines ungeschätzten Atoms: der Median der geschätzten Atome; ohne geschätztes Atom gilt 1."""
+def unestimated_fill(issues, atoms, rule: str = C.DEFAULT_UNEST) -> float:
+    """Gewicht eines ungeschätzten Atoms nach der Regel: nicht zählen = 0, als 1 Story Point, Median der geschätzten Atome (ohne geschätztes Atom gilt 1)."""
     given = [issues[i].points for i in atoms if issues[i].points is not None]
-    return float(median(given)) if given else 1.0
+    return {C.UNEST_IGNORE: 0.0, C.UNEST_ONE: 1.0, C.UNEST_MEDIAN: float(median(given)) if given else 1.0}[rule]
 
 
-def atom_weights(issues, atoms, fill: float | None = None) -> np.ndarray:
-    """Gewicht je Atom: die Story Points des Tickets; fehlt sie, gilt `fill` (Voreinstellung: der Median der geschätzten Atome, siehe `unestimated_fill`). Mit `fill` steht der Ersatzwert
-    fest, z. B. für Atome, die nicht zur Grundlage des Medians gehören."""
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, fill: float | None = None) -> np.ndarray:
+    """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (siehe `unestimated_fill`). Mit `fill` steht der Ersatzwert fest, z. B. für Atome, die nicht
+    zur Grundlage des Medians gehören."""
     if fill is None:
-        fill = unestimated_fill(issues, atoms)
+        fill = unestimated_fill(issues, atoms, rule)
     return np.array([issues[i].points if issues[i].points is not None else fill for i in atoms], dtype=float)
 
 
