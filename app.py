@@ -3,21 +3,43 @@
 Lauffähig mit: streamlit run app.py
 """
 
+import contextlib
+
 import streamlit as st
 
 import jira_constants as C
 import jira_core as A
 import jira_plan as J
 import jira_tables as T
-from jira_charts import build_progress_bars, build_tree_graph
+from jira_charts import build_progress_bars, build_treemap, build_tree_graph
 from jira_evaluation import Settings, analyse, check_consistency, de, pct, status_list, unestimated_note
+from jira_privacy import scrub_streamlit_logs
 
 st.set_page_config(page_title="Jira-Fortschritt", layout="wide")
+scrub_streamlit_logs()      # keine Ausnahmemeldungen (können Ticketdaten enthalten) im Protokoll der App
+
+UPLOAD_NOTICE = f"""
+**Bitte vor dem Hochladen lesen.** Die Datei geht zur Berechnung an den Server, auf dem diese App läuft (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA), und liegt dort nur für Ihre
+Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
+ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
+und Story Points (optional Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter, Komponenten). Alle anderen Spalten, besonders Beschreibungen und Kommentare, gehören vor dem
+Hochladen gelöscht. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
+"""
 
 
-@st.cache_data(show_spinner=False, max_entries=2)
 def _read(data: bytes):
+    """Datei einlesen. Bewusst ohne Cache: hochgeladene Daten bleiben nicht im Serverspeicher liegen (tests/test_privacy.py prüft das)."""
     return J.read_plan(data)
+
+
+@contextlib.contextmanager
+def guard(what):
+    """Fängt unerwartete Fehler und zeigt nur den Typ: Die Meldung könnte Teile der hochgeladenen Daten enthalten. st.stop() ist keine Exception und läuft durch."""
+    try:
+        yield
+    except Exception as exc:  # noqa: BLE001 - bewusst breit
+        st.error(f"Unerwarteter Fehler bei „{what}“ ({type(exc).__name__}). Details zeigt das Werkzeug nicht, weil sie Teile Ihrer Daten enthalten könnten. Bitte Datei und Auswahl prüfen.")
+        st.stop()
 
 
 def _on_weight_edit(version, shown, base):
@@ -34,8 +56,10 @@ def _reset_weights():
 
 st.title("📊 Jira-Fortschritt")
 st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit den Story Points der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
-           "zurückgewiesene Tickets zählen nicht. Alles läuft lokal: Die Datei verlässt diesen Rechner nicht.")
+           "zurückgewiesene Tickets zählen nicht.")
+st.caption(f"🔓 Open Source (MIT-Lizenz): Code und Anleitung im [Repository]({C.REPO_URL}). Mit eigenen, vertraulichen Daten besser lokal ausführen: Dann verlassen sie Ihren Rechner nicht.")
 
+st.warning(UPLOAD_NOTICE)
 upload = st.file_uploader("Export aus Jira Plans (CSV)", type=["csv"], key="upload", help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
 if upload is None:
     st.info("Bitte den CSV-Export aus Jira Plans wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Vorgangsstatus“; für die Gewichte „Story Points“, "
@@ -47,7 +71,7 @@ except J.PlanImportError as exc:
     st.error(str(exc))
     st.stop()
 except Exception as exc:  # noqa: BLE001 - bewusst breit: nur der Typ, nie die Meldung
-    st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte prüfen, ob es der CSV-Export aus Jira Plans ist.")
+    st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte Format und Spalten prüfen: Erwartet wird der CSV-Export aus Jira Plans.")
     st.stop()
 if not issues_all:
     st.warning("Die Datei enthält keine Tickets.")
@@ -93,121 +117,144 @@ with st.sidebar:
         level = st.selectbox("Hierarchiestufe", list(range(1, max_level + 1)), key="level", format_func=lambda n: f"Stufe {n}" + (" (oberste)" if n == 1 else ""),
                              help="Auf welcher Stufe des Ticket-Baums zusammengefasst wird: Stufe 1 ist die oberste (z. B. Initiative oder Epic ohne Eltern), Stufe 2 die darunter und so weiter.")
 
-# --- Status-Gewichte -----------------------------------------------------------------------------------------------------------------------
+with guard("Auswertung"):
+    # --- Status-Gewichte -----------------------------------------------------------------------------------------------------------------------
 
-statuses = status_list(issues)
-base = tuple(A.status_credits(statuses).items())
-overrides = tuple((s, c) for s, c in st.session_state.get("overrides", ()) if s in statuses)
-shown = tuple(A.status_credits(statuses, overrides).items())
-version = st.session_state.get("weights_version", 0)
-with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Namen abgeleitet, änderbar"):
-    st.caption("Anteil der Arbeit, der bei diesem Status als getan gilt: Namen, die nach fertig klingen (Done, Closed, Fertig, Ready4Prod …), zählen 100 %, nach Test 90 %, nach Merged oder Review 80 %, "
-               "alles andere 0 %. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
-    rejected_names = [s for s in statuses if A.is_rejected_status(s)]
-    if rejected_names:
-        st.caption(f"Zurückgewiesen: {', '.join(rejected_names)}.")
-    if overrides:
-        st.button("↩️ Gewichte nach Namen wiederherstellen", on_click=_reset_weights, key="reset_weights")
-    st.data_editor([{"Status": s, "Gewicht (%)": round(100 * c, 1)} for s, c in shown], disabled=["Status"], hide_index=True, key=f"weights_{version}",
-                   on_change=_on_weight_edit, args=(version, shown, base), column_config={"Gewicht (%)": st.column_config.NumberColumn(min_value=0, max_value=100, step=5, format="%.0f")})
+    statuses = status_list(issues)
+    base = tuple(A.status_credits(statuses).items())
+    overrides = tuple((s, c) for s, c in st.session_state.get("overrides", ()) if s in statuses)
+    shown = tuple(A.status_credits(statuses, overrides).items())
+    version = st.session_state.get("weights_version", 0)
+    with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Namen abgeleitet, änderbar"):
+        st.caption("Anteil der Arbeit, der bei diesem Status als getan gilt: Namen, die nach fertig klingen (Done, Closed, Fertig, Ready4Prod …), zählen 100 %, nach Test 90 %, nach Merged oder Review 80 %, "
+                   "alles andere 0 %. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
+        rejected_names = [s for s in statuses if A.is_rejected_status(s)]
+        if rejected_names:
+            st.caption(f"Zurückgewiesen: {', '.join(rejected_names)}.")
+        if overrides:
+            st.button("↩️ Gewichte nach Namen wiederherstellen", on_click=_reset_weights, key="reset_weights")
+        st.data_editor([{"Status": s, "Gewicht (%)": round(100 * c, 1)} for s, c in shown], disabled=["Status"], hide_index=True, key=f"weights_{version}",
+                       on_change=_on_weight_edit, args=(version, shown, base), column_config={"Gewicht (%)": st.column_config.NumberColumn(min_value=0, max_value=100, step=5, format="%.0f")})
 
-# --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
+    # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
-unit = C.UNIT
-settings = Settings(dimension=dimension, level=level, root=root, unest_rule=unest_rule, overrides=overrides)
-a = analyse(issues, settings)
+    unit = C.UNIT
+    settings = Settings(dimension=dimension, level=level, root=root, unest_rule=unest_rule, overrides=overrides)
+    a = analyse(issues, settings)
 
-st.markdown("## 🎯 Ergebnis")
-for problem in check_consistency(a):
-    st.error(f"Interne Prüfung verletzt: {problem}")
-if root != C.ROOT_ALL:
-    st.info(f"Die Auswertung ist auf **{root_label(root).lstrip('↳ ')}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
-if a.n_excluded:
-    bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
-    st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
-
-
-def na(x, fmt):
-    """NaN (kein Gewicht) als Strich zeigen."""
-    return "–" if x != x else fmt(x)
+    st.markdown("## 🎯 Ergebnis")
+    for problem in check_consistency(a):
+        st.error(f"Interne Prüfung verletzt: {problem}")
+    if root != C.ROOT_ALL:
+        st.info(f"Die Auswertung ist auf **{root_label(root).lstrip('↳ ')}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
+    if a.n_excluded:
+        bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
+        st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
 
 
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Fortschritt (nach Status gewichtet)", na(a.progress, pct))
-# Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.
-m2.metric("Nur Done, nach Gewicht", na(a.progress_done, pct),
-          delta=None if a.progress != a.progress or a.progress_done != a.progress_done else f"{de(100 * (a.progress_done - a.progress), sign=True)} Punkte", delta_color="off")
-m3.metric("Nur Done, nach Ticketzahl", na(a.progress_count, pct),
-          delta=None if a.progress != a.progress or a.progress_count != a.progress_count else f"{de(100 * (a.progress_count - a.progress), sign=True)} Punkte", delta_color="off")
-m4.metric(f"Offenes Gewicht ({unit}, gesamt {de(a.weight)})", de(a.weight * (1 - a.progress) if a.progress == a.progress else 0.0))
-kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
-getattr(st, kind)(text)
-
-st.markdown(f"### Fortschritt je {dimension}" if dimension != C.DIM_ALL else "### Fortschritt des gesamten Plans")
-st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
-st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch den Status angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
-           + (f" Gezeigt werden die 30 gewichtsstärksten von {len(a.stats.labels)} Gruppen; die Tabelle unten enthält alle." if len(a.stats.labels) > 30 else ""))
-
-st.markdown("### 🌳 Hierarchiegraph")
-g = a.tree
-st.plotly_chart(build_tree_graph(g, unit), width="stretch", key="chart_graph")
-st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
-           "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover."
-           + (f" Der Graph hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
-
-# --- Tabellen ------------------------------------------------------------------------------------------------------------------------------
-
-st.markdown("## 📋 Tabellen")
-st.caption("Alle Tabellen folgen der Auswahl links; jede lässt sich als CSV für Excel laden (Semikolon, Dezimalkomma) und als Tabelle in Jira oder Confluence einfügen.")
+    def na(x, fmt):
+        """NaN (kein Gewicht) als Strich zeigen."""
+        return "–" if x != x else fmt(x)
 
 
-def show_table(rows, key, formats=None, file_name="tabelle"):
-    """Zeigt Zeilen (Wörterbücher) als Tabelle und bietet sie als CSV und zum Einfügen in Jira oder Confluence an. `formats`: Spalte -> Streamlit-Zahlenformat."""
-    if not rows:
-        st.info("Keine Daten für diese Tabelle.")
-        return
-    config = {name: st.column_config.NumberColumn(format=fmt) for name, fmt in (formats or {}).items() if name in rows[0]}
-    if "Wirkung" in rows[0]:
-        config["Wirkung"] = st.column_config.TextColumn(width="large")
-    st.dataframe(rows, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
-    st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
-    with st.expander("📋 In Jira oder Confluence einfügen"):
-        wiki_tab, html_tab = st.tabs(["Wiki-Markup", "Tabelle zum Kopieren"])
-        with wiki_tab:
-            st.caption("Für Textfelder in Jira (Beschreibung, Kommentar im klassischen Editor) und für Confluence über „Einfügen → Markup“ (Wiki-Markup). Das Kopiersymbol oben rechts im Feld kopiert alles.")
-            st.code(T.rows_to_wiki(rows, formats), language=None)
-        with html_tab:
-            st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
-            st.html(T.rows_to_html(rows, formats))
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Fortschritt (nach Status gewichtet)", na(a.progress, pct))
+    # Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.
+    m2.metric("Nur Done, nach Gewicht", na(a.progress_done, pct),
+              delta=None if a.progress != a.progress or a.progress_done != a.progress_done else f"{de(100 * (a.progress_done - a.progress), sign=True)} Punkte", delta_color="off")
+    m3.metric("Nur Done, nach Ticketzahl", na(a.progress_count, pct),
+              delta=None if a.progress != a.progress or a.progress_count != a.progress_count else f"{de(100 * (a.progress_count - a.progress), sign=True)} Punkte", delta_color="off")
+    m4.metric(f"Offenes Gewicht ({unit}, gesamt {de(a.weight)})", de(a.weight * (1 - a.progress) if a.progress == a.progress else 0.0))
+    kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
+    getattr(st, kind)(text)
+
+    st.markdown(f"### Fortschritt je {dimension}" if dimension != C.DIM_ALL else "### Fortschritt des gesamten Plans")
+    st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
+    st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch den Status angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
+               + (f" Gezeigt werden die 30 gewichtsstärksten von {len(a.stats.labels)} Gruppen; die Tabelle unten enthält alle." if len(a.stats.labels) > 30 else ""))
+
+    st.markdown("### 🗺️ Flächenansicht: Projekt → Epic → Ticket")
+    if a.hierarchy.values[0] > 0:
+        st.plotly_chart(build_treemap(a.hierarchy), width="stretch", key="chart_tree")
+        st.caption("Fläche = Gewicht, Farbe = Fortschritt. Ein Klick auf ein Epic zoomt hinein. Tickets ohne Gewicht (ohne Story Points bei der Regel „nicht zählen“) haben keine Fläche.")
+    else:
+        st.info("Kein Ticket hat Gewicht; die Flächenansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
+
+    st.markdown("### 🌳 Hierarchiegraph")
+    g = a.tree
+    st.plotly_chart(build_tree_graph(g, unit), width="stretch", key="chart_graph")
+    st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
+               "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover."
+               + (f" Der Graph hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
+
+    # --- Tabellen ------------------------------------------------------------------------------------------------------------------------------
+
+    st.markdown("## 📋 Tabellen")
+    st.caption("Alle Tabellen folgen der Auswahl links; jede lässt sich als CSV für Excel laden (Semikolon, Dezimalkomma) und als Tabelle in Jira oder Confluence einfügen.")
 
 
-tab_parent, tab_group, tab_status, tab_quality = st.tabs(["Status-Matrix je Parent", "Je Gruppe", "Status × Gruppe", "Datenqualität"])
-with tab_parent:
-    st.caption(
-        "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
-        "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
-        "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet.")
-    matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
-    matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
-    matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
-    show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
-with tab_group:
-    show_table(T.group_table(a, dimension, unit), "group", {f"Gewicht ({unit})": "%.1f", "Fortschritt": "percent", "Nur Done (Gewicht)": "percent", "Tickets": "%.1f", "ohne Story Points": "%.1f"},
-               "fortschritt-je-gruppe")
-with tab_status:
-    st.caption(f"Wie verteilt sich jede Gruppe der Ebene „{dimension}“ auf die Status? Tickets mit mehreren Werten zählen anteilig.")
-    metric = st.radio("Kennzahl je Zelle", T.METRICS, key="table_metric", horizontal=True, help="Gewicht = Story Points, Tickets = Anzahl, Angerechnet = Gewicht mal Gutschrift des Status.")
-    status_names = T.atom_statuses(issues, a)
-    show_table(T.status_by_group(issues, a, metric), "status", {**{name: "%.1f" for name in (*status_names, T.SUM_LABEL)}, "Fortschritt": "percent"}, "status-je-gruppe")
-with tab_quality:
-    st.caption("Prüfungen der Eingangsdaten: Was davon die Zahl verzerren kann und wie das Werkzeug damit umgeht.")
-    show_table(T.data_quality(issues, a), "quality", {"Anteil an den Tickets": "percent"}, "datenqualitaet")
-    unest_rows, unest_total = T.unestimated_tickets(issues, a)
-    if unest_total:
-        st.markdown(f"**Tickets ohne Story Points** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
-        show_table(unest_rows, "unest", None, "ohne-story-points")
+    def show_table(rows, key, formats=None, file_name="tabelle"):
+        """Zeigt Zeilen (Wörterbücher) als Tabelle und bietet sie als CSV und zum Einfügen in Jira oder Confluence an. `formats`: Spalte -> Streamlit-Zahlenformat."""
+        if not rows:
+            st.info("Keine Daten für diese Tabelle.")
+            return
+        config = {name: st.column_config.NumberColumn(format=fmt) for name, fmt in (formats or {}).items() if name in rows[0]}
+        if "Wirkung" in rows[0]:
+            config["Wirkung"] = st.column_config.TextColumn(width="large")
+        st.dataframe(rows, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
+        st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
+        with st.expander("📋 In Jira oder Confluence einfügen"):
+            wiki_tab, html_tab = st.tabs(["Wiki-Markup", "Tabelle zum Kopieren"])
+            with wiki_tab:
+                st.caption("Für Textfelder in Jira (Beschreibung, Kommentar im klassischen Editor) und für Confluence über „Einfügen → Markup“ (Wiki-Markup). Das Kopiersymbol oben rechts im Feld kopiert alles.")
+                st.code(T.rows_to_wiki(rows, formats), language=None)
+            with html_tab:
+                st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
+                st.html(T.rows_to_html(rows, formats))
+
+
+    tab_parent, tab_group, tab_status, tab_quality = st.tabs(["Status-Matrix je Parent", "Je Gruppe", "Status × Gruppe", "Datenqualität"])
+    with tab_parent:
+        st.caption(
+            "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
+            "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
+            "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet.")
+        matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
+        matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
+        matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
+        show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
+    with tab_group:
+        show_table(T.group_table(a, dimension, unit), "group", {f"Gewicht ({unit})": "%.1f", "Fortschritt": "percent", "Nur Done (Gewicht)": "percent", "Tickets": "%.1f", "ohne Story Points": "%.1f"},
+                   "fortschritt-je-gruppe")
+    with tab_status:
+        st.caption(f"Wie verteilt sich jede Gruppe der Ebene „{dimension}“ auf die Status? Tickets mit mehreren Werten zählen anteilig.")
+        metric = st.radio("Kennzahl je Zelle", T.METRICS, key="table_metric", horizontal=True, help="Gewicht = Story Points, Tickets = Anzahl, Angerechnet = Gewicht mal Gutschrift des Status.")
+        status_names = T.atom_statuses(issues, a)
+        show_table(T.status_by_group(issues, a, metric), "status", {**{name: "%.1f" for name in (*status_names, T.SUM_LABEL)}, "Fortschritt": "percent"}, "status-je-gruppe")
+    with tab_quality:
+        st.caption("Prüfungen der Eingangsdaten: Was davon die Zahl verzerren kann und wie das Werkzeug damit umgeht.")
+        show_table(T.data_quality(issues, a), "quality", {"Anteil an den Tickets": "percent"}, "datenqualitaet")
+        unest_rows, unest_total = T.unestimated_tickets(issues, a)
+        if unest_total:
+            st.markdown(f"**Tickets ohne Story Points** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
+            show_table(unest_rows, "unest", None, "ohne-story-points")
 
 # --- Erklärung -----------------------------------------------------------------------------------------------------------------------------
+
+with st.expander("🔧 Datenquelle und Datenschutz"):
+    st.markdown(
+        """
+**Plan-Export.** In Jira Plans: Plan öffnen → Export → CSV. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
+Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Releases*, *Team*, *Bereich*,
+*Zugewiesene Person*, *Priorität*, *Stichwörter* und *Komponenten*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
+übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.
+
+**Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum
+Ende der Sitzung noch im Speicher halten. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
+Anbindung an die Jira-Schnittstelle: Zugangsdaten sollen nie durch dieses Werkzeug laufen. Höchstens 50 MB und 5000 Tickets je Datei. Läuft die App auf dem eigenen Rechner oder im eigenen Netz, verlässt
+die Datei es nicht.
+"""
+    )
 
 with st.expander("📐 So wird gerechnet"):
     st.markdown(

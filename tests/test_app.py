@@ -37,7 +37,19 @@ def test_the_headline_numbers_of_the_mini_project():
     _ok(at)
     assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 13,5)"]
     assert [m.value for m in at.metric] == ["44,4 %", "29,6 %", "40,0 %", "7,5"]            # 6 / 13,5; 4 / 13,5; 2 von 5; 13,5 · (1 − 6/13,5)
-    assert [w.value for w in at.warning] == [ev.unestimated_note(1, 5)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (1 von 5 = 20 %); die Zahl der Tickets steht im Erkennungsbericht
+    assert [w.value for w in at.warning if "Bitte vor dem Hochladen" not in w.value] == [ev.unestimated_note(1, 5)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (1 von 5 = 20 %); die Zahl der Tickets steht im Erkennungsbericht
+
+
+def test_the_treemap_and_the_hierarchy_graph_are_shown():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    headings = [m.value for m in at.markdown]
+    assert any("Flächenansicht" in h for h in headings) and any("Hierarchiegraph" in h for h in headings)
+    only_unestimated = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\n".encode())
+    at = only_unestimated
+    at.sidebar.selectbox(key="unest_rule").set_value(C.UNEST_IGNORE).run(timeout=TIMEOUT)
+    _ok(at)
+    assert any("Kein Ticket hat Gewicht" in i.value for i in at.info)
 
 
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():

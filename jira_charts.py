@@ -1,4 +1,4 @@
-"""Plotly-Abbildungen: Fortschrittsbalken und Hierarchiegraph. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
+"""Plotly-Abbildungen: Fortschrittsbalken, Flächenansicht und Hierarchiegraph. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
 
 import numpy as np
 import plotly.graph_objects as go
@@ -36,6 +36,16 @@ def build_progress_bars(stats, unit: str):
     fig.update_yaxes(autorange="reversed", automargin=True)
     fig.update_xaxes(title_text=f"Gewicht ({unit})", range=[0, top * 1.6])
     return lock_axes(fig)
+
+
+def build_treemap(h):
+    """Fläche = Gewicht, Farbe = Fortschritt (rot 0 %, gelb 50 %, grün 100 %). Ein Klick auf ein Epic zoomt hinein."""
+    fig = go.Figure(go.Treemap(
+        ids=list(h.ids), labels=list(h.labels), parents=list(h.parents), values=list(h.values), branchvalues="total",
+        marker=dict(colors=list(h.progress), colorscale=C.COLOR_SCALE, cmin=0, cmax=1, colorbar=dict(title="Fortschritt", tickformat=".0%", nticks=5)),
+        customdata=list(h.progress), texttemplate="%{label}<br>%{customdata:.0%}", hovertemplate="%{label}<br>Gewicht %{value:.1f}<br>Fortschritt %{customdata:.0%}<extra></extra>"))
+    fig.update_layout(height=460, margin=dict(l=0, r=0, t=10, b=0))
+    return fig
 
 
 def _node_hover(g, k: int, unit: str) -> str:

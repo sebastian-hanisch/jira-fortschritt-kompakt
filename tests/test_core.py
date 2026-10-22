@@ -158,6 +158,24 @@ def _graph(mini, **kw):
     return A.tree_graph(mini, atoms, w, c, credit_of, **kw)
 
 
+def test_treemap_hierarchy_by_hand(mini):
+    atoms = A.select_atoms(mini)
+    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.0, 0.8, 1.0]))
+    assert h.ids == ("Projekt", "epic:E1", "atom:S1", "atom:S2", "epic:E2", "atom:S3", "atom:S4", "epic:(ohne Epic)", "atom:B1")
+    assert h.labels == ("Projekt", "E1: Epic A", "S1", "S2", "E2: Epic B", "S3", "S4", "(ohne Epic)", "B1")
+    assert h.parents == ("", "Projekt", "epic:E1", "epic:E1", "Projekt", "epic:E2", "epic:E2", "Projekt", "epic:(ohne Epic)")
+    assert h.values == pytest.approx((13.5, 8.0, 3.0, 5.0, 4.5, 2.0, 2.5, 1.0, 1.0))
+    assert h.progress == pytest.approx((6 / 13.5, 3 / 8, 1.0, 0.0, 2 / 4.5, 0.0, 0.8, 1.0, 1.0))
+
+
+def test_treemap_leaves_out_atoms_without_weight(mini):
+    atoms = A.select_atoms(mini)
+    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms, C.UNEST_IGNORE), np.array([1.0, 0.0, 0.0, 0.8, 1.0]))
+    assert "atom:S4" not in h.ids and h.values[0] == 11.0 and h.values[h.ids.index("epic:E2")] == 2.0
+    empty = A.hierarchy((), [], np.array([]), np.array([]))
+    assert empty.ids == ("Projekt",) and empty.values == (0.0,) and empty.progress == (0.0,)
+
+
 def test_graph_nodes_carry_the_sum_of_their_atoms_by_hand(mini):
     g = _graph(mini)
     assert g.keys == ("Projekt", "E1", "S1", "S2", "T1", "T2", "E2", "S3", "S4", "B1") and g.n_total == 10 and g.shown_depth == 3

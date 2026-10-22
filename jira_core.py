@@ -416,7 +416,47 @@ def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, floa
     return p_w, p_d, p_n
 
 
-# ---------------------------------------------------------------- Hierarchiegraph
+# ---------------------------------------------------------------- Flächenansicht und Hierarchiegraph
+
+@dataclass(frozen=True)
+class Hierarchy:
+    ids: tuple[str, ...]
+    labels: tuple[str, ...]
+    parents: tuple[str, ...]
+    values: tuple[float, ...]
+    progress: tuple[float, ...]
+
+
+def hierarchy(issues, atoms, w: np.ndarray, c: np.ndarray) -> Hierarchy:
+    """Baum Projekt → Epic → Atom für die Flächenansicht: Fläche = Gewicht, Farbe = Fortschritt. Atome ohne Gewicht fehlen (Fläche 0);
+    ein Elternknoten trägt die Summe seiner Kinder."""
+    epics = epic_of(issues)
+    names = {i.key: f"{i.key}: {i.summary}" if i.summary else i.key for i in issues if i.is_epic}
+    ids, labels, parents, values, wc = ["Projekt"], ["Projekt"], [""], [0.0], [0.0]
+    epic_row: dict[str, int] = {}
+    for pos, i in enumerate(atoms):
+        if w[pos] <= 0:
+            continue
+        ek = epics[i]
+        eid = f"epic:{ek}" if ek else "epic:(ohne Epic)"
+        if eid not in epic_row:
+            epic_row[eid] = len(ids)
+            ids.append(eid)
+            labels.append(names.get(ek, "(ohne Epic)"))
+            parents.append("Projekt")
+            values.append(0.0)
+            wc.append(0.0)
+        ids.append(f"atom:{issues[i].key}")
+        labels.append(issues[i].key)
+        parents.append(eid)
+        values.append(float(w[pos]))
+        wc.append(float(w[pos] * c[pos]))
+        for row in (epic_row[eid], 0):
+            values[row] += float(w[pos])
+            wc[row] += float(w[pos] * c[pos])
+    progress = [wc_k / v if v > 0 else 0.0 for wc_k, v in zip(wc, values)]
+    return Hierarchy(tuple(ids), tuple(labels), tuple(parents), tuple(values), tuple(progress))
+
 
 @dataclass(frozen=True)
 class TreeGraph:

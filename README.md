@@ -2,7 +2,7 @@
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
 Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Hierarchiegraph und Tabellen, die sich direkt in Jira oder Confluence einfügen lassen.
-Es gibt keine Beispieldaten, keinen Upload-Dienst und keine Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
+Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
 
@@ -11,7 +11,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Alles läuft lokal; die Datei verlässt den Rechner nicht. Tests: `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
+Tests: `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
 
 ## Eingabe
 
@@ -53,10 +53,27 @@ Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketza
 (Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt), Je Gruppe, Status × Gruppe und
 Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
 
+## Datenschutz
+
+* **Hochgeladene Dateien liegen für die Sitzung im Arbeitsspeicher des Servers, auf dem die App läuft** (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA). Das Werkzeug speichert und cached sie nicht
+  (kein `st.cache_data`, kein Schreiben auf die Platte), gibt sie nicht weiter und hat keine Anbindung an die Jira-Schnittstelle und kein Eingabefeld für Zugangsdaten. Die Plattform kann die Datei bis zum
+  Sitzungsende im Speicher halten; den Server betreibt, wer die App bereitstellt.
+* Fehlermeldungen nennen nur den Fehlertyp, und ein Filter ersetzt die Meldung unbehandelter Ausnahmen im Protokoll durch den Typ (sie könnte Ticketdaten enthalten). Das ist nur gegen die eigene Testsuite
+  geprüft, nicht gegen die Server einer Plattform.
+* Obergrenzen: 50 MB (`server.maxUploadSize`) und 5000 Tickets je Datei. Vor dem Hochladen weist die App darauf hin, nur die gebrauchten Spalten zu exportieren.
+* **Keine vertraulichen Daten ohne Freigabe auf einem fremden Server auswerten. Für sensible Projekte lokal ausführen:** Dann bleibt die Datei auf dem eigenen Rechner (oder im eigenen Netz, wenn die App dort
+  betrieben wird), es gibt weder einen Upload an einen fremden Server noch ein Protokoll bei einem Anbieter.
+
+```bash
+streamlit run app.py --server.address localhost
+```
+
+Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`http://localhost:8501`); ohne diese Angabe ist sie standardmäßig auch im lokalen Netz erreichbar.
+
 ## Bewusst nicht enthalten
 
 Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
-Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren, Datenschutzoptionen (die App läuft lokal).
+Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren sowie die Optionen, Bearbeiternamen zu ersetzen und Titel zu verwerfen, und „Daten jetzt löschen“.
 
 ## Aufbau
 
@@ -68,6 +85,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen und Ausgabe als CSV, Wiki-Markup, HTML |
 | `jira_charts.py` | Plotly-Diagramme |
+| `jira_privacy.py` | Filter, der Ausnahmemeldungen aus dem Protokoll nimmt |
 | `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest |
 
 ## Lizenz

@@ -1,0 +1,131 @@
+"""Datenschutz: kein Zwischenspeichern hochgeladener Daten, Wächter bei unerwarteten Fehlern, Filter für das Protokoll, Hinweise vor dem Hochladen, Obergrenzen in der Serverkonfiguration."""
+
+import ast
+import io
+import logging
+import tomllib
+from pathlib import Path
+
+import jira_constants as C
+import jira_evaluation as ev
+import jira_plan as J
+import jira_privacy as P
+from conftest import make_mini, plan_csv
+from test_app import APP_PATH, TIMEOUT, _ok, _open
+
+ROOT = Path(APP_PATH).parent
+
+
+# ---------------------------------------------------------------- Protokoll-Filter
+
+def _logger_with_filter():
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(message)s"))
+    handler.addFilter(P.ScrubExceptionDetails())
+    logger = logging.getLogger("test_privacy_scrub")
+    logger.handlers = [handler]
+    logger.propagate = False
+    return logger, stream
+
+
+def test_filter_replaces_the_exception_message_but_keeps_type_and_call_stations():
+    logger, stream = _logger_with_filter()
+    secret = "GEHEIM-12345 Kundenname"      # steht nur als Wert da, nicht in der Quelltextzeile, die der Traceback zeigt
+    try:
+        raise ValueError(secret)
+    except ValueError:
+        logger.error("Uncaught app execution", exc_info=True)
+    text = stream.getvalue()
+    assert "GEHEIM-12345" not in text and "Kundenname" not in text
+    assert "Uncaught app execution" in text and "ValueError" in text and P.SUPPRESSED in text and "test_filter_replaces_the_exception_message" in text
+
+
+def test_filter_leaves_entries_without_an_exception_alone():
+    logger, stream = _logger_with_filter()
+    logger.warning("alles in Ordnung %s", "ok")
+    assert stream.getvalue() == "WARNING alles in Ordnung ok\n"
+
+
+def test_scrub_streamlit_logs_installs_the_filter_once_on_every_streamlit_handler():
+    import streamlit.logger as sl
+    sl.get_logger("streamlit.runtime.scriptrunner.exec_code")            # legt den Logger mit eigenem Handler an
+    first = P.scrub_streamlit_logs()
+    second = P.scrub_streamlit_logs()
+    assert first == second and first >= 1
+    for logger in P._streamlit_loggers():
+        for handler in logger.handlers:
+            assert sum(isinstance(f, P.ScrubExceptionDetails) for f in handler.filters) == 1
+
+
+def test_the_app_installs_the_log_filter_before_the_upload_field():
+    tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+    calls = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "scrub_streamlit_logs"]
+    uploads = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "file_uploader"]
+    assert calls and uploads and min(calls) < min(uploads)
+
+
+# ---------------------------------------------------------------- Wächter
+
+def test_unexpected_error_in_the_evaluation_shows_only_the_type(monkeypatch):
+    def boom(*args, **kwargs):
+        raise ValueError("GEHEIM-12345 Kundenname")
+    monkeypatch.setattr(ev, "analyse", boom)
+    at = _open(plan_csv(make_mini()))
+    assert not at.exception
+    assert any("Unerwarteter Fehler bei „Auswertung“ (ValueError)" in e.value for e in at.error)
+    texts = " ".join([e.value for e in at.error] + [str(m.value) for m in at.markdown] + [c.value for c in at.caption])
+    assert "GEHEIM" not in texts and not at.metric
+
+
+def test_unexpected_error_while_parsing_shows_only_the_type(monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("GEHEIM-98765")
+    monkeypatch.setattr(J, "read_plan", boom)
+    at = _open(plan_csv(make_mini()))
+    assert not at.exception and any("RuntimeError" in e.value and "GEHEIM" not in e.value for e in at.error) and not at.metric
+
+
+# ---------------------------------------------------------------- nichts wird zwischengespeichert, keine Netzwerk- oder Zugangsdaten-Wege
+
+def test_no_caching_no_network_and_no_credential_field_in_the_code():
+    for name in ("app.py", "jira_plan.py", "jira_core.py", "jira_evaluation.py", "jira_tables.py", "jira_charts.py", "jira_privacy.py"):
+        source = (ROOT / name).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+        assert not attrs & {"cache_data", "cache_resource"}, name
+        imported = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names} | {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+        assert not imported & {"requests", "urllib", "http", "httpx", "socket", "aiohttp", "smtplib"}, name
+        assert "password" not in source.lower() and "api_token" not in source.lower(), name
+
+
+# ---------------------------------------------------------------- Hinweise und Konfiguration
+
+def test_notice_before_the_upload_names_the_limits_the_server_and_local_hosting():
+    at = _open()
+    notice = next(w.value for w in at.warning if "Bitte vor dem Hochladen lesen" in w.value)
+    assert f"{C.MAX_UPLOAD_MB} MB" in notice and f"{C.MAX_IMPORT_ISSUES} Tickets" in notice and "Server" in notice and "keine vertraulichen daten" in " ".join(notice.split()).lower()
+    assert "Open Source (MIT-Lizenz)" in notice and C.REPO_URL in notice and "lokal ausführen" in notice and "Beschreibungen und Kommentare" in notice
+
+
+def test_caption_points_to_the_repository_and_local_hosting_and_does_not_claim_local_operation():
+    at = _open()
+    caption = next(c.value for c in at.caption if "Open Source" in c.value)
+    assert "MIT-Lizenz" in caption and C.REPO_URL in caption and "lokal ausführen" in caption
+    assert not any("läuft lokal" in c.value for c in at.caption) and not any("verlässt diesen Rechner nicht" in c.value for c in at.caption)
+
+
+def test_privacy_explanation_is_in_the_data_expander():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    explanation = next(m.value for e in at.expander if "Datenquelle und Datenschutz" in e.label for m in e.markdown)
+    for part in ("**Plan-Export.**", "Vorgangsschlüssel", "Story Points", "(hochrechnen)", "**Datenschutz.**", "nie gespeichert und nie zwischengespeichert", "nur der Fehlertyp",
+                 "nicht im Protokoll der App", "Zugangsdaten", "50 MB und 5000 Tickets", "eigenen Rechner oder im eigenen Netz"):
+        assert part in explanation or part.replace("nur der", "nur den") in explanation, part
+
+
+def test_server_config_limits_the_upload_size_and_disables_usage_statistics():
+    config = tomllib.loads((ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert config["server"]["maxUploadSize"] == C.MAX_UPLOAD_MB == 50
+    assert config["browser"]["gatherUsageStats"] is False
+    assert TIMEOUT > 0

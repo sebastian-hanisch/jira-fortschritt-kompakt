@@ -1,6 +1,8 @@
 """Konstanten: Obergrenzen, Gutschriften je Statusklasse, Ebenen und Farben."""
 
 MAX_IMPORT_ISSUES = 5000      # harte Obergrenze für eine Datei: alle Schritte sind O(n), das Diagramm-Budget ist darauf ausgelegt
+REPO_URL = "https://github.com/sebastian-hanisch/jira-fortschritt-kompakt"      # Open Source (MIT-Lizenz): Code und Anleitung zum lokalen Betrieb
+MAX_UPLOAD_MB = 50            # Größe einer hochgeladenen Datei; gehört in .streamlit/config.toml als server.maxUploadSize (tests/test_privacy.py prüft die Übereinstimmung)
 UNIT = "SP"                 # Einheit der Gewichte: Story Points
 
 # Gutschrift je Klasse, in die der Name eines Status fällt (jira_core.status_class); alles andere zählt 0, zurückgewiesene Tickets zählen gar nicht
