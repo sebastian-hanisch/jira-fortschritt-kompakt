@@ -47,7 +47,7 @@ def _node_hover(g, k: int, unit: str) -> str:
     if not g.is_atom[k] and g.is_leaf[k] and g.weight[k] <= 0 and not np.isnan(g.progress[k]):
         lines.append("zählt nicht selbst (Zählebene)")
     if g.ignored is not None and g.ignored[k]:
-        lines.append("ausgeschlossen: zählt nicht (zurückgewiesen oder außerhalb des Zeitraums)")
+        lines.append("ausgeschlossen: zählt nicht (zurückgewiesen)")
     if g.hidden[k]:
         lines.append(f"{g.hidden[k]} Tickets darunter nicht gezeichnet")
     return "<br>".join(lines)

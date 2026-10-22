@@ -1,6 +1,6 @@
-"""Kern (nur numpy/Standardbibliothek): gewichteter Fortschritt aus Status, Schätzung und Aggregationsebenen.
+"""Kern (nur numpy/Standardbibliothek): gewichteter Fortschritt aus Status, Story Points und Aggregationsebenen.
 
-Modell: Ein *Atom* ist ein Ticket unterhalb der Behälter (Story, Task, Bug; Epics, Initiativen und Sub-Tasks zählen nicht selbst). Es hat ein Gewicht w (die Schätzung;
+Modell: Ein *Atom* ist ein Ticket unterhalb der Behälter (Story, Task, Bug; Epics, Initiativen und Sub-Tasks zählen nicht selbst). Es hat ein Gewicht w (die Story Points;
 fehlt sie, der Median der geschätzten Atome) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
 P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sind keine Atome."""
 
@@ -18,7 +18,7 @@ STRUCTURAL_TYPES = ("epic", "initiative", "initiativen", "thema", "theme")      
 
 @dataclass(frozen=True)
 class Issue:
-    """Ein Ticket in der Form, die der Kern braucht. `points` (Schätzung in Tagen oder Story Points) ist None, wenn das Ticket nicht geschätzt ist."""
+    """Ein Ticket in der Form, die der Kern braucht. `points` (Story Points) ist None, wenn das Ticket nicht geschätzt ist."""
 
     key: str
     summary: str = ""
@@ -261,7 +261,7 @@ def unestimated_fill(issues, atoms) -> float:
 
 
 def atom_weights(issues, atoms, fill: float | None = None) -> np.ndarray:
-    """Gewicht je Atom: die Schätzung des Tickets; fehlt sie, gilt `fill` (Voreinstellung: der Median der geschätzten Atome, siehe `unestimated_fill`). Mit `fill` steht der Ersatzwert
+    """Gewicht je Atom: die Story Points des Tickets; fehlt sie, gilt `fill` (Voreinstellung: der Median der geschätzten Atome, siehe `unestimated_fill`). Mit `fill` steht der Ersatzwert
     fest, z. B. für Atome, die nicht zur Grundlage des Medians gehören."""
     if fill is None:
         fill = unestimated_fill(issues, atoms)
@@ -291,38 +291,6 @@ def _inherited(by_key: dict[str, Issue], issue: Issue, getter):
     value = getter(issue)
     parent = by_key.get(issue.parent) if not value else None
     return getter(parent) if parent is not None else value
-
-
-def ticket_sprint(by_key: dict[str, Issue], t: Issue) -> str:
-    """Der Sprint eines Tickets: bei mehreren der letzte, bei keinem der des übergeordneten Tickets (wie bei der Ebene Sprint); leer ohne Sprint."""
-    sprints = _inherited(by_key, t, lambda x: x.sprints)
-    return sprints[-1] if sprints else ""
-
-
-def sprint_order(issues) -> list[str]:
-    """Alle Sprints der Tickets in natürlicher Reihenfolge (Sprint 2 vor Sprint 10): die Reihenfolge, in der „von … bis …“ gilt."""
-    by_key = {i.key: i for i in issues}
-    return sorted({ticket_sprint(by_key, t) for t in issues} - {""}, key=natural_key)
-
-
-def filter_sprints(issues, atoms: list[int], first: str = C.SPRINT_OPEN, last: str = C.SPRINT_OPEN, include_none: bool = False) -> list[int]:
-    """Zeitraum der Auswertung: nur Atome, deren Sprint zwischen `first` und `last` liegt (beide eingeschlossen, offen = bis zum ersten bzw. letzten Sprint). Ohne beide Grenzen
-    bleibt alles. Atome ohne Sprint bleiben nur mit `include_none`. Ein Sprint, den es nicht gibt, ist ein Fehler; `first` hinter `last` ergibt nichts."""
-    if first == C.SPRINT_OPEN and last == C.SPRINT_OPEN:
-        return list(atoms)
-    order = sprint_order(issues)
-    for name in (first, last):
-        if name != C.SPRINT_OPEN and name not in order:
-            raise ValueError(f"unbekannter Sprint {name!r}")
-    lo = order.index(first) if first != C.SPRINT_OPEN else 0
-    hi = order.index(last) if last != C.SPRINT_OPEN else len(order) - 1
-    by_key = {i.key: i for i in issues}
-    keep = []
-    for i in atoms:
-        sprint = ticket_sprint(by_key, issues[i])
-        if (sprint == "" and include_none) or (sprint != "" and lo <= order.index(sprint) <= hi):
-            keep.append(i)
-    return keep
 
 
 def hierarchy_chains(issues) -> list[list[int]]:
@@ -418,7 +386,7 @@ class GroupStats:
     done_weight: np.ndarray  # sum w über erledigte Atome
     count: np.ndarray       # Atome (anteilig)
     done_count: np.ndarray
-    unestimated: np.ndarray  # Atome ohne Schätzung (anteilig)
+    unestimated: np.ndarray  # Atome ohne Story Points (anteilig)
 
     @property
     def progress(self) -> np.ndarray:
@@ -469,7 +437,7 @@ class TreeGraph:
     hidden: np.ndarray        # Zahl der Tickets darunter, die nicht gezeichnet werden (zusammengefasste Ebene)
     n_total: int              # Knoten vor dem Zusammenfassen
     shown_depth: int          # tiefste gezeichnete Ebene
-    ignored: np.ndarray | None = None      # zurückgewiesene Knoten und Knoten außerhalb des Zeitraums: zählen nicht, nichts messbar
+    ignored: np.ndarray | None = None      # zurückgewiesene Knoten: zählen nicht, nichts messbar
 
 
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, max_nodes: int = C.GRAPH_MAX_NODES,

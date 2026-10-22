@@ -4,7 +4,6 @@ Die Kopfzeile unten ist die Spaltenliste, die ein echter Export meldete."""
 
 import pytest
 
-import jira_constants as C
 import jira_plan as J
 from conftest import make_mini, plan_csv, random_project
 from jira_core import Issue
@@ -12,7 +11,7 @@ from jira_core import Issue
 REAL_HEADER = [
     "Hierarchie", "Titel", "Bereich", "Releases (hochrechnen)", "Releases", "Team (hochrechnen)", "Team", "Zugewiesene Person", "Autor", "Erstellt", "Aktualisiert",
     "Sprint (hochrechnen)", "Sprint", "Zielstartdatum (hochrechnen)", "Zielstartdatum", "Zielenddatum (hochrechnen)", "Zielenddatum", "Fälligkeitsdatum",
-    "Schätzung (T) (hochrechnen)", "Schätzung (T)", "Übergeordnetes Element", "Priorität", "Stichwörter", "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus", "Ziel",
+    "Schätzung (T) (hochrechnen)", "Schätzung (T)", "Story Points (hochrechnen)", "Story Points", "Übergeordnetes Element", "Priorität", "Stichwörter", "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus", "Ziel",
     "Zielstatus", "Idee", "Fortschritt (%)", "Fortschritt abgeschlossen (T)", "Verbleibender Fortschritt (T)", "Fortschritt (%) Anzahl Vorgänge (AV)", "AV zu erledigen",
     "In Arbeit AV", "Erledigt AV", "AV insgesamt", "Startdatum", "Beteiligte Gesellschaften/Bereiche"]
 
@@ -28,12 +27,12 @@ def _csv(*rows):
 
 
 EPIC = _row(**{"Hierarchie": "Epic", "Titel": "Suche", "Bereich": "Bereich Nord", "Releases (hochrechnen)": "Release 1.0", "Team (hochrechnen)": "Team Alpha",
-               "Sprint (hochrechnen)": "Sprint 3", "Schätzung (T) (hochrechnen)": "8,5", "Vorgangsschlüssel": "P-1", "Vorgangsstatus": "In Arbeit", "Fortschritt (%)": "35",
+               "Sprint (hochrechnen)": "Sprint 3", "Schätzung (T) (hochrechnen)": "42", "Story Points (hochrechnen)": "8,5", "Vorgangsschlüssel": "P-1", "Vorgangsstatus": "In Arbeit", "Fortschritt (%)": "35",
                "AV insgesamt": "2", "Erledigt AV": "1"})
 STORY_A = _row(**{"Hierarchie": "Story", "Titel": "Filter bauen", "Bereich": "Bereich Nord", "Releases": "Release 1.0", "Team": "Team Alpha", "Zugewiesene Person": "Person A",
-                  "Autor": "Person B", "Erstellt": "01.09.2026", "Sprint": "Sprint 2, Sprint 3", "Schätzung (T)": "5", "Übergeordnetes Element": "P-1", "Priorität": "Hoch",
+                  "Autor": "Person B", "Erstellt": "01.09.2026", "Sprint": "Sprint 2, Sprint 3", "Schätzung (T)": "99", "Story Points": "5", "Übergeordnetes Element": "P-1", "Priorität": "Hoch",
                   "Stichwörter": "ux, quick-win", "Komponenten": "Frontend", "Vorgangsschlüssel": "P-2", "Vorgangsstatus": "In Test"})
-STORY_B = _row(**{"Hierarchie": "Story", "Titel": "Index anlegen", "Bereich": "Bereich Nord", "Team": "Team Beta", "Erstellt": "02.09.2026", "Schätzung (T)": "3,5",
+STORY_B = _row(**{"Hierarchie": "Story", "Titel": "Index anlegen", "Bereich": "Bereich Nord", "Team": "Team Beta", "Erstellt": "02.09.2026", "Story Points": "3,5",
                   "Übergeordnetes Element": "P-1", "Priorität": "Mittel", "Vorgangsschlüssel": "P-3", "Vorgangsstatus": "Ready4Prod"})
 
 
@@ -43,11 +42,11 @@ def test_the_real_header_is_read_and_the_status_column_is_found():
     assert [i.status for i in issues] == ["In Arbeit", "In Test", "Ready4Prod"]
     rows = {r["Feld"]: r["Gefunden in"] for r in report.columns}
     assert rows["Status"] == "Vorgangsstatus" and rows["Ticket-Schlüssel"] == "Vorgangsschlüssel" and rows["Titel"] == "Titel" and rows["Ticket-Typ"] == "Hierarchie"
-    assert rows["Übergeordnetes Ticket"] == "Übergeordnetes Element" and rows["Schätzung"] == "Schätzung (T)" and rows["Sprint"] == "Sprint" and rows["Team"] == "Team"
+    assert rows["Übergeordnetes Ticket"] == "Übergeordnetes Element" and rows["Story Points"] == "Story Points" and rows["Sprint"] == "Sprint" and rows["Team"] == "Team"
     assert rows["Bereich"] == "Bereich" and rows["Priorität"] == "Priorität" and rows["Label"] == "Stichwörter" and rows["Komponente"] == "Komponenten"
     assert rows["Release"] == "Releases" and rows["Bearbeiter"] == "Zugewiesene Person"
     counts = {r["Feld"]: r["Tickets mit Wert"] for r in report.columns}
-    assert counts["Schätzung"] == 2 and counts["Übergeordnetes Ticket"] == 2 and counts["Sprint"] == 1 and counts["Ticket-Schlüssel"] == 3
+    assert counts["Story Points"] == 2 and counts["Übergeordnetes Ticket"] == 2 and counts["Sprint"] == 1 and counts["Ticket-Schlüssel"] == 3
 
 
 def test_rollup_columns_are_ignored_and_the_values_of_the_ticket_itself_are_read():
@@ -61,20 +60,15 @@ def test_rollup_columns_are_ignored_and_the_values_of_the_ticket_itself_are_read
 
 def test_all_columns_of_the_real_export_are_known_or_deliberately_skipped():
     used = {REAL_HEADER[i] for idx in J._columns(REAL_HEADER).values() for i in idx}
-    assert used == {"Hierarchie", "Titel", "Bereich", "Releases", "Team", "Zugewiesene Person", "Sprint", "Schätzung (T)", "Übergeordnetes Element", "Priorität", "Stichwörter",
+    assert used == {"Hierarchie", "Titel", "Bereich", "Releases", "Team", "Zugewiesene Person", "Sprint", "Story Points", "Übergeordnetes Element", "Priorität", "Stichwörter",
                     "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus"}
 
 
-def test_the_estimate_in_days_sets_the_unit_to_t_and_story_points_keep_sp():
-    report = J.read_plan(_csv(EPIC, STORY_A))[1]
-    assert report.unit == C.UNIT_DAYS and report.notes == []
-    assert J.read_plan(b"Issue key,Status,Story Points\nA-1,Done,3\n")[1].unit == C.UNIT_POINTS
-    assert J.read_plan(b"Issue key,Status\nA-1,Done\n")[1].unit == C.UNIT_POINTS
-
-
-def test_story_points_next_to_days_win_and_the_days_stay_unused():
-    issues, report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Schätzung (T);Story Points\nA-1;Done;5;3\nA-2;Done;4;\n".encode("utf-8"))
-    assert [i.points for i in issues] == [3.0, None] and report.unit == C.UNIT_POINTS and any("Story Points" in n and "Tage" in n for n in report.notes)
+def test_the_day_estimate_is_never_read_and_a_file_with_only_days_says_so():
+    issues, report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Schätzung (T)\nA-1;Done;5\nA-2;Done;4\n".encode("utf-8"))
+    assert [i.points for i in issues] == [None, None] and any("Keine Story-Points-Spalte" in n and "Schätzung (T)" in n and "nicht gelesen" in n for n in report.notes)
+    both, both_report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Schätzung (T);Story Points\nA-1;Done;5;3\nA-2;Done;4;\n".encode("utf-8"))
+    assert [i.points for i in both] == [3.0, None] and not any("Story-Points-Spalte" in n for n in both_report.notes)            # die Tage bleiben unbenutzt, ohne Rückfall je Ticket
 
 
 def test_english_header_with_commas_is_read_too():
@@ -109,12 +103,12 @@ def test_blank_rows_and_rows_without_a_key_are_skipped():
 
 def test_a_file_without_estimate_parent_and_sprint_columns_warns_instead_of_guessing():
     notes = J.read_plan("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\n".encode())[1].notes
-    assert any("Schätzungsspalte" in n for n in notes) and any("Übergeordnetes Element" in n for n in notes) and any("Sprint-Spalte" in n for n in notes)
+    assert any("Story-Points-Spalte" in n for n in notes) and any("Übergeordnetes Element" in n for n in notes) and any("Sprint-Spalte" in n for n in notes)
 
 
 def test_unreadable_estimates_count_as_unestimated_and_are_reported():
-    issues, report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Schaetzung (T)\nA-1;Done;5\nA-2;Done;viel\nA-3;Done;1,5\n".encode())
-    assert [i.points for i in issues] == [5.0, None, 1.5] and any("Nicht lesbare Schätzungen (keine Zahl): 1" in n for n in report.notes)
+    issues, report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Done;5\nA-2;Done;viel\nA-3;Done;1,5\n".encode())
+    assert [i.points for i in issues] == [5.0, None, 1.5] and any("Nicht lesbare Story Points (keine Zahl): 1" in n for n in report.notes)
     assert J.parse_number(None) is None and J.parse_number(True) is None and J.parse_number(2) == 2.0 and J.parse_number(" 3,5 ") == 3.5 and J.parse_number("") is None
 
 
@@ -154,8 +148,7 @@ def test_plan_csv_has_the_columns_of_the_real_export():
 
 def test_roundtrip_of_the_mini_project_and_of_random_projects():
     mini = make_mini()
-    again, report = J.read_plan(plan_csv(mini))
-    assert again == mini and report.unit == C.UNIT_DAYS
+    assert J.read_plan(plan_csv(mini))[0] == mini
     for seed in range(8):
         project = random_project(seed)
         assert J.read_plan(plan_csv(project))[0] == project
@@ -167,6 +160,6 @@ def test_rollup_cells_of_the_epic_are_sums_of_its_children_by_hand():
     rows = plan_csv(issues).decode("utf-8-sig").split("\n")
     header = rows[0].split(";")
     epic = dict(zip(header, rows[1].split(";")))
-    assert epic["Schätzung (T) (hochrechnen)"] == "3,5" and epic["Releases (hochrechnen)"] == "R1" and epic["Team (hochrechnen)"] == "T1, T2" and epic["Sprint (hochrechnen)"] == "S1, S2"
+    assert epic["Story Points (hochrechnen)"] == "3,5" and epic["Releases (hochrechnen)"] == "R1" and epic["Team (hochrechnen)"] == "T1, T2" and epic["Sprint (hochrechnen)"] == "S1, S2"
     story = dict(zip(header, rows[2].split(";")))
-    assert story["Schätzung (T) (hochrechnen)"] == "" and story["Schätzung (T)"] == "2"
+    assert story["Story Points (hochrechnen)"] == "" and story["Story Points"] == "2"

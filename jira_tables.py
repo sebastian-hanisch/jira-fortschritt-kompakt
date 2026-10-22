@@ -14,7 +14,7 @@ from jira_evaluation import Analysis, de, pct, status_list
 METRIC_WEIGHT, METRIC_COUNT, METRIC_CREDITED = "Gewicht", "Tickets", "Angerechnet"
 METRICS = (METRIC_WEIGHT, METRIC_COUNT, METRIC_CREDITED)
 SUM_LABEL = "Summe"
-MAX_LIST_ROWS = 200      # so viele Tickets nennt die Liste „ohne Schätzung“ höchstens
+MAX_LIST_ROWS = 200      # so viele Tickets nennt die Liste „ohne Story Points“ höchstens
 
 
 def atom_statuses(issues, a: Analysis) -> list[str]:
@@ -24,10 +24,10 @@ def atom_statuses(issues, a: Analysis) -> list[str]:
 
 
 def group_table(a: Analysis, dimension: str, unit: str) -> list[dict]:
-    """Je Gruppe der gewählten Ebene: Gewicht, Fortschritt, nur Done nach Gewicht, Tickets und Tickets ohne Schätzung."""
+    """Je Gruppe der gewählten Ebene: Gewicht, Fortschritt, nur Done nach Gewicht, Tickets und Tickets ohne Story Points."""
     s = a.stats
     return [{dimension: label, f"Gewicht ({unit})": float(w), "Fortschritt": None if p != p else float(p), "Nur Done (Gewicht)": None if d != d else float(d),
-             "Tickets": float(n), "ohne Schätzung": float(u)}
+             "Tickets": float(n), "ohne Story Points": float(u)}
             for label, w, p, d, n, u in zip(s.labels, s.weight, s.progress, s.progress_done, s.count, s.unestimated)]
 
 
@@ -55,15 +55,15 @@ def status_by_group(issues, a: Analysis, metric: str) -> list[dict]:
     return rows
 
 
-PARENT_COL, EPIC_COL, TOTAL_COL, EPIC_CHECK_COL = "Parent Ticket", "Epic-level Schätzung", "Total", "Epic vs. Total"
+PARENT_COL, EPIC_COL, TOTAL_COL, EPIC_CHECK_COL = "Parent Ticket", "Epic-level Story Points", "Total", "Epic vs. Total"
 REJECTED_COL, TOTAL_NET_COL, PROGRESS_COL = "Rejected", "Total (ohne Rejected)", "Fortschritt (gewichtet)"
 
 
 def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
-    """Matrix je übergeordnetem Ticket: Zeilen = Parent, Spalten = die Status des Teilbaums (nach Gewicht geordnet, das Gewicht im Kopf), Zelle = Gewicht (Schätzung).
-    Dazu die eigene Schätzung des Parents („Epic-level“) neben dem Total der Tickets darunter mit Markierung bei Abweichung, die zurückgewiesenen Tickets (auch die unter einem
+    """Matrix je übergeordnetem Ticket: Zeilen = Parent, Spalten = die Status des Teilbaums (nach Gewicht geordnet, das Gewicht im Kopf), Zelle = Gewicht (Story Points).
+    Dazu die eigenen Story Points des Parents („Epic-level“) neben dem Total der Tickets darunter mit Markierung bei Abweichung, die zurückgewiesenen Tickets (auch die unter einem
     zurückgewiesenen Parent) in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix
-    folgt Teilprojekt, Zeitraum und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
+    folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
     w_rej = A.atom_weights(issues, rej, fill=A.unestimated_fill(issues, keep))
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
@@ -125,24 +125,24 @@ def data_quality(issues, a: Analysis) -> list[dict]:
     epics = A.epic_of(issues)
     no_epic_names: dict[str, str] = {}
     checks = {
-        "Ohne Schätzung": sum(issues[i].points is None for i in atoms),
-        "Schätzung = 0": sum(issues[i].points == 0 for i in atoms),
+        "Ohne Story Points": sum(issues[i].points is None for i in atoms),
+        "Story Points = 0": sum(issues[i].points == 0 for i in atoms),
         "Ohne Epic": sum(epics[i] == "" for i in atoms),
         "Ohne Sprint": sum(A.group_labels(by_key, issues[i], epics[i], no_epic_names, C.DIM_SPRINT) == ["(ohne Sprint)"] for i in atoms),
         "Status ohne erkannte Bedeutung (zählt 0)": sum(A.status_class(issues[i].status) == "other" for i in atoms),
     }
     hints = {
-        "Ohne Schätzung": "Wiegen den Median der geschätzten Tickets.",
-        "Schätzung = 0": "Zählen als geschätzt mit Gewicht 0: Das Ticket hat keinen Einfluss auf den Fortschritt.",
+        "Ohne Story Points": "Wiegen den Median der geschätzten Tickets.",
+        "Story Points = 0": "Zählen als geschätzt mit Gewicht 0: Das Ticket hat keinen Einfluss auf den Fortschritt.",
         "Ohne Epic": "Landen in der Gruppe „(ohne Epic)“ der Ebene Epic.",
-        "Ohne Sprint": "Landen in der Gruppe „(ohne Sprint)“ der Ebene Sprint und fehlen in einem eingeschränkten Zeitraum.",
+        "Ohne Sprint": "Landen in der Gruppe „(ohne Sprint)“ der Ebene Sprint.",
         "Status ohne erkannte Bedeutung (zählt 0)": "Der Name klingt weder nach fertig noch nach Test, Merged oder Review (z. B. In Arbeit, To Do). Passt das nicht, die Gewichte der Status ändern.",
     }
     return [{"Prüfung": name, "Anzahl": count, "Anteil an den Tickets": count / n if n else None, "Wirkung": hints[name]} for name, count in checks.items()]
 
 
 def unestimated_tickets(issues, a: Analysis, limit: int = MAX_LIST_ROWS) -> tuple[list[dict], int]:
-    """Atome ohne Schätzung als Liste (Schlüssel, Titel, Typ, Status, Epic), höchstens `limit`; dazu die Gesamtzahl."""
+    """Atome ohne Story Points als Liste (Schlüssel, Titel, Typ, Status, Epic), höchstens `limit`; dazu die Gesamtzahl."""
     epics = A.epic_of(issues)
     found = [i for i in a.atoms if issues[i].points is None]
     rows = [{"Schlüssel": issues[i].key, "Titel": issues[i].summary, "Typ": issues[i].type, "Status": issues[i].status, "Epic": epics[i]} for i in found[:limit]]

@@ -1,7 +1,7 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Schätzung (T) bzw. Story Points, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und Komponenten. Spalten mit „(hochrechnen)“ sind Summen über die
+Story Points, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und Komponenten. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
 import csv
@@ -23,12 +23,11 @@ class ImportReport:
 
     issues: int = 0
     notes: list[str] = field(default_factory=list)
-    unit: str = C.UNIT_POINTS                              # Einheit der Schätzung: SP (Story Points) oder T (Tage, Spalte „Schätzung (T)“)
     columns: list[dict] = field(default_factory=list)      # Erkennungsbericht: je Feld, wo es gefunden wurde und bei wie vielen Tickets ein Wert steht
 
 
 FIELD_LABELS = (
-    ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Schätzung"), ("parent", "Übergeordnetes Ticket"),
+    ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
     ("sprint", "Sprint"), ("components", "Komponente"), ("labels", "Label"), ("assignee", "Bearbeiter"), ("versions", "Release"), ("team", "Team"), ("area", "Bereich"),
     ("priority", "Priorität"))
 NOT_FOUND = "nicht gefunden"
@@ -38,7 +37,7 @@ _ALIASES = {
     "summary": ("titel", "summary", "zusammenfassung"),
     "type": ("hierarchie", "issue type", "vorgangstyp", "type", "typ"),
     "status": ("vorgangsstatus", "status"),
-    "points": ("schätzung (t)", "schätzung (tage)", "schaetzung (t)", "story points", "story point estimate", "storypunkte", "story-punkte", "story-points", "custom field (story points)"),
+    "points": ("story points", "story point", "storypoints", "story point estimate", "storypunkte", "story-punkte", "story-points", "custom field (story points)"),
     "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang"),
     "sprint": ("sprint",),
     "components": ("komponenten", "component/s", "components"),
@@ -49,12 +48,12 @@ _ALIASES = {
     "area": ("bereich", "area"),
     "priority": ("priorität", "priority", "prioritaet"),
 }
-DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # Einheit Tage statt Story Points
+DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # die Schätzung in Tagen des Plan-Exports: wird nicht gelesen, nur gemeldet
 _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgabe", "untervorgang"}
 
 
 def parse_number(text) -> float | None:
-    """Schätzung aus Text oder Zahl; Komma oder Punkt als Dezimaltrenner, leer oder unlesbar = None."""
+    """Story Points aus Text oder Zahl; Komma oder Punkt als Dezimaltrenner, leer oder unlesbar = None."""
     if text is None or isinstance(text, bool):
         return None
     if isinstance(text, (int, float)):
@@ -96,18 +95,8 @@ def _columns(header: list[str]) -> dict[str, list[int]]:
     return found
 
 
-def _points_columns(header: list[str], idx: list[int]) -> tuple[list[int], list[str]]:
-    """Welche Spalten liefern das Gewicht? Stehen Story Points und eine Schätzung in Tagen nebeneinander, gelten nur die Story Points: Die Einheiten lassen sich nicht in einer Spalte
-    mischen (ein Ticket ohne Story Points darf nicht auf seine Tage zurückfallen). Rückgabe: die gelesenen Spalten und die Köpfe der nicht gelesenen Tagesschätzungen."""
-    days = [i for i in idx if _norm(header[i]) in DAY_ESTIMATE_HEADERS]
-    points = [i for i in idx if i not in days]
-    if points and days:
-        return points, [header[i].strip() for i in days]
-    return idx, []
-
-
 def field_counts(issues) -> dict[str, int]:
-    """Bei wie vielen Tickets steht je Feld ein Wert (Schätzung: eine Zahl, Eltern: ein Ticket, das im Bestand steht)."""
+    """Bei wie vielen Tickets steht je Feld ein Wert (Story Points: eine Zahl, Eltern: ein Ticket, das im Bestand steht)."""
     return {
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
@@ -158,9 +147,6 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
         raise PlanImportError("Die Datei ist leer.")
     header = rows[0]
     cols = _columns(header)
-    unused_estimates: list[str] = []
-    if len(cols.get("points", [])) > 1:
-        cols["points"], unused_estimates = _points_columns(header, cols["points"])
     for needed, label in (("key", "Vorgangsschlüssel"), ("status", "Vorgangsstatus")):
         if needed not in cols:
             raise PlanImportError(f"Die Spalte „{label}“ fehlt. Gefunden: {', '.join(h for h in header if h) or '(keine Kopfzeile)'}. Erwartet wird der CSV-Export aus Jira Plans.")
@@ -190,16 +176,11 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     issues = _resolve_parents(issues)
     lost_parents = with_parent - sum(bool(i.parent) for i in issues)
     report = ImportReport(issues=len(issues))
-    if any(_norm(header[i]) in DAY_ESTIMATE_HEADERS for i in cols.get("points", [])):
-        report.unit = C.UNIT_DAYS
     report.columns = coverage_rows(issues, {name: ", ".join(dict.fromkeys(header[i].strip() for i in idx)) for name, idx in cols.items()})
-    if unused_estimates:
-        used = ", ".join(dict.fromkeys(header[i].strip() for i in cols["points"]))
-        report.notes.append(
-            f"Die Datei enthält Story Points („{used}“) und eine Schätzung in Tagen („{', '.join(unused_estimates)}“). Gelesen werden die Story Points; die Tage bleiben unbenutzt, "
-            "weil sich beide Einheiten nicht in einer Gewichtsspalte mischen lassen. Tickets ohne Story Points gelten als ungeschätzt.")
     if "points" not in cols:
-        report.notes.append("Keine Schätzungsspalte gefunden („Schätzung (T)“ oder Story Points): Alle Tickets gelten als ungeschätzt und wiegen gleich viel.")
+        days = [h.strip() for h in header if _norm(h) in DAY_ESTIMATE_HEADERS]
+        unread = f" Die Schätzung in Tagen („{', '.join(days)}“) wird nicht gelesen." if days else ""
+        report.notes.append(f"Keine Story-Points-Spalte gefunden.{unread} Alle Tickets gelten als ungeschätzt und wiegen gleich viel.")
     if "parent" not in cols:
         report.notes.append("Keine Spalte „Übergeordnetes Element“: Epics und Hierarchie lassen sich nicht zuordnen.")
     if "sprint" not in cols:
@@ -207,5 +188,5 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     if lost_parents:
         report.notes.append(f"{lost_parents} Verweise auf übergeordnete Tickets konnten keinem Ticket der Datei zugeordnet werden (Eltern außerhalb der Datei, oder ein Titel statt eines Schlüssels, der nicht eindeutig ist).")
     if bad_points:
-        report.notes.append(f"Nicht lesbare Schätzungen (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+        report.notes.append(f"Nicht lesbare Story Points (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
     return tuple(issues), report

@@ -1,4 +1,4 @@
-"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Zeitraum, Ebene und geänderten Status-Gewichten."""
+"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Ebene und geänderten Status-Gewichten."""
 
 from dataclasses import dataclass
 
@@ -13,9 +13,6 @@ class Settings:
     dimension: str = C.DEFAULT_DIM
     level: int = 1                                       # Hierarchiestufe der Ebene „Hierarchiestufe“ (1 = oberste)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
-    sprint_from: str = C.SPRINT_OPEN                     # Zeitraum: erster Sprint (offen = vom Anfang)
-    sprint_to: str = C.SPRINT_OPEN                       # Zeitraum: letzter Sprint (offen = bis zum Ende)
-    include_no_sprint: bool = False                      # Tickets ohne Sprint im eingeschränkten Zeitraum mitzählen
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
 
 
@@ -32,12 +29,11 @@ class Analysis:
     stats: A.GroupStats
     tree: A.TreeGraph
     atoms: tuple[int, ...]      # Indizes der Atome in der Ticketliste (Grundlage der Tabellen)
-    rejected_atoms: tuple[int, ...]      # zurückgewiesene Atome im Zeitraum: zählen nicht
+    rejected_atoms: tuple[int, ...]      # zurückgewiesene Atome: zählen nicht
     w: np.ndarray               # Gewicht je Atom
     c: np.ndarray               # Gutschrift je Atom
     done: np.ndarray            # erledigt je Atom
     assign: A.Assignment        # Zuordnung der Atome zur Ebene
-    n_outside: int = 0          # Atome außerhalb des gewählten Zeitraums
 
     @property
     def n_excluded(self) -> int:
@@ -62,10 +58,8 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     credit_of = A.status_credits(status_list(issues), settings.overrides)
     rejected = A.rejected_indices(issues)
     every = A.select_atoms(issues)
-    counted = [i for i in every if i not in rejected]
-    atoms = A.filter_sprints(issues, counted, settings.sprint_from, settings.sprint_to, settings.include_no_sprint)
-    outside = frozenset(counted) - frozenset(atoms)
-    rejected_atoms = tuple(A.filter_sprints(issues, [i for i in every if i in rejected], settings.sprint_from, settings.sprint_to, settings.include_no_sprint))
+    atoms = [i for i in every if i not in rejected]
+    rejected_atoms = tuple(i for i in every if i in rejected)
     w = A.atom_weights(issues, atoms)
     c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
@@ -73,18 +67,18 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     p_w, p_d, p_n = A.overall(w, c, done)
     first = A.assign_groups(issues, atoms, settings.dimension, settings.level)
     stats = A.aggregate(first, w, c, done, unest)
-    tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected | outside)
-    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first, len(outside))
+    tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
+    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first)
 
 
 def unestimated_note(n_unestimated: int, n_atoms: int) -> tuple[str, str]:
-    """Wie viele Tickets haben keine Schätzung? Sie wiegen den Median der geschätzten Tickets."""
+    """Wie viele Tickets haben keine Story Points? Sie wiegen den Median der geschätzten Tickets."""
     if n_atoms == 0:
         return "warning", "Es gibt keine zählenden Tickets."
     if n_unestimated == 0:
         return "success", f"Alle {n_atoms} Tickets sind geschätzt."
     share = 100 * n_unestimated / n_atoms
-    text = f"{n_unestimated} von {n_atoms} Tickets ({de(share)} %) haben keine Schätzung und wiegen den Median der geschätzten Tickets."
+    text = f"{n_unestimated} von {n_atoms} Tickets ({de(share)} %) haben keine Story Points und wiegen den Median der geschätzten Tickets."
     return ("warning" if share >= 20 else "info"), text
 
 

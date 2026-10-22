@@ -35,16 +35,16 @@ def test_without_a_file_the_app_asks_for_one_and_stops():
 def test_the_headline_numbers_of_the_mini_project():
     at = _open(plan_csv(make_mini()))
     _ok(at)
-    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (T, gesamt 13,5)"]
+    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 13,5)"]
     assert [m.value for m in at.metric] == ["44,4 %", "29,6 %", "40,0 %", "7,5"]            # 6 / 13,5; 4 / 13,5; 2 von 5; 13,5 · (1 − 6/13,5)
-    assert [w.value for w in at.warning] == [ev.unestimated_note(1, 5)[1]] and any("Tagen (T)" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (1 von 5 = 20 %); die Einheit steht im Erkennungsbericht
+    assert [w.value for w in at.warning] == [ev.unestimated_note(1, 5)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (1 von 5 = 20 %); die Zahl der Tickets steht im Erkennungsbericht
 
 
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
     at = _open(plan_csv(make_mini()))
     labels = [s.label for s in at.sidebar.selectbox]
-    assert labels == ["Teilprojekt (Wurzel)", "Zeitraum: von Sprint", "bis Sprint", "Zusammenfassen nach"]
-    assert [t.label for t in at.sidebar.toggle] == ["Tickets ohne Sprint mitzählen"] and not at.sidebar.radio and not at.sidebar.slider
+    assert labels == ["Teilprojekt (Wurzel)", "Zusammenfassen nach"]
+    assert not at.sidebar.toggle and not at.sidebar.radio and not at.sidebar.slider
     assert not at.radio or [r.label for r in at.radio] == ["Kennzahl je Zelle"]
 
 
@@ -70,22 +70,6 @@ def test_the_subproject_selection_rescopes_the_numbers():
     assert at.metric[0].value == "0,0 %"                                                         # nur S2 (In Progress) mit zwei Sub-Tasks
     at.sidebar.selectbox(key="root").set_value("").run(timeout=TIMEOUT)
     assert at.metric[0].value == "44,4 %"
-
-
-def test_the_period_selection_restricts_the_basis():
-    at = _open(plan_csv(make_mini()))
-    at.sidebar.selectbox(key="sprint_from").set_value("Sprint 2").run(timeout=TIMEOUT)
-    _ok(at)
-    assert at.metric[0].value == "37,8 %" and any("2 außerhalb" in i.value for i in at.info)                  # 3,4 / 9
-    at.sidebar.toggle(key="sprint_none").set_value(True).run(timeout=TIMEOUT)
-    _ok(at)
-    assert any("einschließlich der Tickets ohne Sprint" in i.value for i in at.info) and at.metric[0].value == "26,0 %"      # S2 (5), S3 (2), S4 (Median von 5, 2, 1 = 2, Review), B1 (1): 2,6 / 10
-    at.sidebar.selectbox(key="sprint_to").set_value("Sprint 1").run(timeout=TIMEOUT)
-    _ok(at)
-    assert any("1 zählende Tickets" in i.value for i in at.info) and at.metric[0].value == "0,0 %"                           # Anfang hinter Ende: nur das Ticket ohne Sprint bleibt
-    at.sidebar.toggle(key="sprint_none").set_value(False).run(timeout=TIMEOUT)
-    _ok(at)
-    assert any("kein zählendes Ticket" in w.value for w in at.warning) and at.metric[0].value == "–"
 
 
 def test_changed_status_weights_change_the_numbers():
@@ -117,7 +101,7 @@ def test_unreadable_files_show_an_error_and_stop():
 def test_a_file_without_estimates_weighs_every_ticket_the_same():
     at = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\nA-2;To Do\nA-3;In Progress\n".encode())
     _ok(at)
-    assert any("Schätzungsspalte" in w.value for w in at.warning) and at.metric[0].value == "33,3 %"          # (1 + 0 + 0) / 3
+    assert any("Story-Points-Spalte" in w.value for w in at.warning) and at.metric[0].value == "33,3 %"          # (1 + 0 + 0) / 3
     assert at.metric[3].label.startswith("Offenes Gewicht (SP,")
 
 

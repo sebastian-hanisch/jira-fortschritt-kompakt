@@ -1,7 +1,7 @@
 # Jira-Fortschritt kompakt
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
-Teilbaums nach **Status und Schätzung** gewichtet und zeigt ihn als Kennzahlen, Balken, Hierarchiegraph und Tabellen, die sich direkt in Jira oder Confluence einfügen lassen.
+Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Hierarchiegraph und Tabellen, die sich direkt in Jira oder Confluence einfügen lassen.
 Es gibt keine Beispieldaten, keinen Upload-Dienst und keine Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
@@ -23,7 +23,7 @@ CSV-Export aus Jira Plans (Plan öffnen → Export → CSV, deutsche oder englis
 | Status (Pflicht) | Vorgangsstatus |
 | Typ / Hierarchie | Hierarchie |
 | Eltern | Übergeordnetes Element (als Schlüssel, Schlüssel mit Titel oder eindeutiger Titel) |
-| Schätzung | Schätzung (T), die Einheit ist dann Tage; stehen daneben Story Points, gelten nur sie |
+| Gewicht | Story Points (die Schätzung in Tagen, „Schätzung (T)“, wird nicht gelesen) |
 | weitere | Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter, Komponenten |
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
@@ -32,7 +32,7 @@ Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gele
 ## Was zählt
 
 * **Zählende Tickets:** Story, Task und Bug. Epics, Initiativen, Themen und Sub-Tasks fassen zusammen und zählen nicht selbst.
-* **Gewicht:** die Schätzung des Tickets; fehlt sie, der Median der geschätzten Tickets (im gewählten Teilbaum und Zeitraum).
+* **Gewicht:** die Story Points des Tickets; fehlen sie, der Median der Tickets mit Story Points (im gewählten Teilbaum).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %.
 * **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
@@ -43,19 +43,18 @@ Sonst gibt es nichts einzustellen.
 
 ## Auswahl (Seitenleiste)
 
-* **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status, Sprints und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
-* **Zeitraum von Sprint … bis Sprint …**, optional mit den Tickets ohne Sprint (es zählt der letzte Sprint eines Tickets).
+* **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
 * **Zusammenfassen nach:** Epic, Hierarchiestufe, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Ticket-Typ oder Status.
 
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken, Hierarchiegraph und vier Tabellen: **Status-Matrix je Parent**
-(Summe der Schätzungen je Status mit dem Gewicht im Kopf, Epic-Schätzung gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt), Je Gruppe, Status × Gruppe und
+(Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt), Je Gruppe, Status × Gruppe und
 Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtung, Sub-Task-Mischung, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtung, Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren, Datenschutzoptionen (die App läuft lokal).
 
 ## Aufbau

@@ -1,4 +1,4 @@
-"""Jira-Fortschritt kompakt: Export aus Jira Plans einlesen und den nach Status und Schätzung gewichteten Fortschritt zeigen.
+"""Jira-Fortschritt kompakt: Export aus Jira Plans einlesen und den nach Status und Story Points gewichteten Fortschritt zeigen.
 
 Lauffähig mit: streamlit run app.py
 """
@@ -33,12 +33,12 @@ def _reset_weights():
 
 
 st.title("📊 Jira-Fortschritt")
-st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit der Schätzung der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
+st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit den Story Points der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
            "zurückgewiesene Tickets zählen nicht. Alles läuft lokal: Die Datei verlässt diesen Rechner nicht.")
 
 upload = st.file_uploader("Export aus Jira Plans (CSV)", type=["csv"], key="upload", help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
 if upload is None:
-    st.info("Bitte den CSV-Export aus Jira Plans wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Vorgangsstatus“; für die Gewichte „Schätzung (T)“ (oder Story Points), "
+    st.info("Bitte den CSV-Export aus Jira Plans wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Vorgangsstatus“; für die Gewichte „Story Points“, "
             "für die Hierarchie „Hierarchie“ und „Übergeordnetes Element“.")
     st.stop()
 try:
@@ -54,7 +54,7 @@ if not issues_all:
     st.stop()
 for note in report.notes:
     st.warning(note)
-with st.expander(f"🔎 Was wurde erkannt? ({len(issues_all)} Tickets, Schätzung in {'Tagen (T)' if report.unit == C.UNIT_DAYS else 'Story Points'})"):
+with st.expander(f"🔎 Was wurde erkannt? ({len(issues_all)} Tickets)"):
     st.caption("Welche Spalte wofür gelesen wurde und bei wie vielen Tickets ein Wert steht. Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden nicht gelesen, ebenso alle weiteren Spalten des Exports.")
     st.dataframe(report.columns, hide_index=True, width="stretch")
 
@@ -78,22 +78,8 @@ with st.sidebar:
     st.header("Auswahl")
     root = st.selectbox(
         "Teilprojekt (Wurzel)", root_options, key="root", format_func=root_label, disabled=not root_depth,
-        help="Macht dieses Ticket zur Wurzel: Alles Weitere (Status, Zeitraum, Ebenen, Kennzahlen, Diagramme, Tabellen) gilt wie für einen eigenständigen Datensatz aus diesem Ticket und allem darunter.")
+        help="Macht dieses Ticket zur Wurzel: Alles Weitere (Status, Ebenen, Kennzahlen, Diagramme, Tabellen) gilt wie für einen eigenständigen Datensatz aus diesem Ticket und allem darunter.")
     issues = A.scope_issues(issues_all, root)
-    sprint_options = (C.SPRINT_OPEN, *A.sprint_order(issues))
-    for _key in ("sprint_from", "sprint_to"):
-        if st.session_state.get(_key, C.SPRINT_OPEN) not in sprint_options:        # das Teilprojekt hat gewechselt: den alten Sprint gibt es nicht mehr
-            st.session_state[_key] = C.SPRINT_OPEN
-
-    def sprint_label(name):
-        return "(offen)" if name == C.SPRINT_OPEN else name
-
-    sprint_from = st.selectbox(
-        "Zeitraum: von Sprint", sprint_options, key="sprint_from", format_func=sprint_label, disabled=len(sprint_options) < 2,
-        help="Nur Tickets, deren Sprint im Zeitraum liegt (beide Grenzen eingeschlossen). Es zählt der letzte Sprint eines Tickets; die Reihenfolge ist die natürliche der Namen (Sprint 2 vor Sprint 10).")
-    sprint_to = st.selectbox("bis Sprint", sprint_options, key="sprint_to", format_func=sprint_label, disabled=len(sprint_options) < 2)
-    sprint_none = st.toggle("Tickets ohne Sprint mitzählen", key="sprint_none", disabled=sprint_from == C.SPRINT_OPEN and sprint_to == C.SPRINT_OPEN,
-                            help="Im eingeschränkten Zeitraum zählen Tickets ohne Sprint (z. B. Backlog) sonst nicht. Ohne Einschränkung zählen alle.")
     dimension = st.selectbox("Zusammenfassen nach", C.DIMENSIONS, index=C.DIMENSIONS.index(C.DEFAULT_DIM), key="dimension",
                              help="Wonach die Tickets zusammengefasst werden. Tickets mit mehreren Werten (Stichwörter, Komponenten) zählen anteilig.")
     level = 1
@@ -124,8 +110,8 @@ with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Name
 
 # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
-unit = report.unit
-settings = Settings(dimension=dimension, level=level, root=root, sprint_from=sprint_from, sprint_to=sprint_to, include_no_sprint=sprint_none, overrides=overrides)
+unit = C.UNIT
+settings = Settings(dimension=dimension, level=level, root=root, overrides=overrides)
 a = analyse(issues, settings)
 
 st.markdown("## 🎯 Ergebnis")
@@ -133,12 +119,6 @@ for problem in check_consistency(a):
     st.error(f"Interne Prüfung verletzt: {problem}")
 if root != C.ROOT_ALL:
     st.info(f"Die Auswertung ist auf **{root_label(root).lstrip('↳ ')}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
-if sprint_from != C.SPRINT_OPEN or sprint_to != C.SPRINT_OPEN:
-    span = f"{sprint_from or 'Anfang'} bis {sprint_to or 'Ende'}"
-    if a.n_atoms == 0:
-        st.warning(f"Im Zeitraum {span} liegt kein zählendes Ticket (Anfang hinter Ende oder keine Tickets in diesen Sprints).")
-    else:
-        st.info(f"Zeitraum **{span}**" + (", einschließlich der Tickets ohne Sprint" if sprint_none else "") + f": {a.n_atoms} zählende Tickets, {a.n_outside} außerhalb des Zeitraums.")
 if a.n_excluded:
     bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
     st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
@@ -201,19 +181,19 @@ def show_table(rows, key, formats=None, file_name="tabelle"):
 tab_parent, tab_group, tab_status, tab_quality = st.tabs(["Status-Matrix je Parent", "Je Gruppe", "Status × Gruppe", "Datenqualität"])
 with tab_parent:
     st.caption(
-        "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Schätzungen der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
-        "„Epic-level Schätzung“ ist die eigene Schätzung des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
-        "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Schätzung gewichtet.")
+        "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
+        "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
+        "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet.")
     matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
     matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
     matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
     show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
 with tab_group:
-    show_table(T.group_table(a, dimension, unit), "group", {f"Gewicht ({unit})": "%.1f", "Fortschritt": "percent", "Nur Done (Gewicht)": "percent", "Tickets": "%.1f", "ohne Schätzung": "%.1f"},
+    show_table(T.group_table(a, dimension, unit), "group", {f"Gewicht ({unit})": "%.1f", "Fortschritt": "percent", "Nur Done (Gewicht)": "percent", "Tickets": "%.1f", "ohne Story Points": "%.1f"},
                "fortschritt-je-gruppe")
 with tab_status:
     st.caption(f"Wie verteilt sich jede Gruppe der Ebene „{dimension}“ auf die Status? Tickets mit mehreren Werten zählen anteilig.")
-    metric = st.radio("Kennzahl je Zelle", T.METRICS, key="table_metric", horizontal=True, help="Gewicht = Schätzung, Tickets = Anzahl, Angerechnet = Gewicht mal Gutschrift des Status.")
+    metric = st.radio("Kennzahl je Zelle", T.METRICS, key="table_metric", horizontal=True, help="Gewicht = Story Points, Tickets = Anzahl, Angerechnet = Gewicht mal Gutschrift des Status.")
     status_names = T.atom_statuses(issues, a)
     show_table(T.status_by_group(issues, a, metric), "status", {**{name: "%.1f" for name in (*status_names, T.SUM_LABEL)}, "Fortschritt": "percent"}, "status-je-gruppe")
 with tab_quality:
@@ -221,8 +201,8 @@ with tab_quality:
     show_table(T.data_quality(issues, a), "quality", {"Anteil an den Tickets": "percent"}, "datenqualitaet")
     unest_rows, unest_total = T.unestimated_tickets(issues, a)
     if unest_total:
-        st.markdown(f"**Tickets ohne Schätzung** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
-        show_table(unest_rows, "unest", None, "ohne-schaetzung")
+        st.markdown(f"**Tickets ohne Story Points** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
+        show_table(unest_rows, "unest", None, "ohne-story-points")
 
 # --- Erklärung -----------------------------------------------------------------------------------------------------------------------------
 
@@ -232,7 +212,7 @@ with st.expander("📐 So wird gerechnet"):
 **Zählende Tickets.** Story, Task und Bug; Epics, Initiativen, Themen und Sub-Tasks fassen zusammen und zählen nicht selbst. Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
 Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl.
 
-**Gewicht** eines Tickets ist seine Schätzung (Tage oder Story Points). Fehlt sie, wiegt es den Median der geschätzten Tickets (ohne geschätztes Ticket 1).
+**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, wiegt es den Median der geschätzten Tickets (ohne geschätztes Ticket 1).
 
 **Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;
@@ -246,8 +226,8 @@ Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern
         """
 Ein Ticket mit mehreren Werten (Stichwörter, Komponenten, Releases) teilt sich gleichmäßig auf seine Gruppen auf, damit die Summe über alle Gruppen die Gesamtsumme bleibt.
 
-**Teilprojekt und Zeitraum.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets, die Status der Gewichtstabelle, die Sprints und die
-Hierarchiestufen beziehen sich nur auf diesen Teilbaum. Der Zeitraum schränkt auf Tickets ein, deren Sprint (bei mehreren der letzte) zwischen den gewählten Sprints liegt.
+**Teilprojekt.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets, die Status der Gewichtstabelle, die Sprints und die
+Hierarchiestufen beziehen sich nur auf diesen Teilbaum.
 
 **Grenzen.** Die Gutschriften sind Annahmen. Der Plan-Export enthält weder einen Statusverlauf noch ein Lösungsdatum, deshalb gibt es keinen Verlauf über die Zeit und keine Prognose.
 """

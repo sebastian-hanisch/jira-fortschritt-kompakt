@@ -2,11 +2,11 @@
 
 Mini-Projekt (alle Zahlen von Hand gerechnet, siehe die Tests):
 
-    E1 Epic A   |  S1 Story  3 T  Done         Sprint 1
-                |  S2 Story  5 T  In Progress  Sprint 1, Sprint 2     Sub-Tasks T1 (Done), T2 (To Do), ohne Schätzung
-    E2 Epic B   |  S3 Story  2 T  To Do        (kein Sprint)
-                |  S4 Story  ? T  In Review    Sprint 2
-    ohne Epic   |  B1 Bug    1 T  Done         Sprint 2
+    E1 Epic A   |  S1 Story  3 SP Done         Sprint 1
+                |  S2 Story  5 SP In Progress  Sprint 1, Sprint 2     Sub-Tasks T1 (Done), T2 (To Do), ohne Schätzung
+    E2 Epic B   |  S3 Story  2 SP To Do        (kein Sprint)
+                |  S4 Story  ? SP In Review    Sprint 2
+    ohne Epic   |  B1 Bug    1 SP Done         Sprint 2
 """
 
 import csv
@@ -37,11 +37,11 @@ def make_mini() -> tuple[Issue, ...]:
 
 
 PLAN_HEADER = ("Hierarchie", "Titel", "Bereich", "Releases (hochrechnen)", "Releases", "Team (hochrechnen)", "Team", "Zugewiesene Person", "Erstellt", "Sprint (hochrechnen)", "Sprint",
-               "Schätzung (T) (hochrechnen)", "Schätzung (T)", "Übergeordnetes Element", "Priorität", "Stichwörter", "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus")
+               "Story Points (hochrechnen)", "Story Points", "Übergeordnetes Element", "Priorität", "Stichwörter", "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus")
 
 
 def plan_csv(issues) -> bytes:
-    """Tickets im Aufbau des Plan-Exports (deutsche Oberfläche, Semikolon, Schätzung in Tagen mit Dezimalkomma, Mehrfachwerte mit Komma getrennt). Die Spalten „… (hochrechnen)“
+    """Tickets im Aufbau des Plan-Exports (deutsche Oberfläche, Semikolon, Story Points mit Dezimalkomma, Mehrfachwerte mit Komma getrennt). Die Spalten „… (hochrechnen)“
     tragen bei Epics die Summen bzw. Mengen ihrer Kinder."""
     children: dict[str, list[Issue]] = {}
     for i in issues:

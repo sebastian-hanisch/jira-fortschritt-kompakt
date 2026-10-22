@@ -17,7 +17,7 @@ from test_status import TREE
 def test_progress_of_the_mini_project_by_hand(mini):
     a = ev.analyse(mini)
     # Gewichte 3, 5, 2, 2,5 (Median), 1; Gutschriften 1, 0, 0, 0,8 (In Review), 1
-    assert (a.n_atoms, a.weight, a.n_unestimated, a.n_outside, a.n_excluded) == (5, 13.5, 1, 0, 0)
+    assert (a.n_atoms, a.weight, a.n_unestimated, a.n_excluded) == (5, 13.5, 1, 0)
     assert a.progress == pytest.approx(6 / 13.5) and a.progress_done == pytest.approx(4 / 13.5) and a.progress_count == pytest.approx(2 / 5)
     assert a.credits == {"In Progress": 0.0, "To Do": 0.0, "In Review": 0.8, "Done": 1.0}
     assert ev.check_consistency(a) == [] and [mini[i].key for i in a.atoms] == ["S1", "S2", "S3", "S4", "B1"]
@@ -73,29 +73,6 @@ def test_graph_marks_rejected_nodes_as_not_measurable():
     assert by["E1"][0] == pytest.approx(2 / 6) and by["S1"][1] is False
 
 
-# ---------------------------------------------------------------- Zeitraum
-
-def test_period_restricts_the_basis_and_the_median_by_hand(mini):
-    a = ev.analyse(mini, ev.Settings(sprint_from="Sprint 2"))
-    # im Zeitraum S2 (5), S4 (ungeschätzt: Median von 5 und 1 = 3), B1 (1); S1 (Sprint 1) und S3 (kein Sprint) liegen außerhalb
-    assert (a.n_atoms, a.n_outside, a.weight) == (3, 2, 9.0)
-    assert a.progress == pytest.approx((0 * 5 + 0.8 * 3 + 1 * 1) / 9) and ev.check_consistency(a) == []
-    with_none = ev.analyse(mini, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 2", include_no_sprint=True))
-    assert (with_none.n_atoms, with_none.n_outside) == (4, 1)
-
-
-def test_an_empty_period_gives_no_progress_and_no_crash(mini):
-    a = ev.analyse(mini, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 1"))
-    assert a.n_atoms == 0 and a.n_outside == 5 and math.isnan(a.progress) and ev.check_consistency(a) == []
-
-
-def test_period_and_rejected_combine():
-    items = (Issue(key="A", points=2.0, status="Done", sprints=("S1",)), Issue(key="B", points=3.0, status="Rejected", sprints=("S1",)), Issue(key="C", points=4.0, status="Rejected", sprints=("S2",)),
-             Issue(key="D", points=1.0, status="To Do", sprints=("S2",)))
-    a = ev.analyse(items, ev.Settings(sprint_from="S2"))
-    assert [items[i].key for i in a.atoms] == ["D"] and [items[i].key for i in a.rejected_atoms] == ["C"] and a.n_outside == 1
-
-
 # ---------------------------------------------------------------- Teilprojekt
 
 def test_a_subproject_is_a_standalone_dataset_by_hand(mini):
@@ -128,15 +105,6 @@ def test_random_projects_pass_the_internal_consistency_check_in_every_dimension(
         assert ev.check_consistency(a) == [], (seed, dim)
         assert math.isnan(a.progress) or 0.0 <= a.progress <= 1.0
         assert a.progress_done <= a.progress + 1e-12 or math.isnan(a.progress)                 # fertig zählt 100 %: nie mehr als der gewichtete Fortschritt
-
-
-@pytest.mark.parametrize("seed", range(10))
-def test_random_projects_with_a_period_pass_the_check(seed):
-    project = random_project(seed)
-    order = A.sprint_order(project)
-    for lo, hi in ((order[0], order[-1]), (order[len(order) // 2], ""), ("", order[len(order) // 2])):
-        a = ev.analyse(project, ev.Settings(sprint_from=lo, sprint_to=hi))
-        assert ev.check_consistency(a) == [] and a.n_atoms + a.n_outside == len([i for i in A.select_atoms(project) if i not in A.rejected_indices(project)])
 
 
 def test_consistency_check_reports_a_broken_analysis(mini):

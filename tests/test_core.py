@@ -123,28 +123,6 @@ def test_tree_order_lists_every_ticket_once_even_in_a_cycle():
     assert sorted(i for i, _, _ in A.tree_order(loop)) == [0, 1, 2]
 
 
-# ---------------------------------------------------------------- Zeitraum
-
-def test_sprint_order_is_natural_and_inherits_to_sub_tasks(mini):
-    assert A.sprint_order(mini) == ["Sprint 1", "Sprint 2"]
-    many = tuple(Issue(key=f"K{n}", sprints=(f"Sprint {n}",)) for n in (10, 2, 1))
-    assert A.sprint_order(many) == ["Sprint 1", "Sprint 2", "Sprint 10"]
-    by_key = {t.key: t for t in mini}
-    assert A.ticket_sprint(by_key, by_key["T1"]) == "Sprint 2" and A.ticket_sprint(by_key, by_key["S3"]) == ""
-
-
-def test_filter_sprints_by_hand(mini):
-    atoms = A.select_atoms(mini)
-    assert keys(mini, A.filter_sprints(mini, atoms)) == ["S1", "S2", "S3", "S4", "B1"]
-    assert keys(mini, A.filter_sprints(mini, atoms, "Sprint 2", "")) == ["S2", "S4", "B1"]
-    assert keys(mini, A.filter_sprints(mini, atoms, "", "Sprint 1")) == ["S1"]
-    assert keys(mini, A.filter_sprints(mini, atoms, "Sprint 2", "Sprint 2", True)) == ["S2", "S3", "S4", "B1"]
-    assert A.filter_sprints(mini, atoms, "Sprint 2", "Sprint 1") == []
-    assert keys(mini, A.filter_sprints(mini, atoms, "", "", True)) == ["S1", "S2", "S3", "S4", "B1"]          # ohne Grenzen bleibt alles
-    with pytest.raises(ValueError):
-        A.filter_sprints(mini, atoms, "Sprint 9", "")
-
-
 # ---------------------------------------------------------------- Hierarchiestufen
 
 def test_levels_by_hand(mini):

@@ -72,7 +72,7 @@ def test_a_matching_estimate_is_marked_as_equal():
     assert row[T.EPIC_CHECK_COL] == "gleich" and row[T.TOTAL_COL] == 9.0 and row[T.PROGRESS_COL] == pytest.approx(4 / 9)
 
 
-def test_the_matrix_follows_root_period_and_changed_weights():
+def test_the_matrix_follows_root_and_changed_weights():
     sub = scope_issues(ITEMS, "E2")
     sub_rows = T.parent_status_matrix(sub, ev.analyse(sub, ev.Settings(root="E2")))[0]
     assert {r[T.PARENT_COL] for r in sub_rows} == {"E2: Zwei", T.SUM_LABEL}
@@ -87,13 +87,10 @@ def test_no_status_at_90_percent_gives_a_named_empty_completed_column():
     assert completed == "Completed (kein Status ab 90 %)" and all(r[completed] is None for r in rows)
 
 
-def test_empty_selection_gives_no_rows():
-    items = (Issue(key="E", type="Epic"), Issue(key="A", parent="E", points=1.0, sprints=("Sprint 1",)), Issue(key="B", parent="E", points=2.0, sprints=("Sprint 2",)))
-    assert T.parent_status_matrix(items, ev.analyse(items, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 1")))[0] == []
+def test_a_plan_without_countable_tickets_gives_no_rows():
     only_epic = (Issue(key="E", type="Epic"),)
     assert T.parent_status_matrix(only_epic, ev.analyse(only_epic))[0] == []
-    in_range = ev.analyse(items, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 2"))
-    assert [r[T.TOTAL_COL] for r in T.parent_status_matrix(items, in_range)[0]] == [2.0, 2.0]
+    assert T.status_by_group(only_epic, ev.analyse(only_epic), T.METRIC_WEIGHT) == []
 
 
 def test_tickets_without_a_parent_form_their_own_row_after_the_parents_in_natural_order():
@@ -112,8 +109,8 @@ def test_fractional_totals_below_one_still_give_the_shares():
 
 def test_group_table_by_hand(mini):
     rows = T.group_table(ev.analyse(mini), "Epic", "T")
-    assert [r["Epic"] for r in rows] == ["E1: Epic A", "E2: Epic B", "(ohne Epic)"] and list(rows[0]) == ["Epic", "Gewicht (T)", "Fortschritt", "Nur Done (Gewicht)", "Tickets", "ohne Schätzung"]
-    assert [r["Gewicht (T)"] for r in rows] == [8.0, 4.5, 1.0] and [r["Tickets"] for r in rows] == [2.0, 2.0, 1.0] and [r["ohne Schätzung"] for r in rows] == [0.0, 1.0, 0.0]
+    assert [r["Epic"] for r in rows] == ["E1: Epic A", "E2: Epic B", "(ohne Epic)"] and list(rows[0]) == ["Epic", "Gewicht (T)", "Fortschritt", "Nur Done (Gewicht)", "Tickets", "ohne Story Points"]
+    assert [r["Gewicht (T)"] for r in rows] == [8.0, 4.5, 1.0] and [r["Tickets"] for r in rows] == [2.0, 2.0, 1.0] and [r["ohne Story Points"] for r in rows] == [0.0, 1.0, 0.0]
     assert [r["Fortschritt"] for r in rows] == pytest.approx([3 / 8, 2 / 4.5, 1.0]) and [r["Nur Done (Gewicht)"] for r in rows] == pytest.approx([3 / 8, 0.0, 1.0])
 
 
@@ -144,23 +141,18 @@ def test_status_by_group_with_multi_valued_dimension_keeps_the_total(mini):
     assert rows[-1]["Summe"] == pytest.approx(13.5) and sum(r["Summe"] for r in rows[:-1]) == pytest.approx(13.5)
 
 
-def test_status_by_group_without_atoms_has_no_rows(mini):
-    a = ev.analyse(mini, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 1"))
-    assert T.status_by_group(mini, a, T.METRIC_WEIGHT) == []
-
-
 # ---------------------------------------------------------------- Datenqualität
 
 def test_data_quality_by_hand(mini):
     rows = {r["Prüfung"]: r for r in T.data_quality(mini, ev.analyse(mini))}
     assert {k: v["Anzahl"] for k, v in rows.items()} == {
-        "Ohne Schätzung": 1, "Schätzung = 0": 0, "Ohne Epic": 1, "Ohne Sprint": 1, "Status ohne erkannte Bedeutung (zählt 0)": 2}       # S4; B1; S3; S2 (In Progress) und S3 (To Do)
-    assert rows["Ohne Schätzung"]["Anteil an den Tickets"] == pytest.approx(0.2) and all(r["Wirkung"] for r in rows.values())
+        "Ohne Story Points": 1, "Story Points = 0": 0, "Ohne Epic": 1, "Ohne Sprint": 1, "Status ohne erkannte Bedeutung (zählt 0)": 2}       # S4; B1; S3; S2 (In Progress) und S3 (To Do)
+    assert rows["Ohne Story Points"]["Anteil an den Tickets"] == pytest.approx(0.2) and all(r["Wirkung"] for r in rows.values())
 
 
-def test_data_quality_of_an_empty_selection_has_no_shares(mini):
-    rows = T.data_quality(mini, ev.analyse(mini, ev.Settings(sprint_from="Sprint 2", sprint_to="Sprint 1")))
-    assert all(r["Anzahl"] == 0 and r["Anteil an den Tickets"] is None for r in rows)
+def test_data_quality_without_tickets_has_no_shares():
+    only_epic = (Issue(key="E", type="Epic"),)
+    assert all(r["Anzahl"] == 0 and r["Anteil an den Tickets"] is None for r in T.data_quality(only_epic, ev.analyse(only_epic)))
 
 
 def test_unestimated_list(mini):
