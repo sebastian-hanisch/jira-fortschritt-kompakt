@@ -1,6 +1,6 @@
 # Jira-Fortschritt kompakt
 
-Schlanke Fassung von `jira-fortschritt-intern` für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
+Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
 Teilbaums nach **Status und Schätzung** gewichtet und zeigt ihn als Kennzahlen, Balken, Hierarchiegraph und Tabellen, die sich direkt in Jira oder Confluence einfügen lassen.
 Es gibt keine Beispieldaten, keinen Upload-Dienst und keine Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
@@ -55,7 +55,7 @@ Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma
 
 ## Bewusst nicht enthalten
 
-Gegenüber `jira-fortschritt-intern`: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtung, Sub-Task-Mischung, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtung, Sub-Task-Mischung, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren, Datenschutzoptionen (die App läuft lokal).
 
 ## Aufbau
@@ -69,3 +69,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_tables.py` | Tabellen und Ausgabe als CSV, Wiki-Markup, HTML |
 | `jira_charts.py` | Plotly-Diagramme |
 | `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest |
+
+## Lizenz
+
+Open Source unter der [MIT-Lizenz](LICENSE).
