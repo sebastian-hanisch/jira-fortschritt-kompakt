@@ -177,3 +177,22 @@ def test_assignee_names_are_replaced_by_numbers_by_default():
     _ok(at)
     tables = " ".join(t.value.to_string() for t in at.dataframe)
     assert "Erika Mustermann" not in tables and "Max Beispiel" not in tables and "Person 1" in tables and "Person 2" in tables
+
+
+# ---------------------------------------------------------------- Anleitung zum Export
+
+def test_export_guide_is_shown_before_the_upload_and_names_the_steps():
+    at = _open()
+    guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
+    assert guide.proto.expanded                                                  # ohne Datei steht die Anleitung offen
+    text = " ".join(m.value for m in guide.markdown)
+    for part in ("Plan settings", "Estimation and scheduling", "Story Points", "Scrum-Teams", "Timeline-Ansicht", "Add fields", "Export data (.csv)", "Schätzung (T)",
+                 "Plans administrator", "Premium", "geprüft ist das nicht",
+                 "support.atlassian.com/jira-software-cloud/docs/export-advanced-roadmaps-plan-data-as-csv"):
+        assert part in text, part
+
+
+def test_export_guide_is_collapsed_once_a_file_is_loaded():
+    at = _open(plan_csv(make_mini()))
+    guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
+    assert not guide.proto.expanded

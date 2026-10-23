@@ -27,6 +27,29 @@ Hochladen gelöscht. Beim Laden lassen sich die Namen der Bearbeiter ersetzen un
 """
 
 
+EXPORT_GUIDE = """
+**1. Story Points als Schätzung des Plans einstellen.** Das Werkzeug gewichtet mit Story Points. Die Einheit gilt je Plan: neben dem Namen des Plans in der Seitenleiste **•••** (More actions) →
+**Plan settings** → Seite **Estimation and scheduling** → **Story Points**. Falls nötig, das Feld, mit dem die Tickets geschätzt werden, dem Plan hinzufügen. Laut Atlassian gilt dabei: Story Points sind nur wählbar,
+wenn alle Teams im Plan Scrum-Teams sind (bei einem Kanban-Team fehlt die Option; das Team auf dem Reiter Teams auf Scrum umstellen), Story Points und Zeitschätzungen (Tage, Stunden) sind nicht austauschbar, und
+beim Wechsel der Einheit gehen nicht gespeicherte Schätzungen verloren. Steht der Plan auf Tagen, heißt die Spalte im Export „Schätzung (T)“: Die liest dieses Werkzeug nicht. Die Tickets selbst müssen
+Story Points tragen; Tickets ohne Story Points behandelt die Auswahl „Tickets ohne Story Points“ in der Seitenleiste.
+
+**2. Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** des Plans sichtbar ist. Deshalb zuerst die Filter so setzen, dass genau der Teil des Plans erscheint, der
+ausgewertet werden soll (die Hierarchie darüber, z. B. Initiativen, gehört dazu, wenn sie als Wurzel wählbar sein soll), und über **Add fields** die Spalten einblenden: mindestens Vorgangsschlüssel und
+Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und
+Komponenten. Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
+
+**3. Exportieren.** In der Timeline-Ansicht: **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
+Die erzeugte CSV-Datei hier hochladen; vorher Spalten wie Beschreibung und Kommentare, falls vorhanden, löschen.
+
+**4. Prüfen.** Nach dem Laden zeigt „Was wurde erkannt?“, bei wie vielen Tickets Story Points stehen. Fehlt die Spalte, steht oben eine Warnung, und alle Tickets wiegen gleich viel.
+
+*Die Menünamen folgen der Dokumentation von Atlassian ([Export](https://support.atlassian.com/jira-software-cloud/docs/export-advanced-roadmaps-plan-data-as-csv/),
+[Schätzeinheit](https://support.atlassian.com/jira-software-cloud/docs/change-estimation-units-in-your-plan/), [Spalten](https://support.atlassian.com/jira-software-cloud/docs/add-edit-and-remove-columns-in-advanced-roadmaps/)) in der englischen Oberfläche.
+Die deutsche Oberfläche und neuere Versionen können anders heißen; an einer eigenen Jira-Instanz geprüft ist das nicht.*
+"""
+
+
 def _read(data: bytes):
     """Datei einlesen. Bewusst ohne Cache: hochgeladene Daten bleiben nicht im Serverspeicher liegen (tests/test_privacy.py prüft das)."""
     return J.read_plan(data)
@@ -68,6 +91,8 @@ st.caption(f"🔓 Open Source (MIT-Lizenz): Code und Anleitung im [Repository]({
 
 st.warning(UPLOAD_NOTICE)
 loaded = st.session_state.get("loaded")
+with st.expander("📤 So kommt die Datei zustande: Export aus Jira Plans, mit Story Points", expanded=loaded is None):
+    st.markdown(EXPORT_GUIDE)
 pseudo = st.checkbox(
     "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
     help="Gilt beim Laden. Betrifft Anzeige, Tabellen und Diagramme (z. B. beim Teilen eines Bildschirms). Die Datei hat den Server beim Hochladen schon erreicht.")
@@ -274,7 +299,7 @@ with guard("Auswertung"):
 with st.expander("🔧 Datenquelle und Datenschutz"):
     st.markdown(
         """
-**Plan-Export.** In Jira Plans: Plan öffnen → Export → CSV. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
+**Plan-Export.** Wie man ihn erzeugt, steht oben unter „So kommt die Datei zustande“. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
 Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Releases*, *Team*, *Bereich*,
 *Zugewiesene Person*, *Priorität*, *Stichwörter* und *Komponenten*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
 übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.

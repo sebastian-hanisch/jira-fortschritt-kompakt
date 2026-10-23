@@ -15,7 +15,7 @@ Tests: `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
 
 ## Eingabe
 
-CSV-Export aus Jira Plans (Plan öffnen → Export → CSV, deutsche oder englische Oberfläche, Semikolon oder Komma). Die Spalten werden an ihren Köpfen erkannt:
+CSV-Export aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma); wie man ihn erzeugt, steht im nächsten Abschnitt. Die Spalten werden an ihren Köpfen erkannt:
 
 | Feld | Spalte (deutsch) |
 |---|---|
@@ -28,6 +28,23 @@ CSV-Export aus Jira Plans (Plan öffnen → Export → CSV, deutsche oder englis
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
 Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gelesen werden konnte, meldet die App oben, bevor sie eine Zahl zeigt.
+
+## Daten aus Jira Plans exportieren
+
+Die App zeigt diese Anleitung auch vor dem Hochladen. Menünamen nach der Dokumentation von Atlassian (englische Oberfläche); die deutsche Oberfläche und neuere Versionen können anders heißen, an einer eigenen
+Instanz geprüft ist das nicht.
+
+1. **Story Points als Schätzung des Plans einstellen.** Neben dem Namen des Plans **•••** (More actions) → **Plan settings** → **Estimation and scheduling** → **Story Points**; falls nötig, das Schätzfeld dem Plan
+   hinzufügen. Laut Atlassian sind Story Points nur wählbar, wenn alle Teams im Plan Scrum-Teams sind (bei einem Kanban-Team fehlt die Option), Story Points und Zeitschätzungen (Tage, Stunden) sind nicht
+   austauschbar, und beim Wechsel gehen nicht gespeicherte Schätzungen verloren. Steht der Plan auf Tagen, heißt die Spalte „Schätzung (T)“, und die liest dieses Werkzeug nicht. Die Tickets selbst müssen Story Points tragen.
+2. **Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** sichtbar ist: Filter auf den auszuwertenden Teil des Plans setzen (inklusive der Ebenen darüber, wenn sie als Wurzel
+   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint, Releases, Team, Bereich,
+   Zugewiesene Person, Priorität, Stichwörter und Komponenten.
+3. **Exportieren:** in der Timeline-Ansicht **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
+4. **Prüfen:** Unter „Was wurde erkannt?“ zeigt die App, bei wie vielen Tickets Story Points stehen; fehlt die Spalte, warnt sie.
+
+Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-advanced-roadmaps-plan-data-as-csv/), [Schätzeinheit](https://support.atlassian.com/jira-software-cloud/docs/change-estimation-units-in-your-plan/),
+[Spalten](https://support.atlassian.com/jira-software-cloud/docs/add-edit-and-remove-columns-in-advanced-roadmaps/).
 
 ## Was zählt
 
