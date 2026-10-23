@@ -24,7 +24,7 @@ UPLOAD_NOTICE = f"""
 Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
 ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
 und Story Points (optional Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter, Komponenten). Alle anderen Spalten, besonders Beschreibungen und Kommentare, gehören vor dem
-Hochladen gelöscht. Beim Laden lassen sich die Namen der Bearbeiter ersetzen und die Titel verwerfen. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
+Hochladen gelöscht. Beim Laden lassen sich die Namen der Bearbeiter ersetzen. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
 """
 
 
@@ -120,9 +120,6 @@ with options_box:
 pseudo = st.checkbox(
     "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
     help="Gilt beim Laden und ersetzt die Namen in den Daten der Sitzung. Diese Fassung zeigt Bearbeiter nirgends an; die Option begrenzt, was im Arbeitsspeicher bleibt. Die Datei hat den Server beim Hochladen schon erreicht.")
-drop = st.checkbox(
-    "Titel der Tickets verwerfen (Titel der Epics bleiben)", value=True, key="drop_titles", disabled=loaded is not None,
-    help="Gilt beim Laden. Titel werden für keine Rechnung gebraucht; die Epic-Titel benennen die Gruppen. Die Liste der Tickets ohne Story Points zeigt dann nur Schlüssel.")
 if loaded is None:
     upload = st.file_uploader("Export aus Jira Plans (CSV)", type=["csv"], key=f"upload_{st.session_state['upload_version']}",
                               help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
@@ -138,8 +135,6 @@ if loaded is None:
     except Exception as exc:  # noqa: BLE001 - bewusst breit: nur der Typ, nie die Meldung
         st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte Format und Spalten prüfen: Erwartet wird der CSV-Export aus Jira Plans.")
         st.stop()
-    if drop:
-        issues_all = J.drop_titles(issues_all)
     if pseudo:
         issues_all = J.pseudonymize_assignees(issues_all)
     st.session_state["loaded"] = (upload.name, issues_all, report)
@@ -327,7 +322,7 @@ Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Sc
 übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.
 
 **Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum
-Ende der Sitzung noch im Speicher halten. Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder; die Titel der Tickets (außer Epics) und die Namen der Bearbeiter lassen sich beim Laden verwerfen bzw. durch Nummern ersetzen, und „Daten jetzt löschen“ verwirft die geladenen Tickets. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
+Ende der Sitzung noch im Speicher halten. Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder; die Namen der Bearbeiter lassen sich beim Laden durch Nummern ersetzen, und „Daten jetzt löschen“ verwirft die geladenen Tickets. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
 Anbindung an die Jira-Schnittstelle: Zugangsdaten sollen nie durch dieses Werkzeug laufen. Höchstens 50 MB und 5000 Tickets je Datei. Läuft die App auf dem eigenen Rechner oder im eigenen Netz, verlässt
 die Datei es nicht.
 """

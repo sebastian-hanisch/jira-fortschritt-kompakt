@@ -142,37 +142,18 @@ def test_upload_lifecycle_loads_once_resets_the_uploader_and_can_be_deleted():
     _ok(at)
     assert any("Geladen: projekt.csv mit 9 Tickets" in s.value for s in at.success)
     assert not at.get("file_uploader") and at.button(key="clear_loaded")           # nach dem Laden gibt es kein Upload-Feld mit der Datei mehr
-    assert at.checkbox(key="pseudo").disabled and at.checkbox(key="drop_titles").disabled and at.metric[0].value == "66.7 %"
+    assert at.checkbox(key="pseudo").disabled and at.metric[0].value == "66.7 %"
     at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
     _ok(at)
     assert at.get("file_uploader") and not at.metric and any("Bitte den CSV-Export" in i.value for i in at.info)
     assert not at.checkbox(key="pseudo").disabled and "loaded" not in at.session_state
 
 
-def test_titles_are_dropped_by_default_but_epic_titles_stay():
-    at = _open(TITLES)
-    _ok(at)
-    assert at.checkbox(key="drop_titles").value is True and at.checkbox(key="pseudo").value is True
-    tables = " ".join(t.value.to_string() for t in at.dataframe)
-    page = " ".join(str(m.value) for m in at.markdown) + " ".join(c.value for c in at.caption) + tables
-    assert "Geheimer Kundenname" not in page and "Noch ein Titel" not in page and "Kundenprojekt Alpha" in tables
-
-
-def test_titles_and_names_can_be_kept_when_switched_off_before_loading():
-    at = _open()
-    at.checkbox(key="drop_titles").set_value(False)
-    at.checkbox(key="pseudo").set_value(False)
-    at.file_uploader(key="upload_0").set_value(("plan.csv", TITLES, "text/csv")).run(timeout=TIMEOUT)
-    _ok(at)
-    loaded = at.session_state["loaded"][1]
-    assert [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"] and [t.assignee for t in loaded] == ["", "Erika Mustermann", "Max Beispiel"]
-
-
 def test_assignee_names_are_replaced_by_numbers_by_default():
     at = _open(TITLES)
     _ok(at)
     loaded = at.session_state["loaded"][1]
-    assert [t.assignee for t in loaded] == ["", "Person 1", "Person 2"] and [t.summary for t in loaded] == ["Kundenprojekt Alpha", "", ""]          # Epic-Titel bleiben, Ticket-Titel sind verworfen
+    assert [t.assignee for t in loaded] == ["", "Person 1", "Person 2"] and [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"]          # die Titel bleiben erhalten
 
 
 # ---------------------------------------------------------------- Anleitung zum Export
@@ -199,3 +180,15 @@ def test_status_rules_are_shown_before_the_upload():
     box = next(e for e in at.expander if "Welche Status zählen wie viel" in e.label)
     text = " ".join(m.value for m in box.markdown)
     assert "Regeln" in text and "Auflistung" in text and "Ready4Prod" in text and "zählt nicht" in text
+
+
+def test_names_can_be_kept_when_the_option_is_switched_off_before_loading_and_titles_always_stay():
+    at = _open()
+    assert not [c for c in at.checkbox if c.key == "drop_titles"]                                      # eine Option zum Verwerfen der Titel gibt es nicht
+    at.checkbox(key="pseudo").set_value(False)
+    at.file_uploader(key="upload_0").set_value(("plan.csv", TITLES, "text/csv")).run(timeout=TIMEOUT)
+    _ok(at)
+    loaded = at.session_state["loaded"][1]
+    assert [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"] and [t.assignee for t in loaded] == ["", "Erika Mustermann", "Max Beispiel"]
+    at.sidebar.selectbox(key="root").set_value("E-1").run(timeout=TIMEOUT)
+    assert "E-2: Geheimer Kundenname" in " ".join(t.value.to_string() for t in at.dataframe)                    # die Titel der Tickets stehen in der Tabelle

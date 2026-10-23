@@ -86,7 +86,7 @@ Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketza
 * **Hochgeladene Dateien liegen für die Sitzung im Arbeitsspeicher des Servers, auf dem die App läuft** (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA). Das Werkzeug speichert und cached sie nicht
   (kein `st.cache_data`, kein Schreiben auf die Platte), gibt sie nicht weiter und hat keine Anbindung an die Jira-Schnittstelle und kein Eingabefeld für Zugangsdaten. Die Plattform kann die Datei bis zum
   Sitzungsende im Speicher halten; den Server betreibt, wer die App bereitstellt.
-* Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Beim Laden lassen sich die Namen der Bearbeiter durch Nummern ersetzen und die Titel der Tickets (außer Epics) verwerfen (beides ist voreingestellt); „Daten jetzt löschen“
+* Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Beim Laden lassen sich die Namen der Bearbeiter durch Nummern ersetzen (voreingestellt); die Titel der Tickets bleiben erhalten; „Daten jetzt löschen“
   verwirft die geladenen Tickets der Sitzung und stellt das Upload-Feld zurück. Das betrifft nur die Daten der Sitzung: Die Datei hat den Server beim Hochladen schon erreicht.
 * Fehlermeldungen nennen nur den Fehlertyp, und ein Filter ersetzt die Meldung unbehandelter Ausnahmen im Protokoll durch den Typ (sie könnte Ticketdaten enthalten). Das ist nur gegen die eigene Testsuite
   geprüft, nicht gegen die Server einer Plattform.
@@ -144,7 +144,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | Datei | Inhalt |
 |---|---|
 | `app.py` | Oberfläche (Streamlit) |
-| `jira_plan.py` | Einlesen des Plan-Exports, Titel verwerfen, Bearbeiter ersetzen |
+| `jira_plan.py` | Einlesen des Plan-Exports, Bearbeiter ersetzen |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Hierarchiegraph |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen und Ausgabe als CSV, Wiki-Markup, HTML |

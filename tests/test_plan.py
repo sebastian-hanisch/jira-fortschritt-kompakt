@@ -167,14 +167,6 @@ def test_rollup_cells_of_the_epic_are_sums_of_its_children_by_hand():
 
 # ---------------------------------------------------------------- Datenschutz beim Laden
 
-def test_drop_titles_keeps_the_titles_of_epics_and_higher_levels_only():
-    issues = (Issue(key="I", type="Initiative", summary="Programm"), Issue(key="E", type="Epic", summary="Kundenprojekt Alpha", parent="I"),
-              Issue(key="S", summary="Geheimer Kundenname", parent="E"), Issue(key="T", type="Thema", summary="Thema X"))
-    assert [i.summary for i in J.drop_titles(issues)] == ["Programm", "Kundenprojekt Alpha", "", "Thema X"]
-    assert [i.summary for i in J.drop_titles(issues, keep_epics=False)] == ["", "", "", ""]
-    assert J.drop_titles(()) == ()
-
-
 def test_pseudonymize_assignees_numbers_by_sorted_name_and_keeps_empty_names():
     issues = (Issue(key="A", assignee="Zoe"), Issue(key="B", assignee="Anna"), Issue(key="C"), Issue(key="D", assignee="Zoe"))
     assert [i.assignee for i in J.pseudonymize_assignees(issues)] == ["Person 2", "Person 1", "", "Person 2"]          # unabhängig von der Reihenfolge der Tickets
