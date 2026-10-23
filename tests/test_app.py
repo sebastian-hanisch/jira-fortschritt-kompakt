@@ -224,3 +224,20 @@ def test_story_points_in_quarters_are_shown_with_two_decimals():
     at = _open("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;Epic;;\nS-1;To Do;Story;E-1;0,25\nS-2;To Do;Story;E-1;0,5\n".encode("utf-8"))
     _ok(at)
     assert at.metric[3].label == "Offenes Gewicht (SP, gesamt 0.75)" and at.metric[3].value == "0.75"
+
+
+def test_the_explanation_says_that_only_leaves_count_and_names_the_exceptions():
+    at = _open(plan_csv(make_mini()))
+    box = next(e for e in at.expander if e.label == "📐 So wird gerechnet")
+    text = " ".join(m.value for m in box.markdown)
+    for part in ("Nur die **Blätter**", "Zwischentickets", "gehen nicht ein", "ein Epic auf „Done“ mit offenen Kindern bringt also nichts", "Zurückgewiesen.", "nimmt alle Blätter darunter mit",
+                 "Sub-Tasks einer Story", "Alle Kinder zurückgewiesen."):
+        assert part in text, part
+
+
+def test_the_assumptions_box_is_in_the_app_with_the_limits():
+    import jira_constants as consts
+    at = _open(plan_csv(make_mini()))
+    box = next(e for e in at.expander if e.label == "⚠️ Annahmen, Grenzen und bekannte Probleme")
+    text = " ".join(m.value for m in box.markdown)
+    assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.GRAPH_MAX_NODES} Knoten" in text

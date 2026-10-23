@@ -336,9 +336,17 @@ die Datei es nicht.
 with st.expander("📐 So wird gerechnet"):
     st.markdown(
         """
-**Zählende Tickets.** Die Blätter des Ticket-Baums, also Tickets ohne Kinder: Stories, Tasks und Bugs ohne Sub-Tasks und die Sub-Tasks selbst. Epics, Initiativen und Themen zählen nie selbst, und eine Story mit
-Sub-Tasks zählt durch ihre Sub-Tasks (ihre eigenen Story Points und ihr eigener Status zählen dann nicht), es sei denn, die Auswahl „Sub-Tasks einer Story“ verteilt ihre Story Points (b) oder lässt sie selbst zählen (c). Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
-Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl; eine Story, deren Sub-Tasks alle zurückgewiesen sind, zählt wieder selbst.
+**Was in den Fortschritt eingeht.** Nur die **Blätter** des Ticket-Baums, also Tickets ohne Kinder: Story Points (Gewicht) und Status kommen allein von ihnen. Alles darüber wird nur aufsummiert: Der Fortschritt eines
+Tickets, eines Epics oder der Wurzel ist die Summe aus Story Points mal Status-Gewicht aller Blätter darunter, geteilt durch die Summe ihrer Story Points. Story Points und Status der **Zwischentickets** (Epics, Initiativen,
+Themen, Stories mit Sub-Tasks) gehen nicht ein; ein Epic auf „Done“ mit offenen Kindern bringt also nichts. Auch die Mediane für Tickets ohne Story Points nehmen nur geschätzte Blätter.
+
+Wo ein Zwischenticket doch eine Rolle spielt:
+
+- **Zurückgewiesen.** Ein Ticket mit Status wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled oder Duplicate und alles unter ihm fällt ganz heraus, aus Gewicht und Anzahl. Ist ein Zwischenticket
+  zurückgewiesen, zählt sein Status also doch: Er nimmt alle Blätter darunter mit.
+- **Sub-Tasks einer Story** (Auswahl in der Seitenleiste). Bei **b** teilt eine geschätzte Story ihre Story Points gleichmäßig auf ihre Sub-Tasks auf, wenn keine Sub-Task eigene Story Points hat; dann fließen die Story Points
+  der Story indirekt ein. Bei **c** zählt die Story selbst mit ihren Story Points und ihrem Status, und ihre Sub-Tasks bleiben außen vor.
+- **Alle Kinder zurückgewiesen.** Eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt und zählt mit ihren eigenen Story Points und ihrem Status.
 
 **Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets (A bis F: je Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team oder eine Rückfallkette; gibt es in der Gruppe kein geschätztes Ticket, gilt 1), 1 Story Point (H) oder nicht zählen, Gewicht 0 (I). Stufe heißt Tiefe im Ticket-Baum ab der Wurzel. Die Varianten mit Vor- und Nachteilen stehen im Ausklapper „Berechnungsmöglichkeiten“, ebenso die drei Möglichkeiten für Sub-Tasks (Auswahl „Sub-Tasks einer Story“).
 
@@ -357,6 +365,9 @@ Ein Ticket mit mehreren Werten (Stichwörter, Komponenten, Releases) teilt sich 
 **Teilprojekt.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets (falls gewählt), die Status der Gewichtstabelle, die Sprints und die
 Hierarchiestufen beziehen sich nur auf diesen Teilbaum.
 
-**Grenzen.** Die Gutschriften sind Annahmen. Der Plan-Export enthält weder einen Statusverlauf noch ein Lösungsdatum, deshalb gibt es keinen Verlauf über die Zeit und keine Prognose.
+**Annahmen, Grenzen und bekannte Probleme** stehen im nächsten Ausklapper.
 """
     )
+
+with st.expander("⚠️ Annahmen, Grenzen und bekannte Probleme"):
+    st.markdown(T.ASSUMPTIONS_MARKDOWN)

@@ -221,6 +221,35 @@ Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie star
 """
 
 
+ASSUMPTIONS_MARKDOWN = """
+### Annahmen
+
+- **Die Gutschrift nach Statusname stimmt.** Fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %: Das ist eine Lesart des Namens und eine Verabredung, keine Messung. Angefangene Arbeit („In Arbeit“) zählt 0 %, der Fortschritt springt also erst mit dem Statuswechsel; für laufende Arbeit ist die Zahl eher vorsichtig.
+- **Story Points sind vergleichbar und additiv.** Ein Ticket mit 4 Story Points zählt doppelt so viel wie eines mit 2, über alle Teams und Epics hinweg. Story Points sind aber teamintern kalibriert; ein Gesamtwert über mehrere Teams mischt Maßstäbe.
+- **Die Blätter bilden die Arbeit vollständig ab.** Was nicht als Blatt im Export steht (nicht angelegte oder aus dem Plan herausgefilterte Tickets), fehlt im Fortschritt. Die Story Points der Zwischentickets gelten als nicht maßgeblich, auch wenn ein Epic oder eine Story eine eigene Schätzung hat, die von der Summe der Blätter abweicht; die Tabelle prüft das nicht.
+- **Ersatzwerte für Tickets ohne Story Points sind Annahmen.** Jede Variante (A bis F, H, I) nimmt etwas anderes an; die Tabelle im Ausklapper „Berechnungsmöglichkeiten“ zeigt, wie weit die Zahl an den geladenen Daten schwankt.
+- **Der Export ist der Plan.** Was die Filter und Spalten der Timeline-Ansicht nicht enthalten, kennt das Werkzeug nicht. Eltern außerhalb der Datei werden verworfen (die App meldet es), das Ticket steht dann als eigene Wurzel da.
+
+### Grenzen
+
+- **Nur ein Stichtag.** Der Plan-Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
+- **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
+- **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
+- **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung zählt 0 %, ohne Warnung.
+- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Graphen höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 5000 Tickets und 50 MB je Datei.
+- **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
+
+### Bekannte Probleme und Unsicherheiten
+
+- **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
+- **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
+- **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
+- **Klick in die Diagramme.** Der Wechsel der Wurzel per Klick ist nur mit einer ausgelösten Auswahl getestet, nicht mit einem Mausklick im Browser. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
+- **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
+- **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
+"""
+
+
 def rows_to_csv(rows: list[dict]) -> bytes:
     """CSV für Excel: Semikolon, Dezimalpunkt, UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
     if not rows:

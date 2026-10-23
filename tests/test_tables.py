@@ -210,3 +210,12 @@ def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():
     formats = {name: "%.2f" for name in (*status_cols, T.REJECTED_COL, T.TOTAL_NET_COL)}
     assert rows[0][T.TOTAL_NET_COL] == 38.25
     assert "|38.25|" in T.rows_to_wiki(rows, formats) and "38.25" in T.rows_to_html(rows, formats) and "38.3" not in T.rows_to_wiki(rows, formats)
+
+
+def test_assumptions_text_has_the_three_parts_and_matches_the_readme():
+    import pathlib
+    text = T.ASSUMPTIONS_MARKDOWN
+    for part in ("### Annahmen", "### Grenzen", "### Bekannte Probleme und Unsicherheiten", "Nur ein Stichtag", "Tiefe im Baum, nicht Typ", "Obergrenzen", "Spaltennamen des Exports sind erschlossen", "Klick in die Diagramme"):
+        assert part in text, part
+    readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert text.strip() in readme                                                                  # die README gibt denselben Text wieder
