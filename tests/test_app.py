@@ -44,7 +44,7 @@ def test_the_treemap_and_the_hierarchy_graph_are_shown():
     at = _open(plan_csv(make_mini()))
     _ok(at)
     headings = [m.value for m in at.markdown]
-    assert any("Flächenansicht" in h for h in headings) and any("Hierarchiegraph" in h for h in headings)
+    assert any("Kachelansicht" in h for h in headings) and any("Hierarchiegraph" in h for h in headings)
     only_unestimated = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\n".encode())
     at = only_unestimated
     at.sidebar.selectbox(key="unest_rule").set_value(C.UNEST_IGNORE).run(timeout=TIMEOUT)
@@ -143,3 +143,67 @@ def test_random_projects_render_in_every_dimension(seed):
     for tab_metric in ("Gewicht", "Tickets", "Angerechnet"):
         at.radio(key="table_metric").set_value(tab_metric).run(timeout=TIMEOUT)
         _ok(at, seed, tab_metric)
+
+
+def test_the_options_tab_describes_the_variants_and_shows_the_effect_on_the_data():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    labels = [t.label for t in at.tabs]
+    assert "📊 Auswertung" in labels and "🧮 Ungeschätzte Tickets: Berechnungsmöglichkeiten" in labels and labels.index("📊 Auswertung") == 0
+    text = " ".join(m.value for m in at.markdown)
+    assert "Teil 1: Woher kommt das Gewicht" in text and "Teil 2: Sub-Tasks ohne Story Points" in text and "Wirkung der wählbaren Regeln" in text
+    table = next(t.value for t in at.dataframe if "Regel" in t.value.columns)
+    assert list(table["Regel"]) == list(C.UNEST_RULES) and list(table["Gewicht gesamt"]) == [10.5, 9.0, 6.0]
+
+
+def test_navigation_up_and_down_changes_the_root():
+    at = _open(plan_csv(make_mini()))
+    assert not [b for b in at.button if b.key == "nav_up"]                                   # im ganzen Plan gibt es nichts darüber
+    at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)                   # runter: S2 mit seinen Sub-Tasks
+    _ok(at)
+    up = at.button(key="nav_up")
+    assert up.label == "⬆ Eine Stufe hoch: E1: Epic A" and at.button(key="nav_top").label == "⏫ Ganzer Plan"
+    assert not [b for b in at.button if str(b.key).startswith("nav_down_")]                  # S2 hat nur Sub-Tasks: darunter geht es nicht tiefer
+    up.click().run(timeout=TIMEOUT)                                                         # hoch: E1
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80,0 %"        # S1 (3, Done) und T1 (1, Done), T2 (1, offen) im Teilbaum von E1
+    at.button(key="nav_up").click().run(timeout=TIMEOUT)                                    # hoch: ganzer Plan
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == "" and at.metric[0].value == "66,7 %" and not [b for b in at.button if b.key == "nav_up"]
+
+
+def test_the_top_button_jumps_to_the_whole_plan_from_a_deep_root():
+    at = _open(plan_csv(make_mini()))
+    at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
+    assert at.button(key="nav_top").label == "⏫ Ganzer Plan"
+    at.button(key="nav_top").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == ""
+
+
+def test_navigation_down_opens_the_children_with_children_as_the_new_root():
+    at = _open(plan_csv(make_mini()))
+    down = {b.key: b.label for b in at.button if str(b.key).startswith("nav_down_")}
+    assert down == {"nav_down_E1": "⬇ E1: Epic A", "nav_down_E2": "⬇ E2: Epic B"}          # im ganzen Plan: die obersten Tickets mit Kindern
+    at.button(key="nav_down_E1").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80,0 %"
+    assert {b.key for b in at.button if str(b.key).startswith("nav_down_")} == {"nav_down_S2"}      # eine Stufe tiefer: nur S2 hat Kinder
+    at.button(key="nav_down_S2").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == "S2" and at.metric[0].value == "50,0 %"
+    assert not [b for b in at.button if str(b.key).startswith("nav_down_")] and any("unterste Stufe" in c.value for c in at.caption)
+    at.button(key="nav_up").click().run(timeout=TIMEOUT)                                       # und wieder hoch, Stufe für Stufe
+    assert at.sidebar.selectbox(key="root").value == "E1"
+    at.button(key="nav_up").click().run(timeout=TIMEOUT)
+    assert at.sidebar.selectbox(key="root").value == "" and not [b for b in at.button if b.key == "nav_up"]
+
+
+def test_many_children_with_children_are_limited_to_the_buttons_and_the_rest_is_in_the_selection():
+    rows = ["Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points"]
+    for n in range(C.MAX_DOWN_BUTTONS + 3):
+        rows += [f"E-{n};In Arbeit;Epic;;", f"S-{n};Done;Story;E-{n};3"]
+    at = _open(("\n".join(rows) + "\n").encode("utf-8"))
+    _ok(at)
+    assert len([b for b in at.button if str(b.key).startswith("nav_down_")]) == C.MAX_DOWN_BUTTONS and any("3 weitere Tickets mit Kindern" in c.value for c in at.caption)
+    assert len(at.sidebar.selectbox(key="root").options) == C.MAX_DOWN_BUTTONS + 3 + 1             # das ganze Projekt und alle Epics

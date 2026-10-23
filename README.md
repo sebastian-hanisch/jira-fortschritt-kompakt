@@ -66,6 +66,13 @@ Sonst gibt es nichts einzustellen.
 * **Tickets ohne Story Points:** Median der geschätzten Tickets auf gleicher Stufe, als 1 Story Point oder nicht zählen. Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
 * **Zusammenfassen nach:** Epic, Hierarchiestufe, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Ticket-Typ oder Status.
 
+## Hoch und runter im Baum
+
+Über den Diagrammen stehen Knöpfe, mit denen sich die Wurzel der Auswertung ändern lässt: **⬇** öffnet ein Ticket mit Kindern direkt unter der aktuellen Wurzel als neues Teilprojekt (die Zahlen, Kachelansicht,
+Graph und Tabellen folgen), **⬆ Eine Stufe hoch** geht zum übergeordneten Ticket, **⏫ Ganzer Plan** zurück an die Spitze. Bis zu 12 Knöpfe je Stufe; weitere Tickets stehen in der Auswahl „Teilprojekt“ in der
+Seitenleiste. Ein Klick direkt in die Kachelansicht oder in den Graphen wechselt die Wurzel **nicht**: Streamlit gibt Klicks auf Diagrammflächen nur als Auswahl weiter, und die kam in meinem Versuch im Browser
+nicht an.
+
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken, Hierarchiegraph und vier Tabellen: **Status-Matrix je Parent**
@@ -90,6 +97,12 @@ streamlit run app.py --server.address localhost
 ```
 
 Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`http://localhost:8501`); ohne diese Angabe ist sie standardmäßig auch im lokalen Netz erreichbar.
+
+## Berechnungsmöglichkeiten für Tickets ohne Story Points
+
+Der Reiter „Ungeschätzte Tickets: Berechnungsmöglichkeiten“ in der App stellt die Varianten mit Vor- und Nachteilen gegenüber (Median der Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team,
+Rückfallkette, Mittelwert, 1 Story Point, nicht zählen; dazu drei Möglichkeiten für Sub-Tasks ohne Story Points) und zeigt, wie sich der Fortschritt unter den drei wählbaren Regeln an den geladenen Daten verschiebt.
+Eingebaut sind die Mediane der Stufe im Teilbaum, 1 Story Point und „nicht zählen“; alles andere ist ein Vorschlag.
 
 ## Bewusst nicht enthalten
 

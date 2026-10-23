@@ -169,24 +169,6 @@ def _graph(mini, **kw):
     return A.tree_graph(mini, atoms, w, c, credit_of, **kw)
 
 
-def test_treemap_hierarchy_by_hand(mini):
-    atoms = A.select_atoms(mini)
-    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]))
-    assert h.ids == ("Projekt", "epic:E1", "atom:S1", "epic:E2", "atom:S3", "atom:S4", "epic:(ohne Epic)", "atom:B1", "atom:T1", "atom:T2")
-    assert h.labels == ("Projekt", "E1: Epic A", "S1", "E2: Epic B", "S3", "S4", "(ohne Epic)", "B1", "T1", "T2")
-    assert h.parents == ("", "Projekt", "epic:E1", "Projekt", "epic:E2", "epic:E2", "Projekt", "epic:(ohne Epic)", "epic:E1", "epic:E1")
-    assert h.values == pytest.approx((10.5, 5.0, 3.0, 4.5, 2.0, 2.5, 1.0, 1.0, 1.0, 1.0))
-    assert h.progress == pytest.approx((7 / 10.5, 4 / 5, 1.0, 2 / 4.5, 0.0, 0.8, 1.0, 1.0, 1.0, 0.0))
-
-
-def test_treemap_leaves_out_atoms_without_weight(mini):
-    atoms = A.select_atoms(mini)
-    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms, C.UNEST_IGNORE), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]))
-    assert "atom:S4" not in h.ids and "atom:T1" not in h.ids and h.values[0] == 6.0 and h.values[h.ids.index("epic:E2")] == 2.0
-    empty = A.hierarchy((), [], np.array([]), np.array([]))
-    assert empty.ids == ("Projekt",) and empty.values == (0.0,) and empty.progress == (0.0,)
-
-
 def test_graph_nodes_carry_the_sum_of_their_atoms_by_hand(mini):
     g = _graph(mini)
     assert g.keys == ("Projekt", "E1", "S1", "S2", "T1", "T2", "E2", "S3", "S4", "B1") and g.n_total == 10 and g.shown_depth == 3
@@ -233,3 +215,24 @@ def test_overall_by_hand_and_without_weight():
     assert np.isnan(p_w) and np.isnan(p_d) and np.isnan(p_n)
     p_w, p_d, p_n = A.overall(np.array([0.0, 0.0]), np.array([1.0, 1.0]), np.array([True, False]))
     assert np.isnan(p_w) and np.isnan(p_d) and p_n == 0.5
+
+
+def test_parent_root_goes_one_level_up_to_a_ticket_that_can_be_a_root(mini):
+    assert A.parent_root(mini, "S2") == "E1"                 # die Story mit Sub-Tasks steht unter E1
+    assert A.parent_root(mini, "E1") == C.ROOT_ALL           # E1 hat keine Eltern: das ganze Projekt
+    assert A.parent_root(mini, C.ROOT_ALL) == C.ROOT_ALL
+    deep = (Issue(key="I", type="Initiative"), Issue(key="E", type="Epic", parent="I"), Issue(key="S", parent="E"), Issue(key="U", type="Sub-task", is_subtask=True, parent="S"),
+            Issue(key="O", parent="Fremd"), Issue(key="P", parent="O"))
+    assert [A.parent_root(deep, k) for k in ("S", "E", "I", "O")] == ["E", "I", C.ROOT_ALL, C.ROOT_ALL]          # „Fremd“ steht nicht in den Daten
+
+
+def test_root_path_leads_from_the_top_to_the_root(mini):
+    assert A.root_path(mini, "S2") == ["E1", "S2"] and A.root_path(mini, "E1") == ["E1"] and A.root_path(mini, "E2") == ["E2"] and A.root_path(mini, C.ROOT_ALL) == []
+
+
+def test_child_roots_are_the_tickets_with_children_directly_below_the_root(mini):
+    assert A.child_roots(mini, C.ROOT_ALL) == ["E1", "E2"]               # S2 hängt unter E1, nicht unter dem Projekt
+    assert A.child_roots(mini, "E1") == ["S2"] and A.child_roots(mini, "S2") == [] and A.child_roots(mini, "E2") == []        # S3 und S4 haben keine Kinder
+    deep = (Issue(key="I", type="Initiative"), Issue(key="E", type="Epic", parent="I"), Issue(key="S", parent="E"), Issue(key="U", type="Sub-task", is_subtask=True, parent="S"),
+            Issue(key="O", parent="Fremd"), Issue(key="P", parent="O"))
+    assert A.child_roots(deep, C.ROOT_ALL) == ["I", "O"] and A.child_roots(deep, "I") == ["E"] and A.child_roots(deep, "E") == ["S"] and A.child_roots(deep, "S") == []        # „O“ hat Eltern außerhalb der Daten

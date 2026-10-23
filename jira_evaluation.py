@@ -28,7 +28,6 @@ class Analysis:
     progress_count: float      # nur erledigt, nach Ticketanzahl
     n_unestimated: int
     stats: A.GroupStats
-    hierarchy: A.Hierarchy
     tree: A.TreeGraph
     atoms: tuple[int, ...]      # Indizes der Atome in der Ticketliste (Grundlage der Tabellen)
     rejected_atoms: tuple[int, ...]      # zurückgewiesene Atome: zählen nicht
@@ -69,7 +68,7 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     first = A.assign_groups(issues, atoms, settings.dimension, settings.level)
     stats = A.aggregate(first, w, c, done, unest)
     tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
-    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, A.hierarchy(issues, atoms, w, c), tree, tuple(atoms), rejected_atoms, w, c, done, first)
+    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first)
 
 
 def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:

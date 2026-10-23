@@ -267,6 +267,31 @@ def tree_order(issues, root: str = C.ROOT_ALL) -> list[tuple[int, int, int]]:
     return out
 
 
+def parent_root(issues, root: str) -> str:
+    """Die Wurzel eine Stufe höher: das übergeordnete Ticket von `root`, wenn es als Wurzel taugt (siehe `root_choices`), sonst das ganze Projekt. Für das ganze Projekt selbst gibt es nichts darüber."""
+    if root == C.ROOT_ALL:
+        return C.ROOT_ALL
+    parent = next((t.parent for t in issues if t.key == root), "")
+    return parent if parent in dict(root_choices(issues)) else C.ROOT_ALL
+
+
+def root_path(issues, root: str) -> list[str]:
+    """Der Weg von der obersten Wurzel bis `root` als Liste von Schlüsseln (mit `root` am Ende): jeweils das übergeordnete Ticket, das als Wurzel taugt (siehe `parent_root`). Leer für das ganze Projekt."""
+    path = []
+    while root != C.ROOT_ALL:
+        path.append(root)
+        root = parent_root(issues, root)
+    return path[::-1]
+
+
+def child_roots(issues, root: str) -> list[str]:
+    """Die Tickets direkt unter `root` (beim ganzen Projekt die obersten), die selbst Kinder haben und sich deshalb als nächste Wurzel öffnen lassen, in der Reihenfolge des Baums."""
+    keys = {t.key for t in issues}
+    parent = {t.key: t.parent for t in issues}
+    top = lambda key: parent[key] not in keys or parent[key] == key         # noqa: E731 - ohne Eltern in den Daten
+    return [k for k, _ in root_choices(issues) if (top(k) if root == C.ROOT_ALL else parent[k] == root) and k != root]
+
+
 def root_choices(issues) -> list[tuple[str, int]]:
     """Tickets, die als Wurzel einer Teilauswertung taugen (alle mit Kindern, außer Sub-Tasks), in der Reihenfolge des Baums mit ihrer Tiefe."""
     kids = children_of(issues)
@@ -444,47 +469,7 @@ def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, floa
     return p_w, p_d, p_n
 
 
-# ---------------------------------------------------------------- Flächenansicht und Hierarchiegraph
-
-@dataclass(frozen=True)
-class Hierarchy:
-    ids: tuple[str, ...]
-    labels: tuple[str, ...]
-    parents: tuple[str, ...]
-    values: tuple[float, ...]
-    progress: tuple[float, ...]
-
-
-def hierarchy(issues, atoms, w: np.ndarray, c: np.ndarray) -> Hierarchy:
-    """Baum Projekt → Epic → Atom für die Flächenansicht: Fläche = Gewicht, Farbe = Fortschritt. Atome ohne Gewicht fehlen (Fläche 0);
-    ein Elternknoten trägt die Summe seiner Kinder."""
-    epics = epic_of(issues)
-    names = {i.key: f"{i.key}: {i.summary}" if i.summary else i.key for i in issues if i.is_epic}
-    ids, labels, parents, values, wc = ["Projekt"], ["Projekt"], [""], [0.0], [0.0]
-    epic_row: dict[str, int] = {}
-    for pos, i in enumerate(atoms):
-        if w[pos] <= 0:
-            continue
-        ek = epics[i]
-        eid = f"epic:{ek}" if ek else "epic:(ohne Epic)"
-        if eid not in epic_row:
-            epic_row[eid] = len(ids)
-            ids.append(eid)
-            labels.append(names.get(ek, "(ohne Epic)"))
-            parents.append("Projekt")
-            values.append(0.0)
-            wc.append(0.0)
-        ids.append(f"atom:{issues[i].key}")
-        labels.append(issues[i].key)
-        parents.append(eid)
-        values.append(float(w[pos]))
-        wc.append(float(w[pos] * c[pos]))
-        for row in (epic_row[eid], 0):
-            values[row] += float(w[pos])
-            wc[row] += float(w[pos] * c[pos])
-    progress = [wc_k / v if v > 0 else 0.0 for wc_k, v in zip(wc, values)]
-    return Hierarchy(tuple(ids), tuple(labels), tuple(parents), tuple(values), tuple(progress))
-
+# ---------------------------------------------------------------- Hierarchiegraph
 
 @dataclass(frozen=True)
 class TreeGraph:

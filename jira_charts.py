@@ -1,4 +1,6 @@
-"""Plotly-Abbildungen: Fortschrittsbalken, Flächenansicht und Hierarchiegraph. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
+"""Plotly-Abbildungen: Fortschrittsbalken, Kachelansicht und Hierarchiegraph. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
+
+from dataclasses import dataclass
 
 import numpy as np
 import plotly.graph_objects as go
@@ -38,13 +40,128 @@ def build_progress_bars(stats, unit: str):
     return lock_axes(fig)
 
 
-def build_treemap(h):
-    """Fläche = Gewicht, Farbe = Fortschritt (rot 0 %, gelb 50 %, grün 100 %). Ein Klick auf ein Epic zoomt hinein."""
-    fig = go.Figure(go.Treemap(
-        ids=list(h.ids), labels=list(h.labels), parents=list(h.parents), values=list(h.values), branchvalues="total",
-        marker=dict(colors=list(h.progress), colorscale=C.COLOR_SCALE, cmin=0, cmax=1, colorbar=dict(title="Fortschritt", tickformat=".0%", nticks=5)),
-        customdata=list(h.progress), texttemplate="%{label}<br>%{customdata:.0%}", hovertemplate="%{label}<br>Gewicht %{value:.1f}<br>Fortschritt %{customdata:.0%}<extra></extra>"))
-    fig.update_layout(height=460, margin=dict(l=0, r=0, t=10, b=0))
+def squarify(values, x: float, y: float, w: float, h: float) -> list[tuple[float, float, float, float]]:
+    """Quadratisches Treemap-Layout (Bruls, Huizing, van Wijk): ein Rechteck (x, y, Breite, Höhe) je Wert, Fläche proportional zum Wert, zusammen genau das Rechteck (x, y, w, h). Die Reihenfolge der
+    Rechtecke ist die der Werte (alle > 0). Große Werte zuerst gibt die ansehnlicheren Rechtecke."""
+    if not len(values) or w <= 0 or h <= 0:
+        return []
+    order = sorted(range(len(values)), key=lambda i: -values[i])
+    scale = w * h / float(sum(values))
+    areas = [values[i] * scale for i in order]
+    out: dict[int, tuple[float, float, float, float]] = {}
+
+    def worst(row, side):
+        s = sum(row)
+        return max(side * side * max(row) / (s * s), s * s / (side * side * min(row)))
+    pos = 0
+    while pos < len(areas):
+        side = min(w, h)
+        row = [areas[pos]]
+        pos += 1
+        while pos < len(areas) and worst(row + [areas[pos]], side) <= worst(row, side):
+            row.append(areas[pos])
+            pos += 1
+        first = pos - len(row)
+        s = sum(row)
+        if w >= h:                                  # die Reihe wird eine Spalte links
+            rw, ry = s / h, y
+            for n, a in enumerate(row):
+                out[order[first + n]] = (x, ry, rw, a / rw)
+                ry += a / rw
+            x, w = x + rw, w - rw
+        else:                                       # die Reihe wird eine Zeile oben
+            rh, rx = s / w, x
+            for n, a in enumerate(row):
+                out[order[first + n]] = (rx, y, a / rh, rh)
+                rx += a / rh
+            y, h = y + rh, h - rh
+    return [out[i] for i in range(len(values))]
+
+
+@dataclass(frozen=True)
+class Tile:
+    """Eine Kachel der Kachelansicht: Rechteck, Schlüssel des Tickets, Stufe (1 = unter der Wurzel, 2 = darunter), Gewicht, Fortschritt (NaN = nichts messbar) und ob sie sich öffnen lässt."""
+
+    key: str
+    title: str
+    level: int
+    x: float
+    y: float
+    w: float
+    h: float
+    weight: float
+    progress: float
+    drillable: bool
+    framed: bool        # Kachel der Stufe 1, in der die Kinder als Kacheln liegen (die Beschriftung steht dann in einer Kopfzeile)
+    node: int
+
+
+TILE_W, TILE_H = 100.0, 58.0       # Zeichenfläche der Kacheln (Einheiten sind frei, nur das Seitenverhältnis zählt)
+TILE_PAD, TILE_HEAD = 0.5, 3.6     # Rand und Kopfzeile einer Kachel der Stufe 1, die Kinder enthält
+
+
+def tile_layout(g) -> list[Tile]:
+    """Kacheln für die Kinder der Wurzel des Graphen (Knoten 0) und deren Kinder, Fläche = Gewicht. Knoten ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) haben keine Kachel."""
+    kids: dict[int, list[int]] = {}
+    for k in range(len(g.keys)):
+        if g.parent[k] >= 0:
+            kids.setdefault(int(g.parent[k]), []).append(k)
+
+    def heavy(parent: int) -> list[int]:
+        return sorted((k for k in kids.get(parent, []) if g.weight[k] > 0), key=lambda k: -g.weight[k])
+
+    def tile(k: int, rect, level: int, framed: bool) -> Tile:
+        return Tile(g.keys[k], g.titles[k], level, *rect, float(g.weight[k]), float(g.progress[k]), bool(not g.is_leaf[k] or g.hidden[k] > 0), framed, k)
+    tiles: list[Tile] = []
+    outer = heavy(0)
+    for k, rect in zip(outer, squarify([float(g.weight[k]) for k in outer], 0.0, 0.0, TILE_W, TILE_H)):
+        x, y, w, h = rect
+        inner = heavy(k)
+        framed = bool(inner) and w > 2 * TILE_PAD + 4 and h > TILE_HEAD + TILE_PAD + 2
+        tiles.append(tile(k, rect, 1, framed))
+        if framed:
+            for kk, r in zip(inner, squarify([float(g.weight[kk]) for kk in inner], x + TILE_PAD, y + TILE_HEAD, w - 2 * TILE_PAD, h - TILE_HEAD - TILE_PAD)):
+                tiles.append(tile(kk, r, 2, False))
+    return tiles
+
+
+def progress_color(p: float, alpha: float = 1.0) -> str:
+    """Farbe zum Fortschritt auf der Skala rot (0 %), gelb (50 %), grün (100 %); grau, wenn nichts messbar ist."""
+    if p != p:
+        return f"rgba(190,190,190,{alpha})"
+    stops = [(stop, tuple(int(code[i:i + 2], 16) for i in (1, 3, 5))) for stop, code in C.COLOR_SCALE]
+    p = min(max(p, 0.0), 1.0)
+    for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
+        if p <= p1:
+            t = (p - p0) / (p1 - p0)
+            r, gr, b = (round(a + (b_ - a) * t) for a, b_ in zip(c0, c1))
+            return f"rgba({r},{gr},{b},{alpha})"
+    return f"rgba({stops[-1][1][0]},{stops[-1][1][1]},{stops[-1][1][2]},{alpha})"
+
+
+def build_tiles(g, unit: str):
+    """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken; der Hover nennt Gewicht,
+    Fortschritt und, ob sich die Kachel als Teilprojekt öffnen lässt (Knöpfe über den Diagrammen)."""
+    tiles = tile_layout(g)
+    fig = go.Figure()
+    total = TILE_W * TILE_H
+    for level in (1, 2):
+        sel = [t for t in tiles if t.level == level]
+        if not sel:
+            continue
+        label = [("" if (t.framed or t.w * t.h < 0.004 * total) else f"{t.key}<br>{100 * t.progress:.0f} %" if t.progress == t.progress else t.key) for t in sel]
+        hover = [_node_hover(g, t.node, unit) + ("<br><i>hat Kinder: lässt sich als Teilprojekt öffnen</i>" if t.drillable else "") for t in sel]
+        fig.add_trace(go.Bar(
+            x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel],
+            marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
+            text=label, textposition="inside", insidetextanchor="middle", textfont=dict(size=11), hovertext=hover, hoverinfo="text", showlegend=False))
+    for t in tiles:
+        if t.framed:
+            fig.add_annotation(x=t.x + 0.7, y=t.y + 0.4, xanchor="left", yanchor="top", showarrow=False, font=dict(size=12),
+                               text=f"<b>{t.key}</b> {100 * t.progress:.0f} %" if t.progress == t.progress else f"<b>{t.key}</b>")
+    fig.update_layout(barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False, uniformtext=dict(minsize=8, mode="hide"))
+    fig.update_xaxes(visible=False, range=[0, TILE_W], fixedrange=True)
+    fig.update_yaxes(visible=False, range=[TILE_H, 0], fixedrange=True)
     return fig
 
 

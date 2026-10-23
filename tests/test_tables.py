@@ -212,3 +212,30 @@ def test_status_rules_text_lists_the_credits_and_the_examples():
         for name in names:
             assert name in text, name
     assert "| 100 % | Done," in text and "| zählt nicht | Rejected," in text
+
+
+def test_rule_comparison_by_hand(mini):
+    rows = T.unestimated_rule_comparison(mini, ev.analyse(mini))
+    assert [r["Regel"] for r in rows] == list(C.UNEST_RULES)
+    assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 5.8 / 9, 4 / 6])           # Median der Stufe, als 1 Story Point, nicht zählen
+    assert [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 9.0, 6.0]) and [r["Tickets ohne Story Points"] for r in rows] == [3, 3, 3]
+
+
+def test_rule_comparison_keeps_root_and_status_weights_and_handles_no_weight():
+    from jira_core import scope_issues
+    sub = scope_issues(ITEMS, "E2")
+    rows = T.unestimated_rule_comparison(sub, ev.analyse(sub, ev.Settings(root="E2")))
+    assert rows[0]["Gewicht gesamt"] == 15.0 and rows[2]["Gewicht gesamt"] == 10.0          # Median 5 für S12 gegen „nicht zählen“
+    none = (Issue(key="A", status="Done"),)
+    assert [r["Fortschritt"] for r in T.unestimated_rule_comparison(none, ev.analyse(none))] == [pytest.approx(1.0), pytest.approx(1.0), None]
+    changed = ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),)))
+    assert T.unestimated_rule_comparison(ITEMS, changed)[0]["Fortschritt"] == ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),))).progress
+
+
+def test_the_options_text_names_every_variant_with_pros_and_cons_and_its_status():
+    text = T.UNEST_OPTIONS_MARKDOWN
+    for letter in "ABCDEFGHI":
+        assert f"**{letter}. " in text, letter
+    for letter in "abc":
+        assert f"**{letter}. " in text, letter
+    assert text.count("wählbar") >= 3 and "Vorschlag" in text and "Vorteile" in text and "Nachteile" in text and "Einschätzung" in text and "keine Messungen" in text
