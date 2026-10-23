@@ -1,7 +1,7 @@
 # Jira-Fortschritt kompakt
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
-Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Hierarchiegraph und die Status-Matrix je Parent, die sich direkt in Jira oder Confluence einfügen lässt.
+Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Hierarchiegraph und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
 Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
@@ -78,7 +78,7 @@ bitte melden.
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Hierarchiegraph und eine Tabelle: die
-**Status-Matrix je Parent** (Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Die Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
+**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (eigene Story Points des Tickets, Summe der Story Points seiner direkten Kinder und der Vergleich der beiden, dann die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt).
 
 ## Datenschutz
 

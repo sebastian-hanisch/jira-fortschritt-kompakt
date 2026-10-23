@@ -220,7 +220,7 @@ with guard("Auswertung"):
     # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
     unit = C.UNIT
-    settings = Settings(level=A.summary_level(root), root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides)
+    settings = Settings(root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides)
     a = analyse(issues, settings, issues_all)
 
     st.markdown("## 🎯 Ergebnis")
@@ -274,12 +274,12 @@ with guard("Auswertung"):
 
     # --- Tabellen ------------------------------------------------------------------------------------------------------------------------------
 
-    st.markdown("## 📋 Status-Matrix je Parent")
+    st.markdown("## 📋 Status-Matrix je Ticket unter " + ("dem Plan" if root == C.ROOT_ALL else "der Wurzel"))
     st.caption(
-        "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
-        "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
-        "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet. "
-        "Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalkomma) und als Tabelle für Jira oder Confluence zu übernehmen.")
+        "Eine Zeile je Ticket direkt unter der Wurzel (im ganzen Plan die obersten), mit allem darunter: die Summe der Story Points der zählenden Tickets je Status, die Status nach Gewicht geordnet und mit ihrem "
+        "Gewicht im Kopf. Vorn: die eigenen Story Points des Tickets (falls vorhanden), die Summe der Story Points seiner direkten Kinder ohne die zurückgewiesenen (falls ein Kind welche hat) und, wenn beides da ist, der "
+        "Vergleich. Zurückgewiesene Tickets stehen in einer eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach "
+        "Status und Story Points gewichtet. Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalkomma) und als Tabelle für Jira oder Confluence zu übernehmen.")
 
 
     def show_table(rows, key, formats=None, file_name="tabelle"):
@@ -302,8 +302,8 @@ with guard("Auswertung"):
                 st.html(T.rows_to_html(rows, formats))
 
 
-    matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
-    matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
+    matrix_rows, matrix_status, completed_col = T.status_matrix(issues, a)
+    matrix_formats = {name: "%.1f" for name in (T.OWN_COL, T.SUM_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
     matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
     show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
 

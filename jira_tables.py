@@ -15,31 +15,43 @@ from jira_evaluation import Analysis, analyse, de, pct
 SUM_LABEL = "Summe"
 
 
-PARENT_COL, EPIC_COL, TOTAL_COL, EPIC_CHECK_COL = "Parent Ticket", "Epic-level Story Points", "Total", "Epic vs. Total"
+ROW_COL, OWN_COL, SUM_COL, CHECK_COL = "Ticket", "Story Points (Ticket)", "Summe darunter (direkt)", "Vergleich"
 REJECTED_COL, TOTAL_NET_COL, PROGRESS_COL = "Rejected", "Total (ohne Rejected)", "Fortschritt (gewichtet)"
 
 
-def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
-    """Matrix je übergeordnetem Ticket: Zeilen = Parent, Spalten = die Status des Teilbaums (nach Gewicht geordnet, das Gewicht im Kopf), Zelle = Gewicht (Story Points).
-    Dazu die eigenen Story Points des Parents („Epic-level“) neben dem Total der Tickets darunter mit Markierung bei Abweichung, die zurückgewiesenen Tickets (auch die unter einem
-    zurückgewiesenen Parent) in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix
-    folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
+def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
+    """Matrix der Status: Zeilen = die Tickets direkt unter der Wurzel (im ganzen Plan die obersten, siehe `summary_level`), Spalten = die Status der zählenden Tickets darunter (nach Gewicht
+    geordnet, das Gewicht im Kopf), Zelle = Gewicht (Story Points). Die ersten Spalten vergleichen die eigenen Story Points des Tickets (leer, wenn es keine hat) mit der Summe der Story Points seiner
+    direkten Kinder ohne die zurückgewiesenen (leer, wenn keines Story Points hat; Kinder ohne Story Points tragen nichts bei); „Vergleich“ steht nur, wenn beide da sind. Dann die zurückgewiesenen Tickets
+    darunter in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix folgt Teilprojekt und
+    Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
     w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({de(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
     completed_col = f"Completed ({'+'.join(done_statuses)})/(Total−Rejected)" if done_statuses else "Completed (kein Status ab 90 %)"
-    by_key = {t.key: t for t in issues}
+    level = a.level
+    chains = A.hierarchy_chains(issues)
+    kids = A.children_of(issues)
+    rejected = A.rejected_indices(issues)
 
-    def label(i):
-        parent = by_key.get(issues[i].parent)
-        return "(ohne Parent)" if parent is None else (f"{parent.key}: {parent.summary}" if parent.summary else parent.key)
+    def ticket_of(i):
+        chain = chains[i]
+        return issues[chain[level - 1]] if len(chain) >= level else None
+
+    def label(t):
+        return f"(keine Stufe {level})" if t is None else (f"{t.key}: {t.summary}" if t.summary else t.key)
+
+    def children_sum(t):
+        given = [issues[j].points for j in kids.get(t.key, []) if j not in rejected and issues[j].points is not None] if t is not None else []
+        return float(sum(given)) if given else None
 
     cells: dict[str, dict] = {}
 
     def entry(i):
-        return cells.setdefault(label(i), {"by_status": {}, "rejected": 0.0, "credited": 0.0, "parent": by_key.get(issues[i].parent)})
+        t = ticket_of(i)
+        return cells.setdefault(label(t), {"by_status": {}, "rejected": 0.0, "credited": 0.0, "own": None if t is None else t.points, "sum": children_sum(t)})
     for pos, i in enumerate(keep):
         row = entry(i)
         row["by_status"][issues[i].status] = row["by_status"].get(issues[i].status, 0.0) + float(a.w[pos])
@@ -47,10 +59,10 @@ def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], st
     for pos, i in enumerate(rej):
         entry(i)["rejected"] += float(w_rej[pos])
 
-    def build(name, row, epic_points, check):
+    def build(name, row, check):
         net = sum(row["by_status"].values())
         done = sum(row["by_status"].get(st, 0.0) for st in done_statuses)
-        out = {PARENT_COL: name, EPIC_COL: epic_points, TOTAL_COL: net + row["rejected"], EPIC_CHECK_COL: check}
+        out = {ROW_COL: name, OWN_COL: row["own"], SUM_COL: row["sum"], CHECK_COL: check}
         out.update({heads[st]: row["by_status"].get(st, 0.0) for st in statuses})
         out.update({REJECTED_COL: row["rejected"], TOTAL_NET_COL: net,
                     completed_col: (done / net if net > 0 and done_statuses else None), PROGRESS_COL: (row["credited"] / net if net > 0 else None)})
@@ -59,21 +71,20 @@ def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], st
     rows = []
     for name in sorted(cells, key=A.natural_key):
         row = cells[name]
-        parent = row["parent"]
-        epic_points = parent.points if parent is not None else None
-        total = sum(row["by_status"].values()) + row["rejected"]
-        if epic_points is None:
+        own, summed = row["own"], row["sum"]
+        if own is None or summed is None:
             check = ""
-        elif abs(total - epic_points) <= 1e-9:
+        elif abs(summed - own) <= 1e-9:
             check = "gleich"
         else:
-            check = f"⚠ weicht ab ({de(total - epic_points, sign=True)})"
-        rows.append(build(name, row, epic_points, check))
+            check = f"⚠ weicht ab ({de(summed - own, sign=True)})"
+        rows.append(build(name, row, check))
     if rows:
+        owns = [c["own"] for c in cells.values() if c["own"] is not None]
+        sums = [c["sum"] for c in cells.values() if c["sum"] is not None]
         merged = {"by_status": {st: sum(c["by_status"].get(st, 0.0) for c in cells.values()) for st in statuses}, "rejected": sum(c["rejected"] for c in cells.values()),
-                  "credited": sum(c["credited"] for c in cells.values())}
-        own = [r[EPIC_COL] for r in rows if r[EPIC_COL] is not None]
-        rows.append(build(SUM_LABEL, merged, sum(own) if own else None, ""))
+                  "credited": sum(c["credited"] for c in cells.values()), "own": float(sum(owns)) if owns else None, "sum": float(sum(sums)) if sums else None}
+        rows.append(build(SUM_LABEL, merged, ""))
     return rows, [heads[st] for st in statuses], completed_col
 
 

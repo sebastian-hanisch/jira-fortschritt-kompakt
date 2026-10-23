@@ -12,7 +12,7 @@ import jira_core as A
 class Settings:
     unest_rule: str = C.DEFAULT_UNEST                    # Gewicht eines Tickets ohne Story Points
     sub_rule: str = C.DEFAULT_SUB                        # Sub-Tasks einer Story: wie ungeschätzte Tickets, Story Points verteilen oder nur die Story zählen lassen
-    level: int = 1                                       # Hierarchiestufe der Zusammenfassung (1 = oberste)
+    level: int | None = None                             # Hierarchiestufe der Zusammenfassung (1 = oberste); ohne Angabe die Tickets direkt unter der Wurzel (siehe `summary_level`)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
 
@@ -38,8 +38,17 @@ class Analysis:
     plan: tuple                 # der ganze Plan, auf den sich die Mediane „im ganzen Plan“ beziehen (ohne Angabe die Tickets der Auswertung selbst)
 
     @property
+    def level(self) -> int:
+        return level_of(self.settings)
+
+    @property
     def n_excluded(self) -> int:
         return len(self.rejected_atoms)
+
+
+def level_of(settings: Settings) -> int:
+    """Hierarchiestufe, auf der die Auswertung zusammenfasst: die eingestellte, sonst die Tickets direkt unter der Wurzel."""
+    return A.summary_level(settings.root) if settings.level is None else settings.level
 
 
 def de(x: float, digits: int = 1, sign: bool = False) -> str:
@@ -71,7 +80,7 @@ def analyse(issues, settings: Settings = Settings(), plan=None) -> Analysis:
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
     unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
     p_w, p_d, p_n = A.overall(w, c, done)
-    first = A.assign_groups(issues, atoms, settings.level)
+    first = A.assign_groups(issues, atoms, level_of(settings))
     stats = A.aggregate(first, w, c, done, unest)
     tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
     return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first, plan)
