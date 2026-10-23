@@ -198,3 +198,14 @@ def test_csv_for_excel_uses_semicolon_decimal_comma_and_a_byte_order_mark():
     assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig") == "Gruppe;Gewicht;Fortschritt;Tickets\na,b;0,5;;3\n"
     assert T.rows_to_csv([]) == b"\xef\xbb\xbf"
     assert T.rows_to_csv([{"x": float("nan"), "y": "z\nw"}]).decode("utf-8-sig") == "x;y\n;z w\n"
+
+
+def test_status_rules_text_lists_the_credits_and_the_examples():
+    import jira_core as A
+    text = T.status_rules_markdown()
+    assert "**Fertig → 100 %.**" in text and "**Test → 90 %.**" in text and "**Merged → 80 %.**" in text and "**Review → 80 %.**" in text and "**Alles andere → 0 %**" in text
+    assert text.index("Zurückgewiesen → zählt nicht") < text.index("Verneinung") < text.index("Fertig → 100") < text.index("Merged → 80") < text.index("Test → 90") < text.index("Review → 80")
+    for names in A.STATUS_EXAMPLES.values():
+        for name in names:
+            assert name in text, name
+    assert "| 100 % | Done," in text and "| zählt nicht | Rejected," in text

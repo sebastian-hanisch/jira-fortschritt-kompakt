@@ -68,6 +68,17 @@ _TEST_TOKENS = ("qa", "uat")
 _REVIEW_KEYS = ("review", "uberpruf", "gepruft", "prufung", "prufen", "begutachtung")       # „In Review“, „Wird überprüft“, „Geprüft“, „In Prüfung“: zählt wie Merged
 
 
+# Beispielnamen je Klasse für die Beschreibung in der App; tests/test_status.py prüft, dass jeder Name wirklich in seine Klasse fällt
+STATUS_EXAMPLES = {
+    "done": ("Done", "Closed", "Resolved", "Fertig", "Erledigt", "Abgeschlossen", "Released", "Deployed", "Live", "Ready4Prod", "In Production"),
+    "test": ("In Test", "Testing", "Ready4Test", "QA", "UAT", "Abnahme", "Verification", "Getestet"),
+    "merged": ("Merged", "Gemerged", "Zusammengeführt"),
+    "review": ("In Review", "Code Review", "Wird überprüft", "Geprüft", "In Prüfung"),
+    "other": ("Backlog", "To Do", "Specification", "Estimate", "In Arbeit", "In Progress", "On Hold", "Not done", "Nicht fertig", "Untested"),
+    "rejected": ("Rejected", "Zurückgewiesen", "Won't do", "Abgelehnt", "Cancelled", "Duplicate", "Obsolete"),
+}
+
+
 def status_class(name: str) -> str:
     """Klasse eines Status nach seinem Namen (deutsch und englisch): rejected, done, merged, test, review oder other. Reihenfolge: zurückgewiesen; Verneinungen
     („Not done“) sind other; dann fertig-klingende Namen („Done“, „Closed“, „Erledigt“, „Released“, „…Prod“), merged, Test („In Test“, „Testing“, „QA“, „Abnahme“) und

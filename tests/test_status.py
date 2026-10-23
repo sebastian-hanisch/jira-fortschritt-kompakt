@@ -109,3 +109,10 @@ def test_new_rank_puts_not_yet_started_names_first_and_orders_statuses_of_equal_
     assert [A.new_rank(n) for n in ("Backlog", "To Do", "Specification", "Estimate", "Ready for Development", "Offen")] == [0] * 6
     assert [A.new_rank(n) for n in ("In Progress", "In Arbeit", "On Hold")] == [1] * 3
     assert [A.new_rank(n) for n in ("Ready4Test", "Ready4Prod", "Ready for Review")] == [1, 1, 1]                 # „ready“ allein macht einen Namen noch nicht zum Start des Workflows
+
+
+def test_the_example_names_of_the_description_fall_into_their_class():
+    assert set(A.STATUS_EXAMPLES) == {"done", "test", "merged", "review", "other", "rejected"}
+    for kind, names in A.STATUS_EXAMPLES.items():
+        for name in names:
+            assert A.status_class(name) == kind, (kind, name)

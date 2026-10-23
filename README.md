@@ -55,7 +55,8 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 * **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
 * **Fortschritt** einer Gruppe: Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte.
 
-Die Gewichte der Status stehen in einer Tabelle (Ausklapper „Gewichte der Status“) und lassen sich dort ändern, wenn ein Status anders heißt, als sein Name vermuten lässt.
+Die Regeln stehen auch in der App (Ausklapper „Welche Status zählen wie viel?“). Reihenfolge der Prüfung, der erste Treffer gilt: zurückgewiesen (zählt nicht), Verneinung (0 %), fertig (100 %), Merged (80 %),
+Test (90 %), Review (80 %), alles andere 0 %; die Namen der Klassen stehen in der App. Die Gewichte der Status stehen in einer Tabelle (Ausklapper „Gewichte der Status“) und lassen sich dort ändern, wenn ein Status anders heißt, als sein Name vermuten lässt.
 Sonst gibt es nichts einzustellen.
 
 ## Auswahl (Seitenleiste)

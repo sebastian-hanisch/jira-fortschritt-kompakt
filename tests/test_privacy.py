@@ -196,3 +196,10 @@ def test_export_guide_is_collapsed_once_a_file_is_loaded():
     at = _open(plan_csv(make_mini()))
     guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
     assert not guide.proto.expanded
+
+
+def test_status_rules_are_shown_before_the_upload():
+    at = _open()
+    box = next(e for e in at.expander if "Welche Status zählen wie viel" in e.label)
+    text = " ".join(m.value for m in box.markdown)
+    assert "Regeln" in text and "Auflistung" in text and "Ready4Prod" in text and "zählt nicht" in text

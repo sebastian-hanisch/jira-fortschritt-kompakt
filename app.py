@@ -93,6 +93,8 @@ st.warning(UPLOAD_NOTICE)
 loaded = st.session_state.get("loaded")
 with st.expander("📤 So kommt die Datei zustande: Export aus Jira Plans, mit Story Points", expanded=loaded is None):
     st.markdown(EXPORT_GUIDE)
+with st.expander("📖 Welche Status zählen wie viel? Standard nach Namen"):
+    st.markdown(T.status_rules_markdown())
 pseudo = st.checkbox(
     "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
     help="Gilt beim Laden. Betrifft Anzeige, Tabellen und Diagramme (z. B. beim Teilen eines Bildschirms). Die Datei hat den Server beim Hochladen schon erreicht.")
@@ -180,7 +182,7 @@ with guard("Auswertung"):
     version = st.session_state.get("weights_version", 0)
     with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Namen abgeleitet, änderbar"):
         st.caption("Anteil der Arbeit, der bei diesem Status als getan gilt: Namen, die nach fertig klingen (Done, Closed, Fertig, Ready4Prod …), zählen 100 %, nach Test 90 %, nach Merged oder Review 80 %, "
-                   "alles andere 0 %. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
+                   "alles andere 0 %. Die Regeln und Beispielnamen stehen oben unter „Welche Status zählen wie viel?“. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
         rejected_names = [s for s in statuses if A.is_rejected_status(s)]
         if rejected_names:
             st.caption(f"Zurückgewiesen: {', '.join(rejected_names)}.")

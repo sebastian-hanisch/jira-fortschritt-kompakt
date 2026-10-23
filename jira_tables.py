@@ -211,6 +211,42 @@ def rows_to_html(rows: list[dict], formats: dict | None = None) -> str:
     return f'<table style="border-collapse:collapse;"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
 
 
+def status_rules_markdown() -> str:
+    """Welcher Statusname zählt standardmäßig wie viel? Erst die Regeln in der Reihenfolge, in der sie geprüft werden (der erste Treffer gilt), dann die Auflistung mit Beispielnamen.
+    Die Prozentwerte stammen aus `C.STATUS_CLASS_CREDIT`, die Beispiele aus `A.STATUS_EXAMPLES`."""
+    pct_of = {name: f"{round(100 * credit)} %" for name, credit in C.STATUS_CLASS_CREDIT.items()}
+    examples = {name: ", ".join(names) for name, names in A.STATUS_EXAMPLES.items()}
+    return f"""
+**Regeln.** Verglichen wird der Name des Status ohne Groß- und Kleinschreibung, Akzente, Umlaut-Punkte und Satzzeichen. Die Regeln werden in dieser Reihenfolge geprüft, der erste Treffer gilt
+(„Test Review“ zählt also als Test, nicht als Review):
+
+1. **Zurückgewiesen → zählt nicht.** Der Name enthält Rejected, Declined, Zurückgewiesen, Abgelehnt, Won't do, Will not do, Wontfix, Cancel…, Abgebrochen, Verworfen, Storniert, Abandon…, Duplicate, Duplikat,
+   Obsolete, Invalid, Ungültig, Nicht umgesetzt oder Won't implement. Das Ticket und alles unter ihm fällt aus Gewicht und Anzahl.
+2. **Verneinung → 0 %.** Not done, Nicht fertig, Unfertig, Nicht erledigt, Unresolved, Unreleased, Not closed, Nicht abgeschlossen, Incomplete, Unvollständig, Unfinished, Not merged, Untested, Ungetestet,
+   Unreviewed, Ungeprüft, Nicht überprüft, Not reviewed, Not tested, Not resolved, Not finished, Unmerged, Nicht geschlossen, Unabgeschlossen u. ä.
+3. **Fertig → {pct_of['done']}.** Der Name enthält Done, Closed, Resolved, Fertig, Erledigt, Abgeschlossen, Geschlossen, Released, Deployed, Delivered, Ausgeliefert, Complete, Finished, Production, Produktion oder
+   Produktiv, endet auf „Prod“ (Ready4Prod) oder enthält das Wort „Live“.
+4. **Merged → {pct_of['merged']}.** Merged, Gemerged, Zusammengeführt.
+5. **Test → {pct_of['test']}.** Der Name enthält Test (In Test, Testing, Ready4Test), Abnahme, Acceptance, Verif… oder Validat…, oder ist das Wort QA oder UAT.
+6. **Review → {pct_of['review']}.** Review, Überprüf…, Geprüft, Prüfung, Prüfen, Begutachtung.
+7. **Alles andere → 0 %** (In Arbeit, In Progress, On Hold, Backlog, To Do, Specification …).
+
+**Auflistung** (Beispielnamen, nicht vollständig):
+
+| Gewicht | Beispiele |
+|---|---|
+| {pct_of['done']} | {examples['done']} |
+| {pct_of['test']} | {examples['test']} |
+| {pct_of['merged']} | {examples['merged']} |
+| {pct_of['review']} | {examples['review']} |
+| 0 % | {examples['other']} |
+| zählt nicht | {examples['rejected']} |
+
+Jedes Gewicht lässt sich nach dem Laden in der Tabelle „Gewichte der Status“ ändern, falls ein Status anders heißt, als sein Name vermuten lässt. Die Namen, die in euren Daten vorkommen, stehen dort mit ihrem
+Standardgewicht.
+"""
+
+
 def rows_to_csv(rows: list[dict]) -> bytes:
     """CSV für Excel im deutschen Raum: Semikolon, Dezimalkomma, UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
     if not rows:
