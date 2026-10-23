@@ -20,7 +20,6 @@ DEFAULT_DIM = DIM_EPIC
 ROOT_ALL = ""              # Wurzel der Auswertung: leer = ganzes Projekt
 MAX_LEVELS = 8             # höchste wählbare Hierarchiestufe
 GRAPH_MAX_NODES = 250      # Hierarchiegraph: mehr Knoten lassen sich nicht lesen; die tiefste Ebene wird dann zusammengefasst
-MAX_DOWN_BUTTONS = 12       # so viele Tickets mit Kindern bietet die Navigation „runter“ als Knöpfe an; alle weiteren stehen in der Auswahl „Teilprojekt“
 GRAPH_LABEL_MAX = 60       # bis zu dieser Knotenzahl trägt jeder Knoten seinen Schlüssel, darüber nur die Knoten mit Kindern
 
 COLOR_DONE = "#2F6B65"

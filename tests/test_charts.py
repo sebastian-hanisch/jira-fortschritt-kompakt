@@ -7,7 +7,7 @@ import jira_constants as C
 import jira_evaluation as ev
 from conftest import random_project
 from jira_core import Issue
-from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, squarify, tile_layout
+from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, selected_key, squarify, tile_layout
 
 
 def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):
@@ -105,12 +105,12 @@ def test_tile_layout_leaves_out_tiles_without_weight(mini):
     assert tile_layout(empty) == []
 
 
-def test_build_tiles_draws_one_bar_per_tile_with_its_hover(mini):
+def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
     g = ev.analyse(mini).tree
     fig = build_tiles(g, "SP")
     assert [t.type for t in fig.data] == ["bar", "bar"] and fig.layout.barmode == "overlay"
-    assert [h.split("<br>")[0] for h in fig.data[0].hovertext] == ["E1: Epic A", "E2: Epic B", "B1"] and len(fig.data[1].hovertext) == 4
-    assert fig.layout.yaxis.range == (TILE_H, 0) and "lässt sich als Teilprojekt öffnen" in fig.data[0].hovertext[0] and "Teilprojekt" not in fig.data[0].hovertext[2]       # B1 hat keine Kinder
+    assert [d[0] for d in fig.data[0].customdata] == ["E1", "E2", "B1"] and sorted(d[0] for d in fig.data[1].customdata) == ["S1", "S2", "S3", "S4"]
+    assert fig.layout.yaxis.range == (TILE_H, 0) and "Klick: als Teilprojekt öffnen" in fig.data[0].hovertext[0] and "Klick" not in fig.data[0].hovertext[2]          # B1 hat keine Kinder
     assert [a.text for a in fig.layout.annotations][0].startswith("<b>E1</b>") and len(fig.layout.annotations) == 2          # Kopfzeilen der beiden Kacheln mit Kindern
 
 
@@ -123,3 +123,16 @@ def test_progress_color_runs_from_red_over_yellow_to_green():
     assert progress_color(0.0) == "rgba(201,83,75,1.0)" and progress_color(0.5) == "rgba(242,213,126,1.0)" and progress_color(1.0) == "rgba(47,107,101,1.0)"
     assert progress_color(2.0) == progress_color(1.0) and progress_color(-1.0) == progress_color(0.0) and progress_color(float("nan"), 0.5) == "rgba(190,190,190,0.5)"
     assert progress_color(0.25, 0.35).endswith(",0.35)")
+
+
+def test_selected_key_reads_the_key_from_the_customdata_of_a_clicked_point():
+    assert selected_key([{"customdata": ["S2"], "x": 1}]) == "S2" and selected_key([{"customdata": "S2"}]) == "S2"
+    assert selected_key([]) == "" and selected_key(None) == "" and selected_key([{"x": 1}]) == "" and selected_key([{"customdata": []}]) == ""
+    assert selected_key([{"customdata": None}, {"customdata": ["E1"]}]) == "E1" and selected_key([{"customdata": ["E1"]}, {"customdata": ["E1"]}]) == "E1"
+    assert selected_key([{"customdata": ["E1"]}, {"customdata": ["E2"]}]) == ""                    # ein aufgezogener Rahmen über mehrere Kacheln wählt nichts
+
+
+def test_graph_markers_carry_the_keys_for_clicks(mini):
+    g = ev.analyse(mini).tree
+    keys = [k for t in build_tree_graph(g, "SP").data[1:] for k in t.customdata]
+    assert sorted(keys) == sorted(g.keys)

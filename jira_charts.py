@@ -139,9 +139,22 @@ def progress_color(p: float, alpha: float = 1.0) -> str:
     return f"rgba({stops[-1][1][0]},{stops[-1][1][1]},{stops[-1][1][2]},{alpha})"
 
 
+def selected_key(points) -> str:
+    """Schlüssel des angeklickten Knotens bzw. der angeklickten Kachel aus den Punkten einer Plotly-Auswahl (die Schlüssel stehen in `customdata`); leer ohne Auswahl und bei mehreren
+    verschiedenen Schlüsseln (z. B. nach einem Aufziehen eines Rahmens)."""
+    keys = set()
+    for point in points or []:
+        data = point.get("customdata") if isinstance(point, dict) else None
+        if isinstance(data, (list, tuple)):
+            data = data[0] if data else None
+        if isinstance(data, str) and data:
+            keys.add(data)
+    return next(iter(keys)) if len(keys) == 1 else ""
+
+
 def build_tiles(g, unit: str):
-    """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken; der Hover nennt Gewicht,
-    Fortschritt und, ob sich die Kachel als Teilprojekt öffnen lässt (Knöpfe über den Diagrammen)."""
+    """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken und in der
+    ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen."""
     tiles = tile_layout(g)
     fig = go.Figure()
     total = TILE_W * TILE_H
@@ -150,11 +163,12 @@ def build_tiles(g, unit: str):
         if not sel:
             continue
         label = [("" if (t.framed or t.w * t.h < 0.004 * total) else f"{t.key}<br>{100 * t.progress:.0f} %" if t.progress == t.progress else t.key) for t in sel]
-        hover = [_node_hover(g, t.node, unit) + ("<br><i>hat Kinder: lässt sich als Teilprojekt öffnen</i>" if t.drillable else "") for t in sel]
+        hover = [_node_hover(g, t.node, unit) + ("<br><i>Klick: als Teilprojekt öffnen</i>" if t.drillable else "") for t in sel]
         fig.add_trace(go.Bar(
-            x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel],
+            x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel], customdata=[[t.key] for t in sel],
             marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
-            text=label, textposition="inside", insidetextanchor="middle", textfont=dict(size=11), hovertext=hover, hoverinfo="text", showlegend=False))
+            text=label, textposition="inside", insidetextanchor="middle", textfont=dict(size=11), hovertext=hover, hoverinfo="text", showlegend=False,
+            selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     for t in tiles:
         if t.framed:
             fig.add_annotation(x=t.x + 0.7, y=t.y + 0.4, xanchor="left", yanchor="top", showarrow=False, font=dict(size=12),
@@ -205,12 +219,14 @@ def build_tree_graph(g, unit: str):
             x=[g.x[k] for k in known], y=[g.y[k] for k in known], mode="markers+text", text=[text[k] for k in known], textposition=[place[k] for k in known], textfont=dict(size=11),
             marker=dict(size=[size[k] for k in known], symbol=[symbol[k] for k in known], color=[g.progress[k] for k in known], colorscale=C.COLOR_SCALE, cmin=0, cmax=1,
                         line=dict(color="rgba(60,60,60,0.8)", width=1), colorbar=dict(title="Fortschritt", tickformat=".0%", nticks=5, len=0.5)),
-            hovertext=[_node_hover(g, k, unit) for k in known], hoverinfo="text", showlegend=False))
+            hovertext=[_node_hover(g, k, unit) for k in known], hoverinfo="text", showlegend=False, customdata=[g.keys[k] for k in known],
+            selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     if unknown:
         fig.add_trace(go.Scatter(
             x=[g.x[k] for k in unknown], y=[g.y[k] for k in unknown], mode="markers+text", text=[text[k] for k in unknown], textposition=[place[k] for k in unknown], textfont=dict(size=11),
             marker=dict(size=[size[k] for k in unknown], symbol=[symbol[k] for k in unknown], color="rgba(190,190,190,0.9)", line=dict(color="rgba(60,60,60,0.8)", width=1)),
-            hovertext=[_node_hover(g, k, unit) for k in unknown], hoverinfo="text", showlegend=False))
+            hovertext=[_node_hover(g, k, unit) for k in unknown], hoverinfo="text", showlegend=False, customdata=[g.keys[k] for k in unknown],
+            selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     depth = int(g.x.max()) if n else 0
     fig.update_xaxes(visible=False, range=[-0.4, depth + 1.8])
     fig.update_yaxes(visible=False, autorange="reversed")

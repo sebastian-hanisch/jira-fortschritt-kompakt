@@ -275,21 +275,10 @@ def parent_root(issues, root: str) -> str:
     return parent if parent in dict(root_choices(issues)) else C.ROOT_ALL
 
 
-def root_path(issues, root: str) -> list[str]:
-    """Der Weg von der obersten Wurzel bis `root` als Liste von Schlüsseln (mit `root` am Ende): jeweils das übergeordnete Ticket, das als Wurzel taugt (siehe `parent_root`). Leer für das ganze Projekt."""
-    path = []
-    while root != C.ROOT_ALL:
-        path.append(root)
-        root = parent_root(issues, root)
-    return path[::-1]
-
-
-def child_roots(issues, root: str) -> list[str]:
-    """Die Tickets direkt unter `root` (beim ganzen Projekt die obersten), die selbst Kinder haben und sich deshalb als nächste Wurzel öffnen lassen, in der Reihenfolge des Baums."""
-    keys = {t.key for t in issues}
-    parent = {t.key: t.parent for t in issues}
-    top = lambda key: parent[key] not in keys or parent[key] == key         # noqa: E731 - ohne Eltern in den Daten
-    return [k for k, _ in root_choices(issues) if (top(k) if root == C.ROOT_ALL else parent[k] == root) and k != root]
+def root_for_click(issues, key: str) -> str | None:
+    """Wohin führt ein Klick auf das Ticket `key` in einem Diagramm? Auf ein Ticket, das als Wurzel taugt (siehe `root_choices`), und auf das ganze Projekt; sonst (Blatt, unbekannter Schlüssel,
+    die Sammelwurzel „Projekt“ des Graphen) nirgendwohin (None)."""
+    return key if key == C.ROOT_ALL or key in dict(root_choices(issues)) else None
 
 
 def root_choices(issues) -> list[tuple[str, int]]:

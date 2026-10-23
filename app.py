@@ -4,6 +4,7 @@ Lauffähig mit: streamlit run app.py
 """
 
 import contextlib
+from functools import partial
 
 import streamlit as st
 
@@ -11,7 +12,7 @@ import jira_constants as C
 import jira_core as A
 import jira_plan as J
 import jira_tables as T
-from jira_charts import build_progress_bars, build_tiles, build_tree_graph
+from jira_charts import build_progress_bars, build_tiles, build_tree_graph, selected_key
 from jira_evaluation import Settings, analyse, check_consistency, de, pct, status_list, unestimated_note
 from jira_privacy import scrub_streamlit_logs
 
@@ -79,9 +80,21 @@ def _clear_loaded():
 
 
 def _go_to(key):
-    """Wurzel der Auswertung wechseln (Knöpfe „hoch“ und „runter“): nur auf ein Ticket, das als Wurzel taugt, oder auf das ganze Projekt."""
-    if key == C.ROOT_ALL or key in dict(A.root_choices(st.session_state["loaded"][1])):
-        st.session_state["root"] = key
+    """Wurzel der Auswertung wechseln (Klick in ein Diagramm, Knöpfe „hoch“): nur auf ein Ticket, das als Wurzel taugt, oder auf das ganze Projekt."""
+    target = A.root_for_click(st.session_state["loaded"][1], key)
+    if target is not None:
+        st.session_state["root"] = target
+
+
+def _drill(chart_key):
+    """Auswahl in einem Diagramm (Klick): den angeklickten Knoten bzw. die angeklickte Kachel als Wurzel öffnen."""
+    try:
+        points = st.session_state[chart_key]["selection"]["points"]
+    except (KeyError, TypeError):
+        return
+    key = selected_key(points)
+    if key:
+        _go_to(key)
 
 
 def _reset_weights():
@@ -213,18 +226,7 @@ with tab_main, guard("Auswertung"):
                       help="Wechselt zum übergeordneten Ticket, das als Wurzel taugt, sonst zum ganzen Plan.")
         if up_key != C.ROOT_ALL:
             nav_top.button("⏫ Ganzer Plan", on_click=_go_to, args=(C.ROOT_ALL,), key="nav_top", width="stretch")
-    down = A.child_roots(issues_all, root)
-    if down:
-        nav_hint.caption("Runter: ein Ticket mit Kindern als Teilprojekt öffnen. Die Diagramme und Zahlen folgen der Wurzel.")
-        shown = down[:C.MAX_DOWN_BUTTONS]
-        for row in range(0, len(shown), 4):
-            cols = st.columns(4)
-            for col, key in zip(cols, shown[row:row + 4]):
-                col.button("⬇ " + root_label(key).lstrip("↳ "), on_click=_go_to, args=(key,), key=f"nav_down_{key}", width="stretch")
-        if len(down) > len(shown):
-            st.caption(f"{len(down) - len(shown)} weitere Tickets mit Kindern: über die Auswahl „Teilprojekt“ in der Seitenleiste.")
-    else:
-        nav_hint.caption("Unter dieser Wurzel gibt es kein Ticket mit Kindern mehr: Das ist die unterste Stufe.")
+    nav_hint.caption("Runter: ein Klick auf eine Kachel oder einen Knoten mit Kindern öffnet ihn als Teilprojekt; auch die Auswahl „Teilprojekt“ in der Seitenleiste geht. Hoch: die Knöpfe.")
     for problem in check_consistency(a):
         st.error(f"Interne Prüfung verletzt: {problem}")
     if root != C.ROOT_ALL:
@@ -258,18 +260,18 @@ with tab_main, guard("Auswertung"):
     st.markdown("### 🗺️ Kachelansicht")
     if a.tree.weight[0] > 0:
         tiles_key = f"chart_tiles_{root}"
-        st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key)
-        st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. Eine Kachel mit Kindern lässt sich über die Knöpfe oben als Teilprojekt öffnen "
-                   "(eine Stufe tiefer), mit den Knöpfen oben geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen.")
+        st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key, on_select=partial(_drill, tiles_key), selection_mode="points")
+        st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. **Ein Klick auf eine Kachel mit Kindern öffnet sie als Teilprojekt** "
+                   "(eine Stufe tiefer); mit den Knöpfen oben geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen.")
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 
     st.markdown("### 🌳 Hierarchiegraph")
     g = a.tree
     graph_key = f"chart_graph_{root}"
-    st.plotly_chart(build_tree_graph(g, unit), width="stretch", key=graph_key)
+    st.plotly_chart(build_tree_graph(g, unit), width="stretch", key=graph_key, on_select=partial(_drill, graph_key), selection_mode="points")
     st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
-               "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover."
+               "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt.**"
                + (f" Der Graph hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
 
     # --- Tabellen ------------------------------------------------------------------------------------------------------------------------------

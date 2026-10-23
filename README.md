@@ -68,10 +68,10 @@ Sonst gibt es nichts einzustellen.
 
 ## Hoch und runter im Baum
 
-Über den Diagrammen stehen Knöpfe, mit denen sich die Wurzel der Auswertung ändern lässt: **⬇** öffnet ein Ticket mit Kindern direkt unter der aktuellen Wurzel als neues Teilprojekt (die Zahlen, Kachelansicht,
-Graph und Tabellen folgen), **⬆ Eine Stufe hoch** geht zum übergeordneten Ticket, **⏫ Ganzer Plan** zurück an die Spitze. Bis zu 12 Knöpfe je Stufe; weitere Tickets stehen in der Auswahl „Teilprojekt“ in der
-Seitenleiste. Ein Klick direkt in die Kachelansicht oder in den Graphen wechselt die Wurzel **nicht**: Streamlit gibt Klicks auf Diagrammflächen nur als Auswahl weiter, und die kam in meinem Versuch im Browser
-nicht an.
+**Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. **Hoch:** Die Knöpfe
+über den Diagrammen gehen eine Stufe hoch oder zurück zum ganzen Plan. Alternativ wechselt die Auswahl „Teilprojekt“ in der Seitenleiste die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an
+(`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Versuch im Browser mit einer ausgelösten Auswahl, den Mausklick selbst konnte ich in meiner Testumgebung nicht auslösen
+(dort kam auch in einem minimalen Streamlit-Diagramm keine Auswahl an). Wenn der Klick bei euch nichts bewirkt, bitte melden.
 
 ## Ausgabe
 
