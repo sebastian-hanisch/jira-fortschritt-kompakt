@@ -7,7 +7,7 @@ import jira_constants as C
 import jira_evaluation as ev
 from conftest import random_project
 from jira_core import Issue
-from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, selected_key, squarify, tile_layout
+from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, progress_rgb, selected_key, squarify, text_color_on, tile_label, tile_layout
 
 
 def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):
@@ -109,7 +109,8 @@ def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
     assert [t.type for t in fig.data] == ["bar", "bar"] and fig.layout.barmode == "overlay"
     assert [d[0] for d in fig.data[0].customdata] == ["E1", "E2", "B1"] and sorted(d[0] for d in fig.data[1].customdata) == ["S1", "S2", "S3", "S4"]
     assert fig.layout.yaxis.range == (TILE_H, 0) and "Klick: als Teilprojekt öffnen" in fig.data[0].hovertext[0] and "Klick" not in fig.data[0].hovertext[2]          # B1 hat keine Kinder
-    assert [a.text for a in fig.layout.annotations][0].startswith("<b>E1</b>") and len(fig.layout.annotations) == 2          # Kopfzeilen der beiden Kacheln mit Kindern
+    headers = [a.text for a in fig.layout.annotations if a.text.startswith("<b>")]
+    assert len(headers) == 2 and headers[0].startswith("<b>E1</b>") and headers[1].startswith("<b>E2</b>")          # Kopfzeilen der beiden Kacheln mit Kindern
 
 
 def test_build_tiles_without_weight_is_an_empty_figure():
@@ -139,3 +140,42 @@ def test_graph_markers_carry_the_keys_for_clicks(mini):
     g = ev.analyse(mini).tree
     keys = [k for t in build_tree_graph(g, "SP").data[1:] for k in t.customdata]
     assert sorted(keys) == sorted(g.keys)
+
+
+def test_labels_are_annotations_so_that_a_selection_cannot_dim_them(mini):
+    g = ev.analyse(mini).tree
+    tiles = build_tiles(g, "SP")
+    assert all(t.text is None for t in tiles.data)                                                  # kein Text an den Balken (er würde bei einer Auswahl abgedunkelt)
+    wanted = [t.key for t in tile_layout(g) if tile_label(t)]
+    assert wanted and sorted(a.text.split("<br>")[0] for a in tiles.layout.annotations if not a.text.startswith("<b>")) == sorted(wanted)
+    graph = build_tree_graph(g, "SP")
+    assert all(t.text is None for t in graph.data) and all("text" not in t.mode for t in graph.data)
+    assert sorted(a.text for a in graph.layout.annotations) == sorted(g.keys)                       # bis zu 60 Knoten tragen jeder seinen Schlüssel
+
+
+def test_graph_labels_sit_right_of_leaves_and_above_nodes_with_children(mini):
+    g = ev.analyse(mini).tree
+    by_key = {a.text: a for a in build_tree_graph(g, "SP").layout.annotations}
+    assert by_key["T1"].xanchor == "left" and by_key["T1"].xshift > 0 and by_key["E1"].yanchor == "bottom" and by_key["E1"].yshift > 0
+
+
+def test_large_graphs_label_only_the_nodes_with_children():
+    items = (Issue(key="E", type="Epic"),) + tuple(Issue(key=f"S-{n}", parent="E", points=1.0) for n in range(C.GRAPH_LABEL_MAX + 5))
+    g = ev.analyse(items).tree
+    labels = [a.text for a in build_tree_graph(g, "SP").layout.annotations]
+    assert sorted(labels) == ["E", "Projekt"]
+
+
+def test_tile_labels_depend_on_the_size_of_the_tile():
+    from jira_charts import Tile
+    base = dict(key="P-12", title="", level=2, x=0.0, y=0.0, weight=1.0, progress=0.5, drillable=False, framed=False, node=0)
+    assert tile_label(Tile(w=10.0, h=8.0, **base)) == "P-12<br>50 %"
+    assert tile_label(Tile(w=10.0, h=3.0, **base)) == "P-12"                                       # flach: nur der Schlüssel
+    assert tile_label(Tile(w=3.0, h=8.0, **base)) == "" and tile_label(Tile(w=10.0, h=1.0, **base)) == ""
+    assert tile_label(Tile(w=10.0, h=8.0, **{**base, "framed": True})) == ""                        # Kachel mit Kopfzeile: die Kopfzeile beschriftet
+    assert tile_label(Tile(w=10.0, h=8.0, **{**base, "progress": float("nan")})) == "P-12"
+
+
+def test_label_color_has_contrast_on_the_tile_color():
+    assert text_color_on(1.0) == "#ffffff" and text_color_on(0.5) == "#1f2933" and text_color_on(float("nan")) == "#1f2933"
+    assert progress_rgb(0.0) == (201, 83, 75) and progress_rgb(1.0) == (47, 107, 101) and progress_rgb(float("nan")) == (190, 190, 190)

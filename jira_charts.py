@@ -125,18 +125,30 @@ def tile_layout(g) -> list[Tile]:
     return tiles
 
 
-def progress_color(p: float, alpha: float = 1.0) -> str:
-    """Farbe zum Fortschritt auf der Skala rot (0 %), gelb (50 %), grün (100 %); grau, wenn nichts messbar ist."""
+def progress_rgb(p: float) -> tuple[int, int, int]:
+    """Farbe zum Fortschritt auf der Skala rot (0 %), gelb (50 %), grün (100 %) als (R, G, B); grau, wenn nichts messbar ist."""
     if p != p:
-        return f"rgba(190,190,190,{alpha})"
+        return 190, 190, 190
     stops = [(stop, tuple(int(code[i:i + 2], 16) for i in (1, 3, 5))) for stop, code in C.COLOR_SCALE]
     p = min(max(p, 0.0), 1.0)
     for (p0, c0), (p1, c1) in zip(stops, stops[1:]):
         if p <= p1:
             t = (p - p0) / (p1 - p0)
             r, gr, b = (round(a + (b_ - a) * t) for a, b_ in zip(c0, c1))
-            return f"rgba({r},{gr},{b},{alpha})"
-    return f"rgba({stops[-1][1][0]},{stops[-1][1][1]},{stops[-1][1][2]},{alpha})"
+            return r, gr, b
+    return stops[-1][1]
+
+
+def progress_color(p: float, alpha: float = 1.0) -> str:
+    """Farbe zum Fortschritt (siehe `progress_rgb`) als rgba-Text."""
+    r, g, b = progress_rgb(p)
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def text_color_on(p: float) -> str:
+    """Schriftfarbe mit gutem Kontrast auf der Kachelfarbe zum Fortschritt `p`: weiß auf dunklen, fast schwarz auf hellen Farben."""
+    r, g, b = progress_rgb(p)
+    return "#ffffff" if 0.299 * r + 0.587 * g + 0.114 * b < 150 else "#1f2933"
 
 
 def selected_key(points) -> str:
@@ -152,28 +164,40 @@ def selected_key(points) -> str:
     return next(iter(keys)) if len(keys) == 1 else ""
 
 
+TILE_LABEL_MIN_W, TILE_LABEL_MIN_H, TILE_LABEL2_MIN_H = 6.5, 2.6, 4.4      # so groß muss eine Kachel (in Zeicheneinheiten) mindestens sein, damit der Schlüssel bzw. Schlüssel und Fortschritt hineinpassen
+
+
+def tile_label(t: Tile) -> str:
+    """Beschriftung einer Kachel ohne Kopfzeile: Schlüssel und Fortschritt, nur der Schlüssel in flachen Kacheln, leer in zu kleinen und in Kacheln mit Kopfzeile."""
+    if t.framed or t.w < TILE_LABEL_MIN_W or t.h < TILE_LABEL_MIN_H:
+        return ""
+    if t.h >= TILE_LABEL2_MIN_H and t.progress == t.progress:
+        return f"{t.key}<br>{100 * t.progress:.0f} %"
+    return t.key
+
+
 def build_tiles(g, unit: str):
     """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken und in der
     ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen, Kacheln ohne Kinder reagieren nicht."""
     tiles = tile_layout(g)
     fig = go.Figure()
-    total = TILE_W * TILE_H
     for level in (1, 2):
         sel = [t for t in tiles if t.level == level]
         if not sel:
             continue
-        label = [("" if (t.framed or t.w * t.h < 0.004 * total) else f"{t.key}<br>{100 * t.progress:.0f} %" if t.progress == t.progress else t.key) for t in sel]
         hover = [_node_hover(g, t.node, unit) + ("<br><i>Klick: als Teilprojekt öffnen</i>" if t.drillable else "") for t in sel]
         fig.add_trace(go.Bar(
             x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel], customdata=[[t.key] for t in sel],
             marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
-            text=label, textposition="inside", insidetextanchor="middle", textfont=dict(size=11), hovertext=hover, hoverinfo="text", showlegend=False,
+            hovertext=hover, hoverinfo="text", showlegend=False,
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
-    for t in tiles:
+    for t in tiles:         # Beschriftungen als Annotationen: Der Text von Balken würde bei einer Auswahl (Klick) abgedunkelt, eine Annotation nicht
         if t.framed:
             fig.add_annotation(x=t.x + 0.7, y=t.y + 0.4, xanchor="left", yanchor="top", showarrow=False, font=dict(size=12),
                                text=f"<b>{t.key}</b> {100 * t.progress:.0f} %" if t.progress == t.progress else f"<b>{t.key}</b>")
-    fig.update_layout(barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False, uniformtext=dict(minsize=8, mode="hide"))
+        elif tile_label(t):
+            fig.add_annotation(x=t.x + t.w / 2, y=t.y + t.h / 2, xanchor="center", yanchor="middle", showarrow=False, font=dict(size=11, color=text_color_on(t.progress)), text=tile_label(t))
+    fig.update_layout(barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
     fig.update_xaxes(visible=False, range=[0, TILE_W], fixedrange=True)
     fig.update_yaxes(visible=False, range=[TILE_H, 0], fixedrange=True)
     return fig
@@ -210,23 +234,29 @@ def build_tree_graph(g, unit: str):
     size = np.array([9.0 if top <= 0 or g.weight[k] <= 0 else 9.0 + 25.0 * np.sqrt(g.weight[k] / top) for k in range(n)])
     symbol = ["circle" if g.is_leaf[k] else "square" for k in range(n)]
     label_all = n <= C.GRAPH_LABEL_MAX
-    text = [g.keys[k] if (label_all or not g.is_leaf[k]) else "" for k in range(n)]
-    place = ["middle right" if g.is_leaf[k] else "top center" for k in range(n)]        # Knoten mit Kindern: Schlüssel über den Knoten, damit er nicht auf der Linie zu den Kindern liegt
     known = [k for k in range(n) if not np.isnan(g.progress[k])]
     unknown = [k for k in range(n) if np.isnan(g.progress[k])]
     if known:
         fig.add_trace(go.Scatter(
-            x=[g.x[k] for k in known], y=[g.y[k] for k in known], mode="markers+text", text=[text[k] for k in known], textposition=[place[k] for k in known], textfont=dict(size=11),
+            x=[g.x[k] for k in known], y=[g.y[k] for k in known], mode="markers",
             marker=dict(size=[size[k] for k in known], symbol=[symbol[k] for k in known], color=[g.progress[k] for k in known], colorscale=C.COLOR_SCALE, cmin=0, cmax=1,
                         line=dict(color="rgba(60,60,60,0.8)", width=1), colorbar=dict(title="Fortschritt", tickformat=".0%", nticks=5, len=0.5)),
             hovertext=[_node_hover(g, k, unit) for k in known], hoverinfo="text", showlegend=False, customdata=[g.keys[k] for k in known],
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     if unknown:
         fig.add_trace(go.Scatter(
-            x=[g.x[k] for k in unknown], y=[g.y[k] for k in unknown], mode="markers+text", text=[text[k] for k in unknown], textposition=[place[k] for k in unknown], textfont=dict(size=11),
+            x=[g.x[k] for k in unknown], y=[g.y[k] for k in unknown], mode="markers",
             marker=dict(size=[size[k] for k in unknown], symbol=[symbol[k] for k in unknown], color="rgba(190,190,190,0.9)", line=dict(color="rgba(60,60,60,0.8)", width=1)),
             hovertext=[_node_hover(g, k, unit) for k in unknown], hoverinfo="text", showlegend=False, customdata=[g.keys[k] for k in unknown],
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
+    for k in range(n):          # Beschriftung als Annotation (siehe build_tiles); Blätter rechts vom Knoten, Knoten mit Kindern darüber, damit der Schlüssel nicht auf der Linie zu den Kindern liegt
+        if not (label_all or not g.is_leaf[k]):
+            continue
+        radius = size[k] / 2
+        if g.is_leaf[k]:
+            fig.add_annotation(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="left", yanchor="middle", xshift=radius + 3, font=dict(size=11))
+        else:
+            fig.add_annotation(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="center", yanchor="bottom", yshift=radius + 2, font=dict(size=11))
     depth = int(g.x.max()) if n else 0
     fig.update_xaxes(visible=False, range=[-0.4, depth + 1.8])
     fig.update_yaxes(visible=False, autorange="reversed")
