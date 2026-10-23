@@ -7,7 +7,7 @@ UNIT = "SP"                 # Einheit der Gewichte: Story Points
 
 # Gutschrift je Klasse, in die der Name eines Status fällt (jira_core.status_class); alles andere zählt 0, zurückgewiesene Tickets zählen gar nicht
 STATUS_CLASS_CREDIT = {"done": 1.0, "merged": 0.8, "review": 0.8, "test": 0.9}
-UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE = "Median der geschätzten Tickets", "als 1 Story Point", "nicht zählen"      # Gewicht eines Tickets ohne Story Points
+UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE = "Median der geschätzten Tickets auf gleicher Stufe", "als 1 Story Point", "nicht zählen"      # Gewicht eines Tickets ohne Story Points
 UNEST_RULES = (UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE)
 DEFAULT_UNEST = UNEST_MEDIAN
 COMPLETED_MIN_CREDIT = 0.9      # „Completed“ der Status-Matrix: alle Status ab diesem Gewicht

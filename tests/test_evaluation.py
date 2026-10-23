@@ -16,32 +16,32 @@ from test_status import TREE
 
 def test_progress_of_the_mini_project_by_hand(mini):
     a = ev.analyse(mini)
-    # Gewichte 3, 5, 2, 2,5 (Median), 1; Gutschriften 1, 0, 0, 0,8 (In Review), 1
-    assert (a.n_atoms, a.weight, a.n_unestimated, a.n_excluded) == (5, 13.5, 1, 0)
-    assert a.progress == pytest.approx(6 / 13.5) and a.progress_done == pytest.approx(4 / 13.5) and a.progress_count == pytest.approx(2 / 5)
+    # Blätter S1 (3), S3 (2), S4 (ungeschätzt: Median der Stufe 2,5), B1 (1), T1 und T2 (Stufe ohne geschätztes Ticket: je 1); Gutschriften 1, 0, 0,8 (In Review), 1, 1, 0
+    assert (a.n_atoms, a.weight, a.n_unestimated, a.n_excluded) == (6, 10.5, 3, 0)
+    assert a.progress == pytest.approx(7 / 10.5) and a.progress_done == pytest.approx(5 / 10.5) and a.progress_count == pytest.approx(3 / 6)
     assert a.credits == {"In Progress": 0.0, "To Do": 0.0, "In Review": 0.8, "Done": 1.0}
-    assert ev.check_consistency(a) == [] and [mini[i].key for i in a.atoms] == ["S1", "S2", "S3", "S4", "B1"]
+    assert ev.check_consistency(a) == [] and [mini[i].key for i in a.atoms] == ["S1", "S3", "S4", "B1", "T1", "T2"]
 
 
 def test_the_rule_for_unestimated_tickets_changes_the_progress_by_hand(mini):
     ignore = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_IGNORE))
-    assert (ignore.n_atoms, ignore.weight, ignore.n_unestimated) == (5, 11.0, 1) and ignore.progress == pytest.approx(4 / 11)         # S4 wiegt 0: 3 + 1 von 11
+    assert (ignore.n_atoms, ignore.weight, ignore.n_unestimated) == (6, 6.0, 3) and ignore.progress == pytest.approx(4 / 6)         # S4, T1, T2 wiegen 0: 3 + 1 von 6
     one = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_ONE))
-    assert one.weight == 12.0 and one.progress == pytest.approx((3 + 0.8 + 1) / 12)
-    assert ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_MEDIAN)).progress == pytest.approx(6 / 13.5)
+    assert one.weight == 9.0 and one.progress == pytest.approx((3 + 0.8 + 1 + 1) / 9)
+    assert ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_MEDIAN)).progress == pytest.approx(7 / 10.5)
     for a in (ignore, one):
         assert ev.check_consistency(a) == []
 
 
 def test_changed_status_weights_change_the_progress_by_hand(mini):
-    a = ev.analyse(mini, ev.Settings(overrides=(("In Review", 0.5), ("In Progress", 0.4))))
-    assert a.progress == pytest.approx((3 + 5 * 0.4 + 0 + 2.5 * 0.5 + 1) / 13.5)
-    assert a.progress_done == pytest.approx(4 / 13.5)                                # „nur Done“ hängt nicht von den Gewichten ab
+    a = ev.analyse(mini, ev.Settings(overrides=(("In Review", 0.5), ("To Do", 0.4))))
+    assert a.progress == pytest.approx((3 + 2 * 0.4 + 2.5 * 0.5 + 1 + 1 + 1 * 0.4) / 10.5)
+    assert a.progress_done == pytest.approx(5 / 10.5)                                # „nur Done“ hängt nicht von den Gewichten ab
 
 
 def test_group_by_dimension_is_part_of_the_analysis(mini):
     a = ev.analyse(mini, ev.Settings(dimension=C.DIM_EPIC))
-    assert a.stats.labels == ("E1: Epic A", "E2: Epic B", "(ohne Epic)") and a.stats.progress.tolist() == pytest.approx([3 / 8, 2 / 4.5, 1.0])
+    assert a.stats.labels == ("E1: Epic A", "E2: Epic B", "(ohne Epic)") and a.stats.progress.tolist() == pytest.approx([4 / 5, 2 / 4.5, 1.0])
     assert ev.analyse(mini, ev.Settings(dimension=C.DIM_ALL)).stats.labels == ("Gesamtes Projekt",)
 
 
@@ -58,10 +58,11 @@ def test_formatting_helpers():
 
 def test_progress_without_the_rejected_by_hand():
     a = ev.analyse(TREE)
-    assert (a.n_atoms, a.weight, a.n_excluded) == (3, 9.0, 2)                       # S1, S3, X; S2 und S4 (unter dem zurückgewiesenen E2) fehlen
-    assert [TREE[i].key for i in a.rejected_atoms] == ["S2", "S4"]
-    assert a.progress == pytest.approx((2 * 1.0 + 4 * 0.0 + 3 * 0.8) / 9) and ev.check_consistency(a) == []          # 4,4 / 9
-    assert a.progress_count == pytest.approx(1 / 3)                                    # nur S1 ist erledigt
+    # gezählt werden die Blätter S1 (2), S3b (1, die Sub-Task von S3) und X (3, Merged); zurückgewiesen sind die Blätter S2, S3a und S4a
+    assert (a.n_atoms, a.weight, a.n_excluded) == (3, 6.0, 3)
+    assert [TREE[i].key for i in a.atoms] == ["S1", "S3b", "X"] and [TREE[i].key for i in a.rejected_atoms] == ["S2", "S3a", "S4a"]
+    assert a.progress == pytest.approx((2 * 1.0 + 1 * 1.0 + 3 * 0.8) / 6) and ev.check_consistency(a) == []          # 5,4 / 6
+    assert a.progress_count == pytest.approx(2 / 3)                                    # S1 und S3b sind erledigt, X ist nur Merged
 
 
 def test_median_uses_only_counted_tickets():
@@ -80,14 +81,14 @@ def test_graph_marks_rejected_nodes_as_not_measurable():
     g = ev.analyse(TREE).tree
     by = {k: (p, ign) for k, p, ign in zip(g.keys, g.progress.tolist(), g.ignored.tolist())}
     assert by["S2"][1] and math.isnan(by["S2"][0]) and by["E2"][1] and math.isnan(by["E2"][0]) and by["S4a"][1] and by["S3a"][1]
-    assert by["E1"][0] == pytest.approx(2 / 6) and by["S1"][1] is False
+    assert by["E1"][0] == pytest.approx(1.0) and by["S1"][1] is False
 
 
 # ---------------------------------------------------------------- Teilprojekt
 
 def test_a_subproject_is_a_standalone_dataset_by_hand(mini):
     e1 = ev.analyse(A.scope_issues(mini, "E1"), ev.Settings(root="E1"))
-    assert (e1.n_atoms, e1.weight) == (2, 8.0) and e1.progress == pytest.approx(3 / 8)
+    assert (e1.n_atoms, e1.weight) == (3, 5.0) and e1.progress == pytest.approx(4 / 5)             # S1 (3) und die Sub-Tasks T1, T2 (je 1)
     e2 = ev.analyse(A.scope_issues(mini, "E2"), ev.Settings(root="E2"))
     assert (e2.n_atoms, e2.weight, e2.n_unestimated) == (2, 4.0, 1) and e2.progress == pytest.approx(0.4)      # S4 wiegt den Median des Teilbaums (2), nicht den des ganzen Plans (2,5)
     assert e2.tree.keys[0] == "E2" and e2.credits == {"To Do": 0.0, "In Review": 0.8}                              # nur die Status des Teilbaums

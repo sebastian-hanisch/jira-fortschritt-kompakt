@@ -15,7 +15,7 @@ def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):
     fig = build_progress_bars(a.stats, "SP")
     assert list(fig.data[0].y) == ["E1: Epic A", "E2: Epic B", "(ohne Epic)"]
     total = sum(np.array(t.x) for t in fig.data)
-    assert total.tolist() == pytest.approx([8.0, 4.5, 1.0])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
+    assert total.tolist() == pytest.approx([5.0, 4.5, 1.0])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
     assert len(fig.layout.annotations) == 3 and fig.layout.xaxis.fixedrange and fig.layout.yaxis.fixedrange
 
 

@@ -35,9 +35,9 @@ def test_without_a_file_the_app_asks_for_one_and_stops():
 def test_the_headline_numbers_of_the_mini_project():
     at = _open(plan_csv(make_mini()))
     _ok(at)
-    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 13,5)"]
-    assert [m.value for m in at.metric] == ["44,4 %", "29,6 %", "40,0 %", "7,5"]            # 6 / 13,5; 4 / 13,5; 2 von 5; 13,5 · (1 − 6/13,5)
-    assert [w.value for w in at.warning if "Bitte vor dem Hochladen" not in w.value] == [ev.unestimated_note(1, 5)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (1 von 5 = 20 %); die Zahl der Tickets steht im Erkennungsbericht
+    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 10,5)"]
+    assert [m.value for m in at.metric] == ["66,7 %", "47,6 %", "50,0 %", "3,5"]            # 7 / 10,5; 5 / 10,5; 3 von 6; 10,5 · (1 − 7/10,5)
+    assert [w.value for w in at.warning if "Bitte vor dem Hochladen" not in w.value] == [ev.unestimated_note(3, 6)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (3 von 6 = 50 %); die Zahl der Tickets steht im Erkennungsbericht
 
 
 def test_the_treemap_and_the_hierarchy_graph_are_shown():
@@ -63,11 +63,11 @@ def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
 def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
     at = _open(plan_csv(make_mini()))
     assert at.sidebar.selectbox(key="unest_rule").value == C.UNEST_MEDIAN and at.sidebar.selectbox(key="unest_rule").options == list(C.UNEST_RULES)
-    expected = {C.UNEST_MEDIAN: "44,4 %", C.UNEST_ONE: "40,0 %", C.UNEST_IGNORE: "36,4 %"}          # 6 / 13,5; 4,8 / 12; 4 / 11
-    for rule, value in expected.items():
+    expected = {C.UNEST_MEDIAN: ("66,7 %", "10,5"), C.UNEST_ONE: ("64,4 %", "9,0"), C.UNEST_IGNORE: ("66,7 %", "6,0")}          # 7 / 10,5; 5,8 / 9; 4 / 6 (Gewicht gesamt je Regel)
+    for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="unest_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
-        assert at.metric[0].value == value and any(f"Regel: {rule}" in w.value for w in at.warning)
+        assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})" and any(f"Regel: {rule}" in w.value for w in at.warning)
 
 
 def test_every_dimension_runs_without_error():
@@ -75,7 +75,7 @@ def test_every_dimension_runs_without_error():
     for dim in C.DIMENSIONS:
         at.sidebar.selectbox(key="dimension").set_value(dim).run(timeout=TIMEOUT)
         _ok(at, dim)
-        assert at.metric[0].value == "44,4 %"                                                   # die Ebene ändert den Gesamtwert nicht
+        assert at.metric[0].value == "66,7 %"                                                   # die Ebene ändert den Gesamtwert nicht
     at.sidebar.selectbox(key="dimension").set_value(C.DIM_LEVEL).run(timeout=TIMEOUT)
     for level in (1, 2, 3):
         at.sidebar.selectbox(key="level").set_value(level).run(timeout=TIMEOUT)
@@ -89,22 +89,22 @@ def test_the_subproject_selection_rescopes_the_numbers():
     assert at.metric[0].value == "40,0 %" and any("E2" in i.value and "2 zählende" in i.value for i in at.info)       # S3 (2, offen) und S4 (Median 2, Review): 1,6 / 4
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "0,0 %"                                                         # nur S2 (In Progress) mit zwei Sub-Tasks
+    assert at.metric[0].value == "50,0 %"                                                        # S2 zählt durch seine Sub-Tasks T1 (Done) und T2 (To Do), beide ungeschätzt und gleich schwer
     at.sidebar.selectbox(key="root").set_value("").run(timeout=TIMEOUT)
-    assert at.metric[0].value == "44,4 %"
+    assert at.metric[0].value == "66,7 %"
 
 
 def test_changed_status_weights_change_the_numbers():
     at = _open(plan_csv(make_mini()))
-    at.session_state["overrides"] = (("In Review", 0.5), ("In Progress", 0.4))
+    at.session_state["overrides"] = (("In Review", 0.5), ("To Do", 0.4))
     at.run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == pct_by_hand((3 + 5 * 0.4 + 2.5 * 0.5 + 1) / 13.5)
+    assert at.metric[0].value == pct_by_hand((3 + 2 * 0.4 + 2.5 * 0.5 + 1 + 1 + 0.4) / 10.5)
     reset = [b for b in at.button if b.label.startswith("↩️")]
     assert reset
     reset[0].click().run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "44,4 %" and not at.session_state["overrides"]
+    assert at.metric[0].value == "66,7 %" and not at.session_state["overrides"]
 
 
 def pct_by_hand(x):

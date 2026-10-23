@@ -65,8 +65,7 @@ def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], st
     zurückgewiesenen Parent) in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix
     folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
-    rule = a.settings.unest_rule
-    w_rej = A.atom_weights(issues, rej, rule, fill=A.unestimated_fill(issues, keep, rule))
+    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({de(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]

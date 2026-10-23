@@ -59,9 +59,8 @@ def status_list(issues) -> list[str]:
 def analyse(issues, settings: Settings = Settings()) -> Analysis:
     credit_of = A.status_credits(status_list(issues), settings.overrides)
     rejected = A.rejected_indices(issues)
-    every = A.select_atoms(issues)
-    atoms = [i for i in every if i not in rejected]
-    rejected_atoms = tuple(i for i in every if i in rejected)
+    atoms = A.select_atoms(issues, skip=rejected)
+    rejected_atoms = tuple(i for i in A.select_atoms(issues) if i in rejected)
     w = A.atom_weights(issues, atoms, settings.unest_rule)
     c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)

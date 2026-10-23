@@ -1,7 +1,7 @@
 """Kern (nur numpy/Standardbibliothek): gewichteter Fortschritt aus Status, Story Points und Aggregationsebenen.
 
-Modell: Ein *Atom* ist ein Ticket unterhalb der Behälter (Story, Task, Bug; Epics, Initiativen und Sub-Tasks zählen nicht selbst). Es hat ein Gewicht w (die Story Points;
-fehlt sie, nach der gewählten Regel: Median der geschätzten Atome, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
+Modell: Ein *Atom* ist ein Blatt des Ticket-Baums, also ein Ticket ohne Kinder (Story, Task, Bug oder Sub-Task; Epics, Initiativen und Themen zählen nie selbst, und eine Story mit
+Sub-Tasks zählt durch ihre Sub-Tasks). Es hat ein Gewicht w (die Story Points; fehlt sie, nach der gewählten Regel: Median der geschätzten Atome derselben Stufe, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
 P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sind keine Atome."""
 
 import re
@@ -220,9 +220,19 @@ def scope_issues(issues, root: str = C.ROOT_ALL) -> tuple[Issue, ...]:
     return tuple(replace(t, parent="") if t.key == root else t for t in issues if t.key in keep)
 
 
-def select_atoms(issues) -> list[int]:
-    """Zählebene: alles außer Epics (und höheren Ebenen) und Sub-Tasks, also Stories, Tasks und Bugs."""
-    return [i for i, t in enumerate(issues) if not t.is_subtask and not t.is_epic]
+def select_atoms(issues, skip: frozenset[int] = frozenset()) -> list[int]:
+    """Zählende Tickets: die Blätter des Ticket-Baums, also Tickets ohne Kinder, außer Epics (und höheren Ebenen). Tickets in `skip` (zurückgewiesene) sind keine Atome und gelten auch nicht
+    als Kinder: Eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist dann selbst ein Blatt."""
+    parents = {t.parent for i, t in enumerate(issues) if i not in skip and t.parent}
+    return [i for i, t in enumerate(issues) if i not in skip and not t.is_epic and t.key not in parents]
+
+
+def tree_depths(issues) -> list[int]:
+    """Tiefe jedes Tickets im Ticket-Baum (0 = oberste Stufe der Daten, bei einem Teilprojekt die Wurzel); die Stufe des Tickets im Sinne von „gleiche Stufe“."""
+    depth = [0] * len(issues)
+    for i, d, _ in tree_order(issues):
+        depth[i] = d
+    return depth
 
 
 def tree_order(issues, root: str = C.ROOT_ALL) -> list[tuple[int, int, int]]:
@@ -265,18 +275,25 @@ def root_choices(issues) -> list[tuple[str, int]]:
 
 # ---------------------------------------------------------------- Gewichte
 
-def unestimated_fill(issues, atoms, rule: str = C.DEFAULT_UNEST) -> float:
-    """Gewicht eines ungeschätzten Atoms nach der Regel: nicht zählen = 0, als 1 Story Point, Median der geschätzten Atome (ohne geschätztes Atom gilt 1)."""
-    given = [issues[i].points for i in atoms if issues[i].points is not None]
-    return {C.UNEST_IGNORE: 0.0, C.UNEST_ONE: 1.0, C.UNEST_MEDIAN: float(median(given)) if given else 1.0}[rule]
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None) -> np.ndarray:
+    """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel: nicht zählen = 0, als 1 Story Point oder der Median der geschätzten Atome **derselben Stufe**
+    (Tiefe im Ticket-Baum; gibt es auf dieser Stufe kein geschätztes Atom, gilt 1). Die Mediane bilden die geschätzten Atome aus `basis` (Voreinstellung: `atoms`), z. B. die gezählten
+    Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden."""
+    depth = tree_depths(issues)
+    given: dict[int, list[float]] = {}
+    for i in (atoms if basis is None else basis):
+        if issues[i].points is not None:
+            given.setdefault(depth[i], []).append(issues[i].points)
 
-
-def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, fill: float | None = None) -> np.ndarray:
-    """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (siehe `unestimated_fill`). Mit `fill` steht der Ersatzwert fest, z. B. für Atome, die nicht
-    zur Grundlage des Medians gehören."""
-    if fill is None:
-        fill = unestimated_fill(issues, atoms, rule)
-    return np.array([issues[i].points if issues[i].points is not None else fill for i in atoms], dtype=float)
+    def fill(level: int) -> float:
+        if rule == C.UNEST_IGNORE:
+            return 0.0
+        if rule == C.UNEST_ONE:
+            return 1.0
+        if rule != C.UNEST_MEDIAN:
+            raise KeyError(rule)
+        return float(median(given[level])) if level in given else 1.0
+    return np.array([issues[i].points if issues[i].points is not None else fill(depth[i]) for i in atoms], dtype=float)
 
 
 # ---------------------------------------------------------------- Aggregationsebenen

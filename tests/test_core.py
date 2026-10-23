@@ -14,31 +14,42 @@ def keys(mini, found):
     return [mini[i].key for i in found]
 
 
-def test_atoms_are_stories_tasks_and_bugs_only(mini):
-    assert keys(mini, A.select_atoms(mini)) == ["S1", "S2", "S3", "S4", "B1"]
+def test_atoms_are_the_leaves_of_the_ticket_tree(mini):
+    assert keys(mini, A.select_atoms(mini)) == ["S1", "S3", "S4", "B1", "T1", "T2"]            # S2 hat Sub-Tasks und zählt durch sie; E1 und E2 sind Epics
     layers = (Issue(key="I", type="Initiative"), Issue(key="E", type="Epic", parent="I"), Issue(key="S", parent="E"), Issue(key="K", type="Thema"),
               Issue(key="U", type="Teilaufgabe", is_subtask=True, parent="S"), Issue(key="T", type="Task"))
-    assert [layers[i].key for i in A.select_atoms(layers)] == ["S", "T"]
+    assert [layers[i].key for i in A.select_atoms(layers)] == ["U", "T"]
+    assert [layers[i].key for i in A.select_atoms(layers, skip=frozenset({4}))] == ["S", "T"]          # ist die einzige Sub-Task zurückgewiesen, ist die Story selbst ein Blatt
+    assert A.select_atoms(()) == []
 
 
-def test_weights_use_the_median_of_the_estimated_atoms_for_the_unestimated_one(mini):
+def test_unestimated_atoms_weigh_the_median_of_their_own_level(mini):
     atoms = A.select_atoms(mini)
-    assert A.unestimated_fill(mini, atoms) == 2.5                                     # Median von 3, 5, 2, 1
-    assert A.atom_weights(mini, atoms).tolist() == [3.0, 5.0, 2.0, 2.5, 1.0]
-    assert A.atom_weights(mini, atoms, fill=7.0).tolist() == [3.0, 5.0, 2.0, 7.0, 1.0]
-    assert A.unestimated_fill(mini, []) == 1.0                                        # ohne geschätztes Atom gilt 1
-    assert A.atom_weights(mini, [3, 4]).tolist() == [5.0, 2.0]
+    assert A.tree_depths(mini) == [0, 0, 1, 1, 1, 1, 0, 2, 2]                                   # E1, E2, S1, S2, S3, S4, B1 (ohne Eltern: Stufe 0), T1, T2
+    # Stufe 1 (S1 = 3, S3 = 2, S4 ungeschätzt): Median 2,5; B1 steht auf Stufe 0; die Sub-Tasks auf Stufe 2 haben keine geschätzten Tickets: 1
+    assert A.atom_weights(mini, atoms).tolist() == [3.0, 2.0, 2.5, 1.0, 1.0, 1.0]
+    assert A.atom_weights(mini, [4, 5]).tolist() == [2.0, 2.0]                                   # nur S3 (2) und S4: Median der Stufe aus den übergebenen Atomen
+    assert A.atom_weights(mini, atoms, basis=[2]).tolist() == [3.0, 2.0, 3.0, 1.0, 1.0, 1.0]       # Grundlage nur S1: S4 wiegt 3
+    assert A.atom_weights(mini, atoms, basis=[]).tolist() == [3.0, 2.0, 1.0, 1.0, 1.0, 1.0]
+    assert A.atom_weights(mini, []).tolist() == []
 
 
 def test_the_rule_for_unestimated_atoms_sets_their_weight(mini):
     atoms = A.select_atoms(mini)
-    assert [A.unestimated_fill(mini, atoms, rule) for rule in C.UNEST_RULES] == [2.5, 1.0, 0.0]
-    assert A.atom_weights(mini, atoms, C.UNEST_ONE).tolist() == [3.0, 5.0, 2.0, 1.0, 1.0]
-    assert A.atom_weights(mini, atoms, C.UNEST_IGNORE).tolist() == [3.0, 5.0, 2.0, 0.0, 1.0]
-    assert A.atom_weights(mini, atoms, C.UNEST_IGNORE, fill=4.0).tolist() == [3.0, 5.0, 2.0, 4.0, 1.0]       # ein ausdrücklicher Ersatzwert geht vor
-    assert A.unestimated_fill(mini, [], C.UNEST_MEDIAN) == 1.0 and A.unestimated_fill(mini, [], C.UNEST_IGNORE) == 0.0
+    assert A.atom_weights(mini, atoms, C.UNEST_ONE).tolist() == [3.0, 2.0, 1.0, 1.0, 1.0, 1.0]
+    assert A.atom_weights(mini, atoms, C.UNEST_IGNORE).tolist() == [3.0, 2.0, 0.0, 1.0, 0.0, 0.0]
+    assert A.atom_weights(mini, atoms, C.UNEST_MEDIAN).tolist() == [3.0, 2.0, 2.5, 1.0, 1.0, 1.0]
     with pytest.raises(KeyError):
-        A.unestimated_fill(mini, atoms, "Unsinn")
+        A.atom_weights(mini, atoms, "Unsinn")
+
+
+def test_the_median_is_taken_per_level_not_over_the_whole_tree():
+    items = (Issue(key="E", type="Epic"), Issue(key="S1", parent="E", points=8.0), Issue(key="S2", parent="E", points=2.0), Issue(key="S3", parent="E"),
+             Issue(key="U1", type="Sub-task", is_subtask=True, parent="S1", points=1.0), Issue(key="U2", type="Sub-task", is_subtask=True, parent="S1"),
+             Issue(key="U3", type="Sub-task", is_subtask=True, parent="S1", points=3.0))
+    atoms = A.select_atoms(items)
+    assert [items[i].key for i in atoms] == ["S2", "S3", "U1", "U2", "U3"]
+    assert A.atom_weights(items, atoms).tolist() == [2.0, 2.0, 1.0, 2.0, 3.0]          # S3: Median der Stufe 1 (nur S2, da S1 Sub-Tasks hat) = 2; U2: Median von 1 und 3 = 2
 
 
 def test_epic_of_follows_the_parent_chain_and_survives_cycles(mini):
@@ -50,22 +61,22 @@ def test_epic_of_follows_the_parent_chain_and_survives_cycles(mini):
 def test_group_by_epic_by_hand(mini):
     atoms = A.select_atoms(mini)
     w = A.atom_weights(mini, atoms)
-    c = np.array([1.0, 0.0, 0.0, 0.8, 1.0])
-    done = np.array([True, False, False, False, True])
-    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_EPIC), w, c, done, np.array([False, False, False, True, False]))
+    c = np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0])
+    done = np.array([True, False, False, True, True, False])
+    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_EPIC), w, c, done, np.array([False, False, True, False, True, True]))
     assert stats.labels == ("E1: Epic A", "E2: Epic B", "(ohne Epic)")
-    assert stats.weight.tolist() == [8.0, 4.5, 1.0] and stats.credited.tolist() == pytest.approx([3.0, 2.0, 1.0])
-    assert stats.progress.tolist() == pytest.approx([3 / 8, 2 / 4.5, 1.0]) and stats.unestimated.tolist() == [0.0, 1.0, 0.0]
-    assert stats.done_weight.tolist() == [3.0, 0.0, 1.0] and stats.count.tolist() == [2.0, 2.0, 1.0]
+    assert stats.weight.tolist() == [5.0, 4.5, 1.0] and stats.credited.tolist() == pytest.approx([4.0, 2.0, 1.0])          # E1: S1 (3) + T1 (1) + T2 (1)
+    assert stats.progress.tolist() == pytest.approx([4 / 5, 2 / 4.5, 1.0]) and stats.unestimated.tolist() == [2.0, 1.0, 0.0]
+    assert stats.done_weight.tolist() == [4.0, 0.0, 1.0] and stats.count.tolist() == [3.0, 2.0, 1.0]
 
 
 def test_multi_valued_dimension_splits_a_ticket_evenly(mini):
     atoms = A.select_atoms(mini)
     w = A.atom_weights(mini, atoms)
-    c = np.array([1.0, 0.0, 0.0, 0.8, 1.0])
-    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_COMPONENT), w, c, np.zeros(5, dtype=bool), np.zeros(5, dtype=bool))
+    c = np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0])
+    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_COMPONENT), w, c, np.zeros(6, dtype=bool), np.zeros(6, dtype=bool))
     by = dict(zip(stats.labels, zip(stats.weight.tolist(), stats.credited.tolist())))
-    assert by["Backend"] == pytest.approx((7.5, 2.5)) and by["Frontend"] == pytest.approx((4.0, 3.5)) and by["(ohne Komponente)"] == pytest.approx((2.0, 0.0))
+    assert by["Backend"] == pytest.approx((4.5, 3.5)) and by["Frontend"] == pytest.approx((4.0, 3.5)) and by["(ohne Komponente)"] == pytest.approx((2.0, 0.0))        # die Sub-Tasks erben Backend von S2
     assert stats.weight.sum() == pytest.approx(w.sum())                               # die Summe über alle Gruppen bleibt die Gesamtsumme
 
 
@@ -73,7 +84,7 @@ def test_sprint_dimension_uses_the_last_sprint(mini):
     atoms = A.select_atoms(mini)
     assign = A.assign_groups(mini, atoms, C.DIM_SPRINT)
     assert assign.labels == ("Sprint 1", "Sprint 2", "(ohne Sprint)")
-    assert [assign.labels[g] for g in assign.group] == ["Sprint 1", "Sprint 2", "(ohne Sprint)", "Sprint 2", "Sprint 2"]
+    assert [assign.labels[g] for g in assign.group] == ["Sprint 1", "(ohne Sprint)", "Sprint 2", "Sprint 2", "Sprint 2", "Sprint 2"]          # die Sub-Tasks erben den letzten Sprint von S2
 
 
 def test_every_dimension_assigns_each_atom_with_shares_summing_to_one(mini):
@@ -139,9 +150,9 @@ def test_tree_order_lists_every_ticket_once_even_in_a_cycle():
 def test_levels_by_hand(mini):
     assert A.max_level(mini) == 3
     atoms = A.select_atoms(mini)
-    assert A.level_labels(mini, atoms, 1) == ["E1: Epic A", "E1: Epic A", "E2: Epic B", "E2: Epic B", "B1"]
-    assert A.level_labels(mini, atoms, 2) == ["S1", "S2", "S3", "S4", "(keine Stufe 2)"]
-    assert A.level_labels(mini, atoms, 3) == ["(keine Stufe 3)"] * 5
+    assert A.level_labels(mini, atoms, 1) == ["E1: Epic A", "E2: Epic B", "E2: Epic B", "B1", "E1: Epic A", "E1: Epic A"]
+    assert A.level_labels(mini, atoms, 2) == ["S1", "S3", "S4", "(keine Stufe 2)", "S2", "S2"]
+    assert A.level_labels(mini, atoms, 3) == ["(keine Stufe 3)"] * 4 + ["T1", "T2"]
     assert A.assign_groups(mini, atoms, C.DIM_LEVEL, 1).labels == ("B1", "E1: Epic A", "E2: Epic B")
     assert A.max_level(()) == 1
     deep = tuple(Issue(key=f"N{k}", parent=f"N{k - 1}" if k else "") for k in range(12))
@@ -153,25 +164,25 @@ def test_levels_by_hand(mini):
 def _graph(mini, **kw):
     atoms = A.select_atoms(mini)
     w = A.atom_weights(mini, atoms)
-    c = np.array([1.0, 0.0, 0.0, 0.8, 1.0])
+    c = np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0])
     credit_of = {"Done": 1.0, "In Progress": 0.0, "To Do": 0.0, "In Review": 0.8}
     return A.tree_graph(mini, atoms, w, c, credit_of, **kw)
 
 
 def test_treemap_hierarchy_by_hand(mini):
     atoms = A.select_atoms(mini)
-    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.0, 0.8, 1.0]))
-    assert h.ids == ("Projekt", "epic:E1", "atom:S1", "atom:S2", "epic:E2", "atom:S3", "atom:S4", "epic:(ohne Epic)", "atom:B1")
-    assert h.labels == ("Projekt", "E1: Epic A", "S1", "S2", "E2: Epic B", "S3", "S4", "(ohne Epic)", "B1")
-    assert h.parents == ("", "Projekt", "epic:E1", "epic:E1", "Projekt", "epic:E2", "epic:E2", "Projekt", "epic:(ohne Epic)")
-    assert h.values == pytest.approx((13.5, 8.0, 3.0, 5.0, 4.5, 2.0, 2.5, 1.0, 1.0))
-    assert h.progress == pytest.approx((6 / 13.5, 3 / 8, 1.0, 0.0, 2 / 4.5, 0.0, 0.8, 1.0, 1.0))
+    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]))
+    assert h.ids == ("Projekt", "epic:E1", "atom:S1", "epic:E2", "atom:S3", "atom:S4", "epic:(ohne Epic)", "atom:B1", "atom:T1", "atom:T2")
+    assert h.labels == ("Projekt", "E1: Epic A", "S1", "E2: Epic B", "S3", "S4", "(ohne Epic)", "B1", "T1", "T2")
+    assert h.parents == ("", "Projekt", "epic:E1", "Projekt", "epic:E2", "epic:E2", "Projekt", "epic:(ohne Epic)", "epic:E1", "epic:E1")
+    assert h.values == pytest.approx((10.5, 5.0, 3.0, 4.5, 2.0, 2.5, 1.0, 1.0, 1.0, 1.0))
+    assert h.progress == pytest.approx((7 / 10.5, 4 / 5, 1.0, 2 / 4.5, 0.0, 0.8, 1.0, 1.0, 1.0, 0.0))
 
 
 def test_treemap_leaves_out_atoms_without_weight(mini):
     atoms = A.select_atoms(mini)
-    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms, C.UNEST_IGNORE), np.array([1.0, 0.0, 0.0, 0.8, 1.0]))
-    assert "atom:S4" not in h.ids and h.values[0] == 11.0 and h.values[h.ids.index("epic:E2")] == 2.0
+    h = A.hierarchy(mini, atoms, A.atom_weights(mini, atoms, C.UNEST_IGNORE), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]))
+    assert "atom:S4" not in h.ids and "atom:T1" not in h.ids and h.values[0] == 6.0 and h.values[h.ids.index("epic:E2")] == 2.0
     empty = A.hierarchy((), [], np.array([]), np.array([]))
     assert empty.ids == ("Projekt",) and empty.values == (0.0,) and empty.progress == (0.0,)
 
@@ -180,9 +191,9 @@ def test_graph_nodes_carry_the_sum_of_their_atoms_by_hand(mini):
     g = _graph(mini)
     assert g.keys == ("Projekt", "E1", "S1", "S2", "T1", "T2", "E2", "S3", "S4", "B1") and g.n_total == 10 and g.shown_depth == 3
     by = {k: (w, p, atom, leaf) for k, w, p, atom, leaf in zip(g.keys, g.weight.tolist(), g.progress.tolist(), g.is_atom.tolist(), g.is_leaf.tolist())}
-    assert by["Projekt"][:2] == pytest.approx((13.5, 6 / 13.5)) and by["E1"][:2] == pytest.approx((8.0, 3 / 8)) and by["E2"][:2] == pytest.approx((4.5, 2 / 4.5))
-    assert by["S2"] == (5.0, 0.0, True, False)                                          # eine Story mit Sub-Tasks ist Atom und Knoten mit Kindern
-    assert by["T1"][:2] == (0.0, 1.0) and by["T2"][:2] == (0.0, 0.0)                    # Blätter ohne Gewicht zeigen die Gutschrift ihres Status
+    assert by["Projekt"][:2] == pytest.approx((10.5, 7 / 10.5)) and by["E1"][:2] == pytest.approx((5.0, 4 / 5)) and by["E2"][:2] == pytest.approx((4.5, 2 / 4.5))
+    assert by["S2"] == (2.0, 0.5, False, False)                                          # S2 hat Sub-Tasks: kein Atom, trägt die Summe seiner Sub-Tasks (1 von 2)
+    assert by["T1"] == (1.0, 1.0, True, True) and by["T2"] == (1.0, 0.0, True, True)
     assert g.parent.tolist() == [-1, 0, 1, 1, 3, 3, 0, 6, 6, 0] and g.x.tolist() == [0, 1, 2, 2, 3, 3, 1, 2, 2, 1]
     assert not g.ignored.any() and not g.hidden.any()
 
@@ -198,7 +209,7 @@ def test_graph_summarises_the_deepest_levels_beyond_the_node_limit(mini):
     g = _graph(mini, max_nodes=5)
     assert g.keys == ("Projekt", "E1", "E2", "B1") and g.shown_depth == 1 and g.n_total == 10
     assert g.hidden.tolist() == [0, 4, 2, 0] and g.is_leaf.tolist() == [False, True, True, True]
-    assert g.weight.tolist() == pytest.approx([13.5, 8.0, 4.5, 1.0])                     # die Summen enthalten auch die nicht gezeichneten Tickets
+    assert g.weight.tolist() == pytest.approx([10.5, 5.0, 4.5, 1.0])                     # die Summen enthalten auch die nicht gezeichneten Tickets
 
 
 def test_graph_marks_excluded_nodes_as_not_measurable(mini):
@@ -208,7 +219,8 @@ def test_graph_marks_excluded_nodes_as_not_measurable(mini):
 
 def test_graph_survives_a_cycle():
     loop = (Issue(key="A", parent="B", points=1.0), Issue(key="B", parent="A", points=1.0))
-    atoms = A.select_atoms(loop)
+    assert A.select_atoms(loop) == []                                                  # in einem Kreis hat kein Ticket kein Kind: kein Blatt
+    atoms = [0, 1]
     g = A.tree_graph(loop, atoms, A.atom_weights(loop, atoms), np.array([1.0, 0.0]), {"To Do": 0.0})
     assert len(g.keys) == 3 and g.weight[0] == 2.0
 

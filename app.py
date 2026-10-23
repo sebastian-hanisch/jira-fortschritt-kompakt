@@ -161,7 +161,7 @@ with st.sidebar:
     issues = A.scope_issues(issues_all, root)
     unest_rule = st.selectbox(
         "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
-        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es offen ist).")
+        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets auf gleicher Stufe des Ticket-Baums (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es offen ist).")
     dimension = st.selectbox("Zusammenfassen nach", C.DIMENSIONS, index=C.DIMENSIONS.index(C.DEFAULT_DIM), key="dimension",
                              help="Wonach die Tickets zusammengefasst werden. Tickets mit mehreren Werten (Stichwörter, Komponenten) zählen anteilig.")
     level = 1
@@ -316,10 +316,11 @@ die Datei es nicht.
 with st.expander("📐 So wird gerechnet"):
     st.markdown(
         """
-**Zählende Tickets.** Story, Task und Bug; Epics, Initiativen, Themen und Sub-Tasks fassen zusammen und zählen nicht selbst. Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
-Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl.
+**Zählende Tickets.** Die Blätter des Ticket-Baums, also Tickets ohne Kinder: Stories, Tasks und Bugs ohne Sub-Tasks und die Sub-Tasks selbst. Epics, Initiativen und Themen zählen nie selbst, und eine Story mit
+Sub-Tasks zählt durch ihre Sub-Tasks (ihre eigenen Story Points und ihr eigener Status zählen dann nicht). Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
+Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl; eine Story, deren Sub-Tasks alle zurückgewiesen sind, zählt wieder selbst.
 
-**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der geschätzten Tickets (ohne geschätztes Ticket 1), 1 Story Point oder nicht zählen (Gewicht 0).
+**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der geschätzten Tickets **auf gleicher Stufe** (Stufe = Tiefe im Ticket-Baum, wie bei der Ebene „Hierarchiestufe“; gibt es auf der Stufe kein geschätztes Ticket, gilt 1), 1 Story Point oder nicht zählen (Gewicht 0).
 
 **Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;
