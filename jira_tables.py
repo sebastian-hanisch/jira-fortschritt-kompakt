@@ -1,6 +1,6 @@
 """Tabellarische Auswertungen: reine Funktionen, die aus einer `Analysis` Zeilen (Listen von Wörterbüchern) bauen.
 
-Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel mit Dezimalkomma, `rows_to_wiki` und
+Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel (Semikolon, Dezimalpunkt), `rows_to_wiki` und
 `rows_to_html` bereiten dieselben Zeilen zum Einfügen in Jira und Confluence auf."""
 
 import html
@@ -10,31 +10,28 @@ import numpy as np
 
 import jira_constants as C
 import jira_core as A
-from jira_evaluation import Analysis, analyse, de, pct
+from jira_evaluation import Analysis, analyse, credit_text, de, pct
 
 SUM_LABEL = "Summe"
 
 
-ROW_COL, OWN_COL, SUM_COL, CHECK_COL = "Ticket", "Story Points (Ticket)", "Summe darunter (direkt)", "Vergleich"
+ROW_COL = "Ticket"
 REJECTED_COL, TOTAL_NET_COL, PROGRESS_COL = "Rejected", "Total (ohne Rejected)", "Fortschritt (gewichtet)"
 
 
 def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     """Matrix der Status: Zeilen = die Tickets direkt unter der Wurzel (im ganzen Plan die obersten, siehe `summary_level`), Spalten = die Status der zählenden Tickets darunter (nach Gewicht
-    geordnet, das Gewicht im Kopf), Zelle = Gewicht (Story Points). Die ersten Spalten vergleichen die eigenen Story Points des Tickets (leer, wenn es keine hat) mit der Summe der Story Points seiner
-    direkten Kinder ohne die zurückgewiesenen (leer, wenn keines Story Points hat; Kinder ohne Story Points tragen nichts bei); „Vergleich“ steht nur, wenn beide da sind. Dann die zurückgewiesenen Tickets
-    darunter in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix folgt Teilprojekt und
-    Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
+    geordnet, das Gewicht im Kopf), Zelle = Gewicht (Story Points). Dazu die zurückgewiesenen Tickets darunter in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 %
+    („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name
+    der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
     w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
-    heads = {st: st + (f" ({de(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
+    heads = {st: st + (f" ({credit_text(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
     completed_col = f"Completed ({'+'.join(done_statuses)})/(Total−Rejected)" if done_statuses else "Completed (kein Status ab 90 %)"
     level = a.level
     chains = A.hierarchy_chains(issues)
-    kids = A.children_of(issues)
-    rejected = A.rejected_indices(issues)
 
     def ticket_of(i):
         chain = chains[i]
@@ -43,15 +40,11 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     def label(t):
         return f"(keine Stufe {level})" if t is None else (f"{t.key}: {t.summary}" if t.summary else t.key)
 
-    def children_sum(t):
-        given = [issues[j].points for j in kids.get(t.key, []) if j not in rejected and issues[j].points is not None] if t is not None else []
-        return float(sum(given)) if given else None
-
     cells: dict[str, dict] = {}
 
     def entry(i):
         t = ticket_of(i)
-        return cells.setdefault(label(t), {"by_status": {}, "rejected": 0.0, "credited": 0.0, "own": None if t is None else t.points, "sum": children_sum(t)})
+        return cells.setdefault(label(t), {"by_status": {}, "rejected": 0.0, "credited": 0.0})
     for pos, i in enumerate(keep):
         row = entry(i)
         row["by_status"][issues[i].status] = row["by_status"].get(issues[i].status, 0.0) + float(a.w[pos])
@@ -59,39 +52,27 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     for pos, i in enumerate(rej):
         entry(i)["rejected"] += float(w_rej[pos])
 
-    def build(name, row, check):
+    def build(name, row):
         net = sum(row["by_status"].values())
         done = sum(row["by_status"].get(st, 0.0) for st in done_statuses)
-        out = {ROW_COL: name, OWN_COL: row["own"], SUM_COL: row["sum"], CHECK_COL: check}
+        out = {ROW_COL: name}
         out.update({heads[st]: row["by_status"].get(st, 0.0) for st in statuses})
         out.update({REJECTED_COL: row["rejected"], TOTAL_NET_COL: net,
                     completed_col: (done / net if net > 0 and done_statuses else None), PROGRESS_COL: (row["credited"] / net if net > 0 else None)})
         return out
 
-    rows = []
-    for name in sorted(cells, key=A.natural_key):
-        row = cells[name]
-        own, summed = row["own"], row["sum"]
-        if own is None or summed is None:
-            check = ""
-        elif abs(summed - own) <= 1e-9:
-            check = "gleich"
-        else:
-            check = f"⚠ weicht ab ({de(summed - own, sign=True)})"
-        rows.append(build(name, row, check))
+    rows = [build(name, cells[name]) for name in sorted(cells, key=A.natural_key)]
     if rows:
-        owns = [c["own"] for c in cells.values() if c["own"] is not None]
-        sums = [c["sum"] for c in cells.values() if c["sum"] is not None]
         merged = {"by_status": {st: sum(c["by_status"].get(st, 0.0) for c in cells.values()) for st in statuses}, "rejected": sum(c["rejected"] for c in cells.values()),
-                  "credited": sum(c["credited"] for c in cells.values()), "own": float(sum(owns)) if owns else None, "sum": float(sum(sums)) if sums else None}
-        rows.append(build(SUM_LABEL, merged, ""))
+                  "credited": sum(c["credited"] for c in cells.values())}
+        rows.append(build(SUM_LABEL, merged))
     return rows, [heads[st] for st in statuses], completed_col
 
 
 # ---------------------------------------------------------------- Ausgabe: CSV, Wiki-Markup, HTML
 
 def format_cell(value, fmt=None) -> str:
-    """Zelle als Text für Jira und Confluence (deutsche Zahlen): Streamlit-Formate „percent“, „%.0f“, „%.1f“, „%.2f“; Ganzzahlen ohne Nachkommastelle; fehlende Werte leer."""
+    """Zelle als Text für Jira und Confluence (Dezimalpunkt): Streamlit-Formate „percent“, „%.0f“, „%.1f“, „%.2f“; Ganzzahlen ohne Nachkommastelle; fehlende Werte leer."""
     if value is None or (isinstance(value, float) and value != value):
         return ""
     if isinstance(value, bool):
@@ -101,7 +82,7 @@ def format_cell(value, fmt=None) -> str:
             return pct(value)
         digits = {"%.0f": 0, "%.1f": 1, "%.2f": 2}.get(fmt)
         if digits is None:
-            return str(int(value)) if float(value).is_integer() else de(float(value), 1)
+            return str(int(value)) if float(value).is_integer() else de(float(value), 2)
         return de(float(value), digits)
     return str(value)
 
@@ -241,7 +222,7 @@ Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie star
 
 
 def rows_to_csv(rows: list[dict]) -> bytes:
-    """CSV für Excel im deutschen Raum: Semikolon, Dezimalkomma, UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
+    """CSV für Excel: Semikolon, Dezimalpunkt, UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
     if not rows:
         return "".encode("utf-8-sig")
 
@@ -249,7 +230,7 @@ def rows_to_csv(rows: list[dict]) -> bytes:
         if v is None or (isinstance(v, float) and np.isnan(v)):
             return ""
         if isinstance(v, float):
-            return repr(v).replace(".", ",")
+            return repr(v)
         return str(v).replace(";", ",").replace("\n", " ")
     header = list(rows[0])
     lines = [";".join(h.replace(";", ",") for h in header)] + [";".join(cell(r.get(h)) for h in header) for r in rows]

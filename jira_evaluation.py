@@ -52,8 +52,14 @@ def level_of(settings: Settings) -> int:
 
 
 def de(x: float, digits: int = 1, sign: bool = False) -> str:
-    """Zahl mit Dezimalkomma; `sign` setzt ein Vorzeichen auch vor positive Werte (für Differenzen)."""
-    return f"{x:{'+' if sign else ''}.{digits}f}".replace(".", ",")
+    """Zahl mit Dezimalpunkt; `sign` setzt ein Vorzeichen auch vor positive Werte (für Differenzen)."""
+    return f"{x:{'+' if sign else ''}.{digits}f}"
+
+
+def credit_text(credit: float) -> str:
+    """Gutschrift eines Status mit Dezimalpunkt: eine Nachkommastelle, bei Bedarf zwei (0.8; 0.85; 1.0)."""
+    text = f"{credit:.2f}"
+    return text[:-1] if text.endswith("0") else text
 
 
 def pct(x: float) -> str:

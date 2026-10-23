@@ -33,25 +33,23 @@ def _matrix(**kw):
 
 def test_columns_follow_the_schema_with_the_weight_in_the_header():
     by, status_cols, completed, _ = _matrix()
-    assert status_cols == ["Backlog", "Specification", "In Progress", "In Review (0,8)", "Merged (0,8)", "Ready4Test (0,9)", "Ready4Prod (1,0)"]
+    assert status_cols == ["Backlog", "Specification", "In Progress", "In Review (0.8)", "Merged (0.8)", "Ready4Test (0.9)", "Ready4Prod (1.0)"]
     assert completed == COMPLETED
-    assert list(by["E1: Eins"]) == [T.ROW_COL, T.OWN_COL, T.SUM_COL, T.CHECK_COL, *status_cols, T.REJECTED_COL, T.TOTAL_NET_COL, completed, T.PROGRESS_COL]
+    assert list(by["E1: Eins"]) == [T.ROW_COL, *status_cols, T.REJECTED_COL, T.TOTAL_NET_COL, completed, T.PROGRESS_COL]
 
 
 def test_epic_one_by_hand():
     row = _matrix()[0]["E1: Eins"]
-    assert [row[c] for c in ("Backlog", "Specification", "In Progress", "In Review (0,8)", "Merged (0,8)", "Ready4Test (0,9)", "Ready4Prod (1,0)")] == [5.0, 3.0, 4.0, 2.0, 6.0, 10.0, 8.0]
-    assert row[T.REJECTED_COL] == 7.0 and row[T.TOTAL_NET_COL] == 38.0 and row[T.OWN_COL] == 20.0
-    assert row[T.SUM_COL] == 38.0 and row[T.CHECK_COL] == "⚠ weicht ab (+18,0)"                    # die direkten Kinder ohne das zurückgewiesene S8 (7): 38 gegen die eigenen 20
+    assert [row[c] for c in ("Backlog", "Specification", "In Progress", "In Review (0.8)", "Merged (0.8)", "Ready4Test (0.9)", "Ready4Prod (1.0)")] == [5.0, 3.0, 4.0, 2.0, 6.0, 10.0, 8.0]
+    assert row[T.REJECTED_COL] == 7.0 and row[T.TOTAL_NET_COL] == 38.0
     assert row[COMPLETED] == pytest.approx(18 / 38)
-    assert row[T.PROGRESS_COL] == pytest.approx((2 * 0.8 + 6 * 0.8 + 10 * 0.9 + 8 * 1.0) / 38)    # In Review zählt wie Merged: 23,4 / 38
+    assert row[T.PROGRESS_COL] == pytest.approx((2 * 0.8 + 6 * 0.8 + 10 * 0.9 + 8 * 1.0) / 38)    # In Review zählt wie Merged: 23.4 / 38
 
 
 def test_epic_two_uses_the_median_of_the_counted_tickets_for_the_unestimated_one():
     row = _matrix()[0]["E2: Zwei"]
-    assert row["Backlog"] == 5.0 and row["Ready4Prod (1,0)"] == 4.0 and row["In Progress"] == 6.0       # Median der gezählten Tickets: 5 (das 7er-Rejected zählt nicht mit)
-    assert row[T.TOTAL_NET_COL] == 15.0 and row[T.OWN_COL] is None and row[T.CHECK_COL] == ""
-    assert row[T.SUM_COL] == 10.0                                                                      # S12 hat keine Story Points und trägt zur Summe der Kinder nichts bei (im Status-Gewicht 5)
+    assert row["Backlog"] == 5.0 and row["Ready4Prod (1.0)"] == 4.0 and row["In Progress"] == 6.0       # Median der gezählten Tickets: 5 (das 7er-Rejected zählt nicht mit)
+    assert row[T.TOTAL_NET_COL] == 15.0
     assert row[COMPLETED] == pytest.approx(4 / 15) and row[T.PROGRESS_COL] == pytest.approx(4 / 15)
 
 
@@ -65,29 +63,15 @@ def test_the_rule_for_unestimated_tickets_reaches_the_matrix():
 
 def test_a_parent_that_is_rejected_puts_its_tickets_into_the_rejected_column():
     row = _matrix()[0]["E3: Drei"]
-    assert row[T.REJECTED_COL] == 3.0 and row[T.TOTAL_NET_COL] == 0.0 and row[T.SUM_COL] is None and row[T.OWN_COL] is None       # das einzige Kind ist zurückgewiesen
+    assert row[T.REJECTED_COL] == 3.0 and row[T.TOTAL_NET_COL] == 0.0
     assert row[COMPLETED] is None and row[T.PROGRESS_COL] is None and all(row[c] == 0.0 for c in ("Backlog", "In Progress"))
 
 
 def test_sum_row_adds_everything_and_compares_nothing():
     total = _matrix()[0][T.SUM_LABEL]
-    assert total[T.TOTAL_NET_COL] == 53.0 and total[T.REJECTED_COL] == 10.0 and total[T.OWN_COL] == 20.0 and total[T.SUM_COL] == 48.0 and total[T.CHECK_COL] == ""
+    assert total[T.TOTAL_NET_COL] == 53.0 and total[T.REJECTED_COL] == 10.0
     assert total[COMPLETED] == pytest.approx(22 / 53) and total[T.PROGRESS_COL] == pytest.approx((23.4 + 4) / 53)
-    assert total["Backlog"] == 10.0 and total["Ready4Prod (1,0)"] == 12.0
-
-
-def test_the_comparison_needs_both_numbers_and_marks_equal_and_different_sums():
-    items = (Issue(key="E", type="Epic", points=9.0), _story("A", "Done", 4.0, "E"), _story("B", "To Do", 5.0, "E"),
-             Issue(key="F", type="Epic", points=9.0), _story("C", "Done", 4.0, "F"), _story("D", "To Do", 6.0, "F"),
-             Issue(key="G", type="Epic", points=9.0), _story("H", "Done", None, "G"),                                    # eigene, aber keine Kinder-Story-Points
-             Issue(key="I", type="Epic"), _story("J", "Done", 3.0, "I"),                                                 # Kinder-Story-Points, aber keine eigenen
-             Issue(key="L", type="Epic", points=2.0))                                                                   # eigene, aber keine Kinder
-    rows = {r[T.ROW_COL]: r for r in T.status_matrix(items, ev.analyse(items))[0]}
-    assert (rows["E"][T.OWN_COL], rows["E"][T.SUM_COL], rows["E"][T.CHECK_COL]) == (9.0, 9.0, "gleich") and rows["E"][T.PROGRESS_COL] == pytest.approx(4 / 9)
-    assert (rows["F"][T.OWN_COL], rows["F"][T.SUM_COL], rows["F"][T.CHECK_COL]) == (9.0, 10.0, "⚠ weicht ab (+1,0)")
-    assert (rows["G"][T.OWN_COL], rows["G"][T.SUM_COL], rows["G"][T.CHECK_COL]) == (9.0, None, "")
-    assert (rows["I"][T.OWN_COL], rows["I"][T.SUM_COL], rows["I"][T.CHECK_COL]) == (None, 3.0, "")
-    assert "L" not in rows                                                                                               # ein Epic ohne zählende Tickets hat keine Zeile
+    assert total["Backlog"] == 10.0 and total["Ready4Prod (1.0)"] == 12.0
 
 
 def test_the_matrix_follows_root_and_changed_weights():
@@ -96,7 +80,7 @@ def test_the_matrix_follows_root_and_changed_weights():
     assert [r[T.ROW_COL] for r in sub_rows] == ["S9", "S10", "S12", T.SUM_LABEL]                              # eine Zeile je Ticket unter der Wurzel E2
     changed = ev.analyse(ITEMS, ev.Settings(overrides=(("In Review", 0.0), ("Merged", 0.9))))
     rows, status_cols, completed = T.status_matrix(ITEMS, changed)
-    assert "In Review" in status_cols and "Merged (0,9)" in status_cols and completed.startswith("Completed (Merged+Ready4Test+Ready4Prod)")
+    assert "In Review" in status_cols and "Merged (0.9)" in status_cols and completed.startswith("Completed (Merged+Ready4Test+Ready4Prod)")
 
 
 def test_no_status_at_90_percent_gives_a_named_empty_completed_column():
@@ -130,8 +114,8 @@ def test_fractional_totals_below_one_still_give_the_shares():
 
 def test_format_cell():
     assert T.format_cell(None) == "" and T.format_cell(float("nan")) == "" and T.format_cell(True) == "ja" and T.format_cell(False) == "nein"
-    assert T.format_cell(0.444, "percent") == "44,4 %" and T.format_cell(3.0) == "3" and T.format_cell(2.5) == "2,5" and T.format_cell(7) == "7"
-    assert T.format_cell(4.0, "%.1f") == "4,0" and T.format_cell(4.0, "%.0f") == "4" and T.format_cell(1.5, "%.2f") == "1,50" and T.format_cell("Text") == "Text"
+    assert T.format_cell(0.444, "percent") == "44.4 %" and T.format_cell(3.0) == "3" and T.format_cell(2.5) == "2.50" and T.format_cell(38.25) == "38.25" and T.format_cell(7) == "7"
+    assert T.format_cell(4.0, "%.1f") == "4.0" and T.format_cell(4.0, "%.0f") == "4" and T.format_cell(1.5, "%.2f") == "1.50" and T.format_cell("Text") == "Text"
 
 
 ROWS = [{"Gruppe": "A|B", "Gewicht": 1.5, "Fortschritt": 0.5}, {"Gruppe": "Summe", "Gewicht": 2.0, "Fortschritt": None}]
@@ -139,19 +123,19 @@ FORMATS = {"Gewicht": "%.1f", "Fortschritt": "percent"}
 
 
 def test_wiki_markup_escapes_special_characters_and_bolds_the_sum_row():
-    assert T.rows_to_wiki(ROWS, FORMATS).split("\n") == ["||Gruppe||Gewicht||Fortschritt||", "|A\\|B|1,5|50,0 %|", "|*Summe*|*2,0*| |"]
+    assert T.rows_to_wiki(ROWS, FORMATS).split("\n") == ["||Gruppe||Gewicht||Fortschritt||", "|A\\|B|1.5|50.0 %|", "|*Summe*|*2.0*| |"]
     assert T.rows_to_wiki([]) == "" and "\\*" in T.rows_to_wiki([{"x": "a*b"}])
 
 
 def test_html_table_has_a_header_aligned_numbers_and_escaped_text():
     html = T.rows_to_html(ROWS + [{"Gruppe": "<b>", "Gewicht": 1.0, "Fortschritt": 0.1}], FORMATS)
     assert html.startswith("<table") and html.count("<th ") == 3 and "&lt;b&gt;" in html and "<strong>Summe</strong>" in html
-    assert 'text-align:right;">1,5<' in html and 'text-align:left;">A|B<' in html and T.rows_to_html([]) == ""
+    assert 'text-align:right;">1.5<' in html and 'text-align:left;">A|B<' in html and T.rows_to_html([]) == ""
 
 
 def test_csv_for_excel_uses_semicolon_decimal_comma_and_a_byte_order_mark():
     raw = T.rows_to_csv([{"Gruppe": "a;b", "Gewicht": 0.5, "Fortschritt": None, "Tickets": 3}])
-    assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig") == "Gruppe;Gewicht;Fortschritt;Tickets\na,b;0,5;;3\n"
+    assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig") == "Gruppe;Gewicht;Fortschritt;Tickets\na,b;0.5;;3\n"
     assert T.rows_to_csv([]) == b"\xef\xbb\xbf"
     assert T.rows_to_csv([{"x": float("nan"), "y": "z\nw"}]).decode("utf-8-sig") == "x;y\n;z w\n"
 
@@ -205,16 +189,24 @@ def test_sub_task_rule_comparison_by_hand(mini):
 
 def test_the_rows_are_the_tickets_directly_below_the_root_with_everything_below_them(mini):
     rows, status_cols, completed = T.status_matrix(mini, ev.analyse(mini))
-    assert status_cols == ["To Do", "In Review (0,8)", "Done (1,0)"] and completed == "Completed (Done)/(Total−Rejected)"
+    assert status_cols == ["To Do", "In Review (0.8)", "Done (1.0)"] and completed == "Completed (Done)/(Total−Rejected)"
     by = {r[T.ROW_COL]: r for r in rows}
     assert list(by) == ["B1", "E1: Epic A", "E2: Epic B", T.SUM_LABEL]
     e1, e2, b1 = by["E1: Epic A"], by["E2: Epic B"], by["B1"]
-    assert (e1["To Do"], e1["Done (1,0)"], e1[T.TOTAL_NET_COL]) == (1.0, 4.0, 5.0)                       # T2; S1 (3) und T1 (1): alles unter E1 steht in der Zeile von E1
-    assert (e1[T.OWN_COL], e1[T.SUM_COL], e1[T.CHECK_COL]) == (None, 8.0, "") and e1[T.PROGRESS_COL] == pytest.approx(4 / 5)          # direkte Kinder: S1 (3) und S2 (5)
-    assert (e2[T.SUM_COL], e2["To Do"], e2["In Review (0,8)"]) == (2.0, 2.0, 2.5) and e2[T.PROGRESS_COL] == pytest.approx(2 / 4.5)
-    assert (b1[T.OWN_COL], b1[T.SUM_COL], b1["Done (1,0)"]) == (1.0, None, 1.0)
+    assert (e1["To Do"], e1["Done (1.0)"], e1[T.TOTAL_NET_COL]) == (1.0, 4.0, 5.0)                       # T2; S1 (3) und T1 (1): alles unter E1 steht in der Zeile von E1
+    assert e1[T.PROGRESS_COL] == pytest.approx(4 / 5)
+    assert (e2["To Do"], e2["In Review (0.8)"]) == (2.0, 2.5) and e2[T.PROGRESS_COL] == pytest.approx(2 / 4.5)
+    assert b1["Done (1.0)"] == 1.0
     below = scope_issues(mini, "E1")
     rows, _, _ = T.status_matrix(below, ev.analyse(below, ev.Settings(root="E1")))
     by = {r[T.ROW_COL]: r for r in rows}
-    assert list(by) == ["S1", "S2", T.SUM_LABEL] and (by["S1"][T.OWN_COL], by["S2"][T.OWN_COL]) == (3.0, 5.0)          # eine Stufe tiefer: die Kinder von E1; T1 und T2 stehen in der Zeile von S2
-    assert by["S2"]["Done (1,0)"] == 1.0 and by["S2"]["To Do"] == 1.0 and by["S2"][T.SUM_COL] is None                        # T1 und T2 haben keine Story Points
+    assert list(by) == ["S1", "S2", T.SUM_LABEL]                                                      # eine Stufe tiefer: die Kinder von E1; T1 und T2 stehen in der Zeile von S2
+    assert by["S1"]["Done (1.0)"] == 3.0 and by["S2"]["Done (1.0)"] == 1.0 and by["S2"]["To Do"] == 1.0
+
+
+def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():
+    items = (Issue(key="E", type="Epic"), _story("A", "Done", 0.25, "E"), _story("B", "To Do", 38.0, "E"))
+    rows, status_cols, completed = T.status_matrix(items, ev.analyse(items))
+    formats = {name: "%.2f" for name in (*status_cols, T.REJECTED_COL, T.TOTAL_NET_COL)}
+    assert rows[0][T.TOTAL_NET_COL] == 38.25
+    assert "|38.25|" in T.rows_to_wiki(rows, formats) and "38.25" in T.rows_to_html(rows, formats) and "38.3" not in T.rows_to_wiki(rows, formats)

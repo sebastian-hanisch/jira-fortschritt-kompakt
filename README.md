@@ -78,7 +78,7 @@ bitte melden.
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Hierarchiegraph und eine Tabelle: die
-**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (eigene Story Points des Tickets, Summe der Story Points seiner direkten Kinder und der Vergleich der beiden, dann die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt).
+**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt).
 
 ## Datenschutz
 

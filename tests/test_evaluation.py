@@ -16,7 +16,7 @@ from test_status import TREE
 
 def test_progress_of_the_mini_project_by_hand(mini):
     a = ev.analyse(mini)
-    # Blätter S1 (3), S3 (2), S4 (ungeschätzt: Median der Stufe 2,5), B1 (1), T1 und T2 (Stufe ohne geschätztes Ticket: je 1); Gutschriften 1, 0, 0,8 (In Review), 1, 1, 0
+    # Blätter S1 (3), S3 (2), S4 (ungeschätzt: Median der Stufe 2.5), B1 (1), T1 und T2 (Stufe ohne geschätztes Ticket: je 1); Gutschriften 1, 0, 0.8 (In Review), 1, 1, 0
     assert (a.n_atoms, a.weight, a.n_unestimated, a.n_excluded) == (6, 10.5, 3, 0)
     assert a.progress == pytest.approx(7 / 10.5) and a.progress_done == pytest.approx(5 / 10.5) and a.progress_count == pytest.approx(3 / 6)
     assert a.credits == {"In Progress": 0.0, "To Do": 0.0, "In Review": 0.8, "Done": 1.0}
@@ -51,7 +51,7 @@ def test_status_list_orders_by_credit_then_not_started_first(mini):
 
 
 def test_formatting_helpers():
-    assert ev.de(1234.5678, 2) == "1234,57" and ev.de(0.5, sign=True) == "+0,5" and ev.de(-0.5, sign=True) == "-0,5" and ev.pct(0.4444) == "44,4 %"
+    assert ev.de(1234.5678, 2) == "1234.57" and ev.de(0.5, sign=True) == "+0.5" and ev.de(-0.5, sign=True) == "-0.5" and ev.pct(0.4444) == "44.4 %"
 
 
 # ---------------------------------------------------------------- Zurückgewiesene Tickets
@@ -61,7 +61,7 @@ def test_progress_without_the_rejected_by_hand():
     # gezählt werden die Blätter S1 (2), S3b (1, die Sub-Task von S3) und X (3, Merged); zurückgewiesen sind die Blätter S2, S3a und S4a
     assert (a.n_atoms, a.weight, a.n_excluded) == (3, 6.0, 3)
     assert [TREE[i].key for i in a.atoms] == ["S1", "S3b", "X"] and [TREE[i].key for i in a.rejected_atoms] == ["S2", "S3a", "S4a"]
-    assert a.progress == pytest.approx((2 * 1.0 + 1 * 1.0 + 3 * 0.8) / 6) and ev.check_consistency(a) == []          # 5,4 / 6
+    assert a.progress == pytest.approx((2 * 1.0 + 1 * 1.0 + 3 * 0.8) / 6) and ev.check_consistency(a) == []          # 5.4 / 6
     assert a.progress_count == pytest.approx(2 / 3)                                    # S1 und S3b sind erledigt, X ist nur Merged
 
 
@@ -90,7 +90,7 @@ def test_a_subproject_is_a_standalone_dataset_by_hand(mini):
     e1 = ev.analyse(A.scope_issues(mini, "E1"), ev.Settings(root="E1"))
     assert (e1.n_atoms, e1.weight) == (3, 5.0) and e1.progress == pytest.approx(4 / 5)             # S1 (3) und die Sub-Tasks T1, T2 (je 1)
     e2 = ev.analyse(A.scope_issues(mini, "E2"), ev.Settings(root="E2"))
-    assert (e2.n_atoms, e2.weight, e2.n_unestimated) == (2, 4.0, 1) and e2.progress == pytest.approx(0.4)      # S4 wiegt den Median des Teilbaums (2), nicht den des ganzen Plans (2,5)
+    assert (e2.n_atoms, e2.weight, e2.n_unestimated) == (2, 4.0, 1) and e2.progress == pytest.approx(0.4)      # S4 wiegt den Median des Teilbaums (2), nicht den des ganzen Plans (2.5)
     assert e2.tree.keys[0] == "E2" and e2.credits == {"To Do": 0.0, "In Review": 0.8}                              # nur die Status des Teilbaums
 
 
@@ -129,14 +129,14 @@ def test_consistency_check_reports_a_broken_analysis(mini):
 def test_unestimated_note():
     assert ev.unestimated_note(0, 0)[0] == "warning" and ev.unestimated_note(0, 5) == ("success", "Alle 5 Tickets haben Story Points.")
     kind, text = ev.unestimated_note(1, 10)
-    assert kind == "info" and "1 von 10 Tickets (10,0 %)" in text and "Median" in text
+    assert kind == "info" and "1 von 10 Tickets (10.0 %)" in text and "Median" in text
     assert ev.unestimated_note(2, 10)[0] == "warning"                                      # ab 20 % ein Warnhinweis
     assert "Regel: H. als 1 Story Point" in ev.unestimated_note(1, 10, C.UNEST_ONE)[1] and "im Fortschritt nicht auf" not in ev.unestimated_note(1, 10, C.UNEST_ONE)[1]
     assert "Regel: I. nicht zählen" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1] and "im Fortschritt nicht auf" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1]
 
 
 def test_every_rule_changes_weight_and_progress_by_hand(mini):
-    expected = {                                       # Regel: (Gesamtgewicht, angerechnet); Gutschriften S1 1, S3 0, S4 0,8, B1 1, T1 1, T2 0
+    expected = {                                       # Regel: (Gesamtgewicht, angerechnet); Gutschriften S1 1, S3 0, S4 0.8, B1 1, T1 1, T2 0
         C.UNEST_MEDIAN: (10.5, 7.0), C.UNEST_PLAN: (10.5, 7.0), C.UNEST_TYPE: (10.5, 7.0), C.UNEST_SIBLINGS: (10.0, 6.6), C.UNEST_TEAM: (12.0, 7.6), C.UNEST_CHAIN: (12.0, 7.6),
         C.UNEST_ONE: (9.0, 5.8), C.UNEST_IGNORE: (6.0, 4.0)}
     assert list(expected) == list(C.UNEST_RULES)
@@ -148,7 +148,7 @@ def test_every_rule_changes_weight_and_progress_by_hand(mini):
 def test_a_subproject_uses_the_whole_plan_for_the_plan_rules(mini):
     sub = A.scope_issues(mini, "E2")
     own = ev.analyse(sub, ev.Settings(root="E2", unest_rule=C.UNEST_PLAN))                       # ohne Plan: nur der Teilbaum (S3 = 2)
-    with_plan = ev.analyse(sub, ev.Settings(root="E2", unest_rule=C.UNEST_PLAN), mini)         # Stufe 1 des ganzen Plans: Median von 3 und 2 = 2,5
+    with_plan = ev.analyse(sub, ev.Settings(root="E2", unest_rule=C.UNEST_PLAN), mini)         # Stufe 1 des ganzen Plans: Median von 3 und 2 = 2.5
     assert own.weight == 4.0 and with_plan.weight == 4.5 and with_plan.plan == tuple(mini)
     assert ev.analyse(sub, ev.Settings(root="E2")).plan == tuple(sub)
 
@@ -171,3 +171,7 @@ def test_the_sub_task_rule_c_keeps_the_rejected_logic():
     # S3 zählt selbst (4, In Progress), seine Sub-Tasks bleiben außen vor; S2 und S4 (unter dem zurückgewiesenen E2) sind die zurückgewiesenen Blätter
     assert [TREE[i].key for i in a.atoms] == ["S1", "S3", "X"] and [TREE[i].key for i in a.rejected_atoms] == ["S2", "S4"]
     assert a.weight == 9.0 and a.progress == pytest.approx((2 * 1.0 + 4 * 0.0 + 3 * 0.8) / 9)
+
+
+def test_credit_text_shows_one_decimal_and_two_when_needed():
+    assert [ev.credit_text(c) for c in (0.8, 0.85, 1.0, 0.9, 0.125, 0.05)] == ["0.8", "0.85", "1.0", "0.9", "0.12", "0.05"]

@@ -246,7 +246,7 @@ with guard("Auswertung"):
               delta=None if a.progress != a.progress or a.progress_done != a.progress_done else f"{de(100 * (a.progress_done - a.progress), sign=True)} Punkte", delta_color="off")
     m3.metric("Nur Done, nach Ticketzahl", na(a.progress_count, pct),
               delta=None if a.progress != a.progress or a.progress_count != a.progress_count else f"{de(100 * (a.progress_count - a.progress), sign=True)} Punkte", delta_color="off")
-    m4.metric(f"Offenes Gewicht ({unit}, gesamt {de(a.weight)})", de(a.weight * (1 - a.progress) if a.progress == a.progress else 0.0))
+    m4.metric(f"Offenes Gewicht ({unit}, gesamt {de(a.weight, 2)})", de(a.weight * (1 - a.progress) if a.progress == a.progress else 0.0, 2))
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
 
@@ -277,9 +277,8 @@ with guard("Auswertung"):
     st.markdown("## 📋 Status-Matrix je Ticket unter " + ("dem Plan" if root == C.ROOT_ALL else "der Wurzel"))
     st.caption(
         "Eine Zeile je Ticket direkt unter der Wurzel (im ganzen Plan die obersten), mit allem darunter: die Summe der Story Points der zählenden Tickets je Status, die Status nach Gewicht geordnet und mit ihrem "
-        "Gewicht im Kopf. Vorn: die eigenen Story Points des Tickets (falls vorhanden), die Summe der Story Points seiner direkten Kinder ohne die zurückgewiesenen (falls ein Kind welche hat) und, wenn beides da ist, der "
-        "Vergleich. Zurückgewiesene Tickets stehen in einer eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach "
-        "Status und Story Points gewichtet. Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalkomma) und als Tabelle für Jira oder Confluence zu übernehmen.")
+        "Gewicht im Kopf. Zurückgewiesene Tickets stehen in einer eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach "
+        "Status und Story Points gewichtet. Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalpunkt) und als Tabelle für Jira oder Confluence zu übernehmen.")
 
 
     def show_table(rows, key, formats=None, file_name="tabelle"):
@@ -287,10 +286,13 @@ with guard("Auswertung"):
         if not rows:
             st.info("Keine Daten für diese Tabelle.")
             return
-        config = {name: st.column_config.NumberColumn(format=fmt) for name, fmt in (formats or {}).items() if name in rows[0]}
+        percent = [name for name, fmt in (formats or {}).items() if fmt == "percent" and name in rows[0]]
+        # Das Streamlit-Format „percent“ folgt der Sprache des Browsers (Komma); für einen einheitlichen Dezimalpunkt zeigt die Tabelle Prozentwerte als Zahl mit „%“ im Format
+        shown = [{**r, **{name: None if r[name] is None else 100 * r[name] for name in percent}} for r in rows]
+        config = {name: st.column_config.NumberColumn(format="%.1f %%" if fmt == "percent" else fmt) for name, fmt in (formats or {}).items() if name in rows[0]}
         if "Wirkung" in rows[0]:
             config["Wirkung"] = st.column_config.TextColumn(width="large")
-        st.dataframe(rows, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
+        st.dataframe(shown, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
         st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
         with st.expander("📋 In Jira oder Confluence einfügen"):
             wiki_tab, html_tab = st.tabs(["Wiki-Markup", "Tabelle zum Kopieren"])
@@ -303,16 +305,16 @@ with guard("Auswertung"):
 
 
     matrix_rows, matrix_status, completed_col = T.status_matrix(issues, a)
-    matrix_formats = {name: "%.1f" for name in (T.OWN_COL, T.SUM_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
+    matrix_formats = {name: "%.2f" for name in (*matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
     matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
     show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
 
 with options_box, guard("Berechnungsmöglichkeiten"):
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
     st.caption("Alles andere wie in der aktuellen Auswertung (Teilprojekt, Status-Gewichte); die Auswahl in der Seitenleiste ändert nur, welche Zeile in „Ergebnis“ gilt.")
-    show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.1f"}, "wirkung-der-regeln")
+    show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.2f"}, "wirkung-der-regeln")
     st.markdown("#### Wirkung der Sub-Task-Regeln auf die geladenen Daten")
-    show_table(T.subtask_rule_comparison(issues, a), "subrules", {"Fortschritt": "percent", "Gewicht gesamt": "%.1f"}, "wirkung-der-sub-task-regeln")
+    show_table(T.subtask_rule_comparison(issues, a), "subrules", {"Fortschritt": "percent", "Gewicht gesamt": "%.2f"}, "wirkung-der-sub-task-regeln")
 
 # --- Erklärung -----------------------------------------------------------------------------------------------------------------------------
 

@@ -125,7 +125,7 @@ def rejected_indices(issues) -> frozenset[int]:
 
 
 def status_credit(status: str) -> float:
-    """Gutschrift eines Status nach seinem Namen: fertig 1, Test 0,9, Merged oder Review 0,8, alles andere 0."""
+    """Gutschrift eines Status nach seinem Namen: fertig 1, Test 0.9, Merged oder Review 0.8, alles andere 0."""
     return C.STATUS_CLASS_CREDIT.get(status_class(status), 0.0)
 
 

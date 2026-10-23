@@ -17,7 +17,7 @@ def lock_axes(fig):
 
 
 def _pct_text(progress: float, weight: float, unit: str) -> str:
-    return "ohne Gewicht" if np.isnan(progress) else f"{100 * progress:.0f} % · {weight:.0f} {unit}".replace(".", ",")
+    return "ohne Gewicht" if np.isnan(progress) else f"{100 * progress:.0f} % · {weight:.2f} {unit}"
 
 
 def build_progress_bars(stats, unit: str):
@@ -30,7 +30,7 @@ def build_progress_bars(stats, unit: str):
     prog = stats.progress[order]
     fig = go.Figure()
     for name, values, color in (("erledigt", done, C.COLOR_DONE), ("durch Status angerechnet", partial, C.COLOR_PARTIAL), ("offen", rest, C.COLOR_OPEN)):
-        fig.add_trace(go.Bar(y=labels, x=values, orientation="h", name=name, marker_color=color, hovertemplate=f"%{{y}}<br>{name}: %{{x:.1f}} {unit}<extra></extra>"))
+        fig.add_trace(go.Bar(y=labels, x=values, orientation="h", name=name, marker_color=color, hovertemplate=f"%{{y}}<br>{name}: %{{x:.2f}} {unit}<extra></extra>"))
     top = float(max(stats.weight[order].max(), 1e-9)) if len(order) else 1.0
     for label, p, w in zip(labels, prog, stats.weight[order]):
         fig.add_annotation(x=w, y=label, text=" " + _pct_text(p, w, unit), showarrow=False, xanchor="left", font=dict(size=12))
@@ -207,7 +207,7 @@ def _node_hover(g, k: int, unit: str) -> str:
     lines = [g.keys[k] + (f": {g.titles[k]}" if g.titles[k] else "")]
     if g.types[k] or g.statuses[k]:
         lines.append(" · ".join(x for x in (g.types[k], g.statuses[k]) if x))
-    lines.append("kein Gewicht" if g.weight[k] <= 0 else f"Gewicht {g.weight[k]:.1f} {unit}".replace(".", ","))
+    lines.append("kein Gewicht" if g.weight[k] <= 0 else f"Gewicht {g.weight[k]:.2f} {unit}")
     lines.append("kein Fortschritt messbar" if np.isnan(g.progress[k]) else f"Fortschritt {100 * g.progress[k]:.0f} %")
     if not g.is_atom[k] and g.is_leaf[k] and g.weight[k] <= 0 and not np.isnan(g.progress[k]):
         lines.append("zählt nicht selbst (Zählebene)")

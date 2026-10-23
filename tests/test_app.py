@@ -35,8 +35,8 @@ def test_without_a_file_the_app_asks_for_one_and_stops():
 def test_the_headline_numbers_of_the_mini_project():
     at = _open(plan_csv(make_mini()))
     _ok(at)
-    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 10,5)"]
-    assert [m.value for m in at.metric] == ["66,7 %", "47,6 %", "50,0 %", "3,5"]            # 7 / 10,5; 5 / 10,5; 3 von 6; 10,5 · (1 − 7/10,5)
+    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 10.50)"]
+    assert [m.value for m in at.metric] == ["66.7 %", "47.6 %", "50.0 %", "3.50"]            # 7 / 10.5; 5 / 10.5; 3 von 6; 10.5 · (1 − 7/10.5)
     assert [w.value for w in at.warning if "Bitte vor dem Hochladen" not in w.value] == [ev.unestimated_note(3, 6)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (3 von 6 = 50 %); die Zahl der Tickets steht im Erkennungsbericht
 
 
@@ -63,8 +63,8 @@ def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
 def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
     at = _open(plan_csv(make_mini()))
     assert at.sidebar.selectbox(key="unest_rule").value == C.UNEST_MEDIAN and at.sidebar.selectbox(key="unest_rule").options == list(C.UNEST_RULES)
-    expected = {C.UNEST_MEDIAN: ("66,7 %", "10,5"), C.UNEST_PLAN: ("66,7 %", "10,5"), C.UNEST_TYPE: ("66,7 %", "10,5"), C.UNEST_SIBLINGS: ("66,0 %", "10,0"), C.UNEST_TEAM: ("63,3 %", "12,0"),
-                C.UNEST_CHAIN: ("63,3 %", "12,0"), C.UNEST_ONE: ("64,4 %", "9,0"), C.UNEST_IGNORE: ("66,7 %", "6,0")}          # 7 / 10,5; 6,6 / 10; 7,6 / 12; 5,8 / 9; 4 / 6 (Gewicht gesamt je Regel)
+    expected = {C.UNEST_MEDIAN: ("66.7 %", "10.50"), C.UNEST_PLAN: ("66.7 %", "10.50"), C.UNEST_TYPE: ("66.7 %", "10.50"), C.UNEST_SIBLINGS: ("66.0 %", "10.00"), C.UNEST_TEAM: ("63.3 %", "12.00"),
+                C.UNEST_CHAIN: ("63.3 %", "12.00"), C.UNEST_ONE: ("64.4 %", "9.00"), C.UNEST_IGNORE: ("66.7 %", "6.00")}          # 7 / 10.5; 6.6 / 10; 7.6 / 12; 5.8 / 9; 4 / 6 (Gewicht gesamt je Regel)
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="unest_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
@@ -81,7 +81,7 @@ def test_the_summary_is_always_one_level_below_the_root():
     at.sidebar.selectbox(key="root").set_value("E1").run(timeout=TIMEOUT)
     _ok(at)
     assert any("direkt unter der Wurzel" in m.value for m in at.markdown) and bars() == ["S1", "S2"]          # die Kinder von E1; T1 und T2 zählen zu S2
-    assert at.metric[0].value == "80,0 %"
+    assert at.metric[0].value == "80.0 %"
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
     assert bars() == ["T1", "T2"]
 
@@ -90,12 +90,12 @@ def test_the_subproject_selection_rescopes_the_numbers():
     at = _open(plan_csv(make_mini()))
     at.sidebar.selectbox(key="root").set_value("E2").run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "40,0 %" and any("E2" in i.value and "2 zählende" in i.value for i in at.info)       # S3 (2, offen) und S4 (Median 2, Review): 1,6 / 4
+    assert at.metric[0].value == "40.0 %" and any("E2" in i.value and "2 zählende" in i.value for i in at.info)       # S3 (2, offen) und S4 (Median 2, Review): 1.6 / 4
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "50,0 %"                                                        # S2 zählt durch seine Sub-Tasks T1 (Done) und T2 (To Do), beide ungeschätzt und gleich schwer
+    assert at.metric[0].value == "50.0 %"                                                        # S2 zählt durch seine Sub-Tasks T1 (Done) und T2 (To Do), beide ungeschätzt und gleich schwer
     at.sidebar.selectbox(key="root").set_value("").run(timeout=TIMEOUT)
-    assert at.metric[0].value == "66,7 %"
+    assert at.metric[0].value == "66.7 %"
 
 
 def test_changed_status_weights_change_the_numbers():
@@ -108,11 +108,11 @@ def test_changed_status_weights_change_the_numbers():
     assert reset
     reset[0].click().run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "66,7 %" and not at.session_state["overrides"]
+    assert at.metric[0].value == "66.7 %" and not at.session_state["overrides"]
 
 
 def pct_by_hand(x):
-    return f"{100 * x:.1f}".replace(".", ",") + " %"
+    return f"{100 * x:.1f} %"
 
 
 def test_unreadable_files_show_an_error_and_stop():
@@ -127,7 +127,7 @@ def test_unreadable_files_show_an_error_and_stop():
 def test_a_file_without_estimates_weighs_every_ticket_the_same():
     at = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\nA-2;To Do\nA-3;In Progress\n".encode())
     _ok(at)
-    assert any("Story-Points-Spalte" in w.value for w in at.warning) and at.metric[0].value == "33,3 %"          # (1 + 0 + 0) / 3
+    assert any("Story-Points-Spalte" in w.value for w in at.warning) and at.metric[0].value == "33.3 %"          # (1 + 0 + 0) / 3
     assert at.metric[3].label.startswith("Offenes Gewicht (SP,")
 
 
@@ -183,10 +183,10 @@ def test_navigation_up_and_down_changes_the_root():
     assert up.label == "⬆ Eine Stufe hoch: E1: Epic A" and at.sidebar.button(key="nav_top").label == "⏫ Ganzer Plan"
     up.click().run(timeout=TIMEOUT)                                                         # hoch: E1
     _ok(at)
-    assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80,0 %"        # S1 (3, Done) und T1 (1, Done), T2 (1, offen) im Teilbaum von E1
+    assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80.0 %"        # S1 (3, Done) und T1 (1, Done), T2 (1, offen) im Teilbaum von E1
     at.sidebar.button(key="nav_up").click().run(timeout=TIMEOUT)                                    # hoch: ganzer Plan
     _ok(at)
-    assert at.sidebar.selectbox(key="root").value == "" and at.metric[0].value == "66,7 %" and not [b for b in at.sidebar.button if b.key == "nav_up"]
+    assert at.sidebar.selectbox(key="root").value == "" and at.metric[0].value == "66.7 %" and not [b for b in at.sidebar.button if b.key == "nav_up"]
 
 
 def test_the_top_button_jumps_to_the_whole_plan_from_a_deep_root():
@@ -211,10 +211,16 @@ def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
     at = _open(plan_csv(make_mini()))
     pick = at.sidebar.selectbox(key="sub_rule")
     assert pick.value == C.SUB_RULE and pick.options == list(C.SUB_RULES)
-    expected = {C.SUB_RULE: ("66,7 %", "10,5"), C.SUB_SHARE: ("63,0 %", "13,5"), C.SUB_SELF: ("45,7 %", "14,0")}          # 7 / 10,5; 8,5 / 13,5; 6,4 / 14
+    expected = {C.SUB_RULE: ("66.7 %", "10.50"), C.SUB_SHARE: ("63.0 %", "13.50"), C.SUB_SELF: ("45.7 %", "14.00")}          # 7 / 10.5; 8.5 / 13.5; 6.4 / 14
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="sub_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
         assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})"
     table = next(t.value for t in at.dataframe if "Zählende Tickets" in t.value.columns)
     assert list(table["Regel"]) == list(C.SUB_RULES)
+
+
+def test_story_points_in_quarters_are_shown_with_two_decimals():
+    at = _open("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;Epic;;\nS-1;To Do;Story;E-1;0,25\nS-2;To Do;Story;E-1;0,5\n".encode("utf-8"))
+    _ok(at)
+    assert at.metric[3].label == "Offenes Gewicht (SP, gesamt 0.75)" and at.metric[3].value == "0.75"
