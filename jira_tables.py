@@ -289,7 +289,7 @@ Seit nur Blätter zählen, zählt eine Story mit Sub-Tasks durch ihre Sub-Tasks.
 ### Einschätzung
 
 Das ist eine Einschätzung, keine Messung. Kommt es auf **vergleichbare Zahlen zwischen Teilprojekten** an (z. B. ein Bericht je Epic), sprechen B oder F dafür, die Vergleichsgruppe nicht vom gewählten Teilbaum abhängen zu lassen. Soll ein **Teilprojekt für sich stehen**, ist A richtig.
-Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie stark die Wahl die Zahl verschiebt, zeigt die Tabelle unten für die drei wählbaren Regeln an den geladenen Daten; für die Vorschläge gibt es noch keine Zahlen.
+Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie stark die Wahl die Zahl verschiebt, zeigt die Tabelle am Ende für die drei wählbaren Regeln an den geladenen Daten (sobald eine Datei geladen ist); für die Vorschläge gibt es noch keine Zahlen.
 """
 
 

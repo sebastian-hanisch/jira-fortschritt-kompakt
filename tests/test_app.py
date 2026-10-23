@@ -55,7 +55,7 @@ def test_the_treemap_and_the_hierarchy_graph_are_shown():
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
     at = _open(plan_csv(make_mini()))
     labels = [s.label for s in at.sidebar.selectbox]
-    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Zusammenfassen nach"]
+    assert labels == ["Teilprojekt (Wurzel)", "Darunter öffnen", "Tickets ohne Story Points", "Zusammenfassen nach"]
     assert not at.sidebar.toggle and not at.sidebar.radio and not at.sidebar.slider
     assert not at.radio or [r.label for r in at.radio] == ["Kennzahl je Zelle"]
 
@@ -145,36 +145,64 @@ def test_random_projects_render_in_every_dimension(seed):
         _ok(at, seed, tab_metric)
 
 
-def test_the_options_tab_describes_the_variants_and_shows_the_effect_on_the_data():
+def test_the_options_box_describes_the_variants_and_shows_the_effect_on_the_data():
     at = _open(plan_csv(make_mini()))
     _ok(at)
-    labels = [t.label for t in at.tabs]
-    assert "📊 Auswertung" in labels and "🧮 Ungeschätzte Tickets: Berechnungsmöglichkeiten" in labels and labels.index("📊 Auswertung") == 0
+    labels = [e.label for e in at.expander]
+    assert labels.index("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten") == labels.index("📖 Welche Status zählen wie viel? Standard nach Namen") + 1       # direkt nach den Regeln der Status
+    assert not at.tabs or "🧮" not in " ".join(t.label for t in at.tabs)
     text = " ".join(m.value for m in at.markdown)
     assert "Teil 1: Woher kommt das Gewicht" in text and "Teil 2: Sub-Tasks ohne Story Points" in text and "Wirkung der wählbaren Regeln" in text
     table = next(t.value for t in at.dataframe if "Regel" in t.value.columns)
     assert list(table["Regel"]) == list(C.UNEST_RULES) and list(table["Gewicht gesamt"]) == [10.5, 9.0, 6.0]
 
 
+def test_the_options_box_is_there_before_a_file_is_loaded_without_the_table():
+    at = _open()
+    box = next(e for e in at.expander if "Berechnungsmöglichkeiten" in e.label)
+    assert "Teil 1: Woher kommt das Gewicht" in " ".join(m.value for m in box.markdown) and not at.dataframe
+
+
+def test_the_children_selection_opens_a_ticket_one_level_down():
+    at = _open(plan_csv(make_mini()))
+    pick = at.sidebar.selectbox(key="child_pick")
+    assert pick.options == ["(Ticket mit Kindern wählen)", "E1: Epic A", "E2: Epic B"]
+    pick.set_value("E1").run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80,0 %"
+    pick = at.sidebar.selectbox(key="child_pick")
+    assert pick.value == "" and pick.options == ["(Ticket mit Kindern wählen)", "S2"]            # die Auswahl ist zurückgestellt, die Kinder sind die der neuen Wurzel
+    pick.set_value("S2").run(timeout=TIMEOUT)
+    assert at.sidebar.selectbox(key="root").value == "S2" and not [s for s in at.sidebar.selectbox if s.key == "child_pick"]       # S2 hat nur Blätter darunter: keine Auswahl mehr
+
+
+def test_up_buttons_stand_above_the_selection_in_the_sidebar():
+    at = _open(plan_csv(make_mini()))
+    at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
+    assert [b.key for b in at.sidebar.button] == ["nav_up", "nav_top"] and not [b for b in at.main.button if str(b.key).startswith("nav_")]
+    elements = [e.key for e in at.sidebar if getattr(e, "key", None) in ("nav_up", "nav_top", "root", "child_pick", "unest_rule", "dimension")]
+    assert elements[:3] == ["nav_up", "nav_top", "root"] and elements[-2:] == ["unest_rule", "dimension"]
+
+
 def test_navigation_up_and_down_changes_the_root():
     at = _open(plan_csv(make_mini()))
-    assert not [b for b in at.button if b.key == "nav_up"]                                   # im ganzen Plan gibt es nichts darüber
+    assert not [b for b in at.sidebar.button if b.key == "nav_up"]                                   # im ganzen Plan gibt es nichts darüber
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)                   # runter: S2 mit seinen Sub-Tasks
     _ok(at)
-    up = at.button(key="nav_up")
-    assert up.label == "⬆ Eine Stufe hoch: E1: Epic A" and at.button(key="nav_top").label == "⏫ Ganzer Plan"
+    up = at.sidebar.button(key="nav_up")
+    assert up.label == "⬆ Eine Stufe hoch: E1: Epic A" and at.sidebar.button(key="nav_top").label == "⏫ Ganzer Plan"
     up.click().run(timeout=TIMEOUT)                                                         # hoch: E1
     _ok(at)
     assert at.sidebar.selectbox(key="root").value == "E1" and at.metric[0].value == "80,0 %"        # S1 (3, Done) und T1 (1, Done), T2 (1, offen) im Teilbaum von E1
-    at.button(key="nav_up").click().run(timeout=TIMEOUT)                                    # hoch: ganzer Plan
+    at.sidebar.button(key="nav_up").click().run(timeout=TIMEOUT)                                    # hoch: ganzer Plan
     _ok(at)
-    assert at.sidebar.selectbox(key="root").value == "" and at.metric[0].value == "66,7 %" and not [b for b in at.button if b.key == "nav_up"]
+    assert at.sidebar.selectbox(key="root").value == "" and at.metric[0].value == "66,7 %" and not [b for b in at.sidebar.button if b.key == "nav_up"]
 
 
 def test_the_top_button_jumps_to_the_whole_plan_from_a_deep_root():
     at = _open(plan_csv(make_mini()))
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
-    assert at.button(key="nav_top").label == "⏫ Ganzer Plan"
-    at.button(key="nav_top").click().run(timeout=TIMEOUT)
+    assert at.sidebar.button(key="nav_top").label == "⏫ Ganzer Plan"
+    at.sidebar.button(key="nav_top").click().run(timeout=TIMEOUT)
     _ok(at)
     assert at.sidebar.selectbox(key="root").value == ""

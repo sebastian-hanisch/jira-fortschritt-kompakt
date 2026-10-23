@@ -69,7 +69,8 @@ Sonst gibt es nichts einzustellen.
 ## Hoch und runter im Baum
 
 **Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. **Hoch:** Die Knöpfe
-über den Diagrammen gehen eine Stufe hoch oder zurück zum ganzen Plan. Alternativ wechselt die Auswahl „Teilprojekt“ in der Seitenleiste die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an
+über der Auswahl in der Seitenleiste gehen eine Stufe hoch oder zurück zum ganzen Plan. Alternativ wechselt die Auswahl „Teilprojekt“ die Wurzel, und „Darunter öffnen“ bietet die Tickets mit Kindern direkt unter der
+aktuellen Wurzel an. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an
 (`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Versuch im Browser mit einer ausgelösten Auswahl, den Mausklick selbst konnte ich in meiner Testumgebung nicht auslösen
 (dort kam auch in einem minimalen Streamlit-Diagramm keine Auswahl an). Wenn der Klick bei euch nichts bewirkt, bitte melden.
 
@@ -100,7 +101,7 @@ Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`htt
 
 ## Berechnungsmöglichkeiten für Tickets ohne Story Points
 
-Der Reiter „Ungeschätzte Tickets: Berechnungsmöglichkeiten“ in der App stellt die Varianten mit Vor- und Nachteilen gegenüber (Median der Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team,
+Der Ausklapper „Tickets ohne Story Points: Berechnungsmöglichkeiten“ in der App (nach „Welche Status zählen wie viel?“) stellt die Varianten mit Vor- und Nachteilen gegenüber (Median der Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team,
 Rückfallkette, Mittelwert, 1 Story Point, nicht zählen; dazu drei Möglichkeiten für Sub-Tasks ohne Story Points) und zeigt, wie sich der Fortschritt unter den drei wählbaren Regeln an den geladenen Daten verschiebt.
 Eingebaut sind die Mediane der Stufe im Teilbaum, 1 Story Point und „nicht zählen“; alles andere ist ein Vorschlag.
 

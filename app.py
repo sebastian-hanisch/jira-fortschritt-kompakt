@@ -97,6 +97,14 @@ def _drill(chart_key):
         _go_to(key)
 
 
+def _pick_child():
+    """Auswahl „Darunter öffnen“: das gewählte Ticket zur Wurzel machen und die Auswahl zurückstellen (die Kinder der neuen Wurzel sind andere)."""
+    key = st.session_state.get("child_pick", "")
+    st.session_state["child_pick"] = ""
+    if key:
+        _go_to(key)
+
+
 def _reset_weights():
     st.session_state["overrides"] = ()
     st.session_state["weights_version"] = st.session_state.get("weights_version", 0) + 1
@@ -114,6 +122,9 @@ with st.expander("📤 So kommt die Datei zustande: Export aus Jira Plans, mit S
     st.markdown(EXPORT_GUIDE)
 with st.expander("📖 Welche Status zählen wie viel? Standard nach Namen"):
     st.markdown(T.status_rules_markdown())
+options_box = st.expander("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten")          # die Wirkung auf die Daten kommt nach der Auswertung dazu
+with options_box:
+    st.markdown(T.UNEST_OPTIONS_MARKDOWN)
 pseudo = st.checkbox(
     "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
     help="Gilt beim Laden. Betrifft Anzeige, Tabellen und Diagramme (z. B. beim Teilen eines Bildschirms). Die Datei hat den Server beim Hochladen schon erreicht.")
@@ -156,8 +167,6 @@ with st.expander(f"🔎 Was wurde erkannt? ({len(issues_all)} Tickets)"):
     st.caption("Welche Spalte wofür gelesen wurde und bei wie vielen Tickets ein Wert steht. Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden nicht gelesen, ebenso alle weiteren Spalten des Exports.")
     st.dataframe(report.columns, hide_index=True, width="stretch")
 
-tab_main, tab_options = st.tabs(["📊 Auswertung", "🧮 Ungeschätzte Tickets: Berechnungsmöglichkeiten"])
-
 # --- Auswahl (Seitenleiste) ----------------------------------------------------------------------------------------------------------------
 
 root_depth = dict(A.root_choices(issues_all))
@@ -174,15 +183,27 @@ def root_label(key):
     return "↳ " * root_depth[key] + key + (f": {title}" if title else "")
 
 
+current_root = st.session_state.get("root", C.ROOT_ALL)
+children = A.child_roots(issues_all, current_root)
 with st.sidebar:
-    st.header("Auswahl")
+    st.header("Teilprojekt")
+    if current_root != C.ROOT_ALL:
+        up_key = A.parent_root(issues_all, current_root)
+        st.button("⬆ Eine Stufe hoch: " + root_label(up_key).lstrip("↳ "), on_click=_go_to, args=(up_key,), key="nav_up", width="stretch",
+                  help="Wechselt zum übergeordneten Ticket, das als Wurzel taugt, sonst zum ganzen Plan.")
+        if up_key != C.ROOT_ALL:
+            st.button("⏫ Ganzer Plan", on_click=_go_to, args=(C.ROOT_ALL,), key="nav_top", width="stretch")
     root = st.selectbox(
         "Teilprojekt (Wurzel)", root_options, key="root", format_func=root_label, disabled=not root_depth,
         help="Macht dieses Ticket zur Wurzel: Alles Weitere (Status, Ebenen, Kennzahlen, Diagramme, Tabellen) gilt wie für einen eigenständigen Datensatz aus diesem Ticket und allem darunter.")
+    if children:
+        st.selectbox("Darunter öffnen", ("", *children), key="child_pick", on_change=_pick_child, format_func=lambda k: "(Ticket mit Kindern wählen)" if k == "" else root_label(k).lstrip("↳ "),
+                     help="Die Tickets mit Kindern direkt unter der Wurzel: Die Wahl macht das Ticket zur neuen Wurzel (eine Stufe tiefer). Dasselbe geht per Klick auf eine Kachel oder einen Knoten.")
     issues = A.scope_issues(issues_all, root)
+    st.header("Berechnung und Darstellung")
     unest_rule = st.selectbox(
         "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
-        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets auf gleicher Stufe des Ticket-Baums (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es offen ist).")
+        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets auf gleicher Stufe des Ticket-Baums (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Varianten stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
     dimension = st.selectbox("Zusammenfassen nach", C.DIMENSIONS, index=C.DIMENSIONS.index(C.DEFAULT_DIM), key="dimension",
                              help="Wonach die Tickets zusammengefasst werden. Tickets mit mehreren Werten (Stichwörter, Komponenten) zählen anteilig.")
     level = 1
@@ -193,7 +214,7 @@ with st.sidebar:
         level = st.selectbox("Hierarchiestufe", list(range(1, max_level + 1)), key="level", format_func=lambda n: f"Stufe {n}" + (" (oberste)" if n == 1 else ""),
                              help="Auf welcher Stufe des Ticket-Baums zusammengefasst wird: Stufe 1 ist die oberste (z. B. Initiative oder Epic ohne Eltern), Stufe 2 die darunter und so weiter.")
 
-with tab_main, guard("Auswertung"):
+with guard("Auswertung"):
     # --- Status-Gewichte -----------------------------------------------------------------------------------------------------------------------
 
     statuses = status_list(issues)
@@ -219,14 +240,7 @@ with tab_main, guard("Auswertung"):
     a = analyse(issues, settings)
 
     st.markdown("## 🎯 Ergebnis")
-    up_key = A.parent_root(issues_all, root)
-    nav_up, nav_top, nav_hint = st.columns([3, 2, 5])
-    if root != C.ROOT_ALL:
-        nav_up.button("⬆ Eine Stufe hoch: " + root_label(up_key).lstrip("↳ "), on_click=_go_to, args=(up_key,), key="nav_up", width="stretch",
-                      help="Wechselt zum übergeordneten Ticket, das als Wurzel taugt, sonst zum ganzen Plan.")
-        if up_key != C.ROOT_ALL:
-            nav_top.button("⏫ Ganzer Plan", on_click=_go_to, args=(C.ROOT_ALL,), key="nav_top", width="stretch")
-    nav_hint.caption("Runter: ein Klick auf eine Kachel oder einen Knoten mit Kindern öffnet ihn als Teilprojekt; auch die Auswahl „Teilprojekt“ in der Seitenleiste geht. Hoch: die Knöpfe.")
+    st.caption("Runter: ein Klick auf eine Kachel oder einen Knoten mit Kindern, oder „Darunter öffnen“ in der Seitenleiste. Hoch: die Knöpfe oben in der Seitenleiste.")
     for problem in check_consistency(a):
         st.error(f"Interne Prüfung verletzt: {problem}")
     if root != C.ROOT_ALL:
@@ -262,7 +276,7 @@ with tab_main, guard("Auswertung"):
         tiles_key = f"chart_tiles_{root}"
         st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key, on_select=partial(_drill, tiles_key), selection_mode="points")
         st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. **Ein Klick auf eine Kachel mit Kindern öffnet sie als Teilprojekt** "
-                   "(eine Stufe tiefer); mit den Knöpfen oben geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen.")
+                   "(eine Stufe tiefer); mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen.")
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 
@@ -328,8 +342,7 @@ with tab_main, guard("Auswertung"):
             st.markdown(f"**Tickets ohne Story Points** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
             show_table(unest_rows, "unest", None, "ohne-story-points")
 
-with tab_options, guard("Berechnungsmöglichkeiten"):
-    st.markdown(T.UNEST_OPTIONS_MARKDOWN)
+with options_box, guard("Berechnungsmöglichkeiten"):
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
     st.caption("Alles andere wie in der aktuellen Auswertung (Teilprojekt, Status-Gewichte); die Auswahl in der Seitenleiste ändert nur, welche Zeile in „Ergebnis“ gilt.")
     show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.1f"}, "wirkung-der-regeln")
