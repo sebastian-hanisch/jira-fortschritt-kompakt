@@ -191,13 +191,12 @@ with st.sidebar:
     st.header("Berechnung und Darstellung")
     unest_rule = st.selectbox(
         "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
-        help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets auf gleicher Stufe des Ticket-Baums (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Varianten stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
-    max_level = A.max_level(issues)
-    if not 1 <= st.session_state.get("level", 0) <= max_level:                        # noch nicht gewählt oder der Teilbaum ist flacher: die oberste Stufe mit einer Aufteilung
-        st.session_state["level"] = A.default_level(issues, A.select_atoms(issues, skip=A.rejected_indices(issues)))
-    level = st.selectbox("Zusammenfassen auf Hierarchiestufe", list(range(1, max_level + 1)), key="level", format_func=lambda n: f"Stufe {n}" + (" (oberste)" if n == 1 else ""),
-                         help="Auf welcher Stufe des Ticket-Baums die Balken zusammenfassen: Stufe 1 ist die oberste (bei einem Teilprojekt die Wurzel selbst), Stufe 2 die darunter und so weiter. Ein Ticket, das "
-                              "höher steht, bekommt „(keine Stufe n)“; Tickets auf der Stufe bilden je eine Gruppe, alles darunter zählt zu ihr.")
+        help="Was ein Ticket ohne Story Points wiegt: ein Median geschätzter Tickets (Stufe, Typ, Geschwister, Team oder eine Kette davon), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Buchstaben gehören zu den Varianten im Ausklapper „Berechnungsmöglichkeiten“ oben, dort stehen Vor- und Nachteile.")
+    sub_rule = st.selectbox(
+        "Sub-Tasks einer Story", C.SUB_RULES, key="sub_rule",
+        help="Zählende Tickets sind die Blätter des Baums, bei einer Story also ihre Sub-Tasks. a: Sub-Tasks ohne Story Points bekommen das Gewicht nach der Regel oben, die Story Points der Story fallen weg. "
+             "b: Hat keine Sub-Task eigene Story Points, teilen sie sich die Story Points der Story gleichmäßig. c: Die Story zählt selbst mit ihren Story Points und ihrem Status, die Sub-Tasks bleiben außen vor. "
+             "Vor- und Nachteile stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
 
 with guard("Auswertung"):
     # --- Status-Gewichte -----------------------------------------------------------------------------------------------------------------------
@@ -221,8 +220,8 @@ with guard("Auswertung"):
     # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
     unit = C.UNIT
-    settings = Settings(level=level, root=root, unest_rule=unest_rule, overrides=overrides)
-    a = analyse(issues, settings)
+    settings = Settings(level=A.summary_level(root), root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides)
+    a = analyse(issues, settings, issues_all)
 
     st.markdown("## 🎯 Ergebnis")
     st.caption("Runter: ein Klick auf eine Kachel oder einen Knoten mit Kindern, oder die Auswahl „Teilprojekt“ in der Seitenleiste. Hoch: die Knöpfe oben in der Seitenleiste.")
@@ -251,7 +250,7 @@ with guard("Auswertung"):
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
 
-    st.markdown(f"### Fortschritt je Ticket der Hierarchiestufe {level}")
+    st.markdown("### Fortschritt je Ticket direkt unter " + ("dem Plan" if root == C.ROOT_ALL else "der Wurzel"))
     st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
     st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch den Status angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
                + (f" Gezeigt werden die 30 gewichtsstärksten von {len(a.stats.labels)} Gruppen; die Tabelle unten enthält alle." if len(a.stats.labels) > 30 else ""))
@@ -312,6 +311,8 @@ with options_box, guard("Berechnungsmöglichkeiten"):
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
     st.caption("Alles andere wie in der aktuellen Auswertung (Teilprojekt, Status-Gewichte); die Auswahl in der Seitenleiste ändert nur, welche Zeile in „Ergebnis“ gilt.")
     show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.1f"}, "wirkung-der-regeln")
+    st.markdown("#### Wirkung der Sub-Task-Regeln auf die geladenen Daten")
+    show_table(T.subtask_rule_comparison(issues, a), "subrules", {"Fortschritt": "percent", "Gewicht gesamt": "%.1f"}, "wirkung-der-sub-task-regeln")
 
 # --- Erklärung -----------------------------------------------------------------------------------------------------------------------------
 
@@ -334,10 +335,10 @@ with st.expander("📐 So wird gerechnet"):
     st.markdown(
         """
 **Zählende Tickets.** Die Blätter des Ticket-Baums, also Tickets ohne Kinder: Stories, Tasks und Bugs ohne Sub-Tasks und die Sub-Tasks selbst. Epics, Initiativen und Themen zählen nie selbst, und eine Story mit
-Sub-Tasks zählt durch ihre Sub-Tasks (ihre eigenen Story Points und ihr eigener Status zählen dann nicht). Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
+Sub-Tasks zählt durch ihre Sub-Tasks (ihre eigenen Story Points und ihr eigener Status zählen dann nicht), es sei denn, die Auswahl „Sub-Tasks einer Story“ verteilt ihre Story Points (b) oder lässt sie selbst zählen (c). Zurückgewiesene Tickets (Status wie Rejected, Zurückgewiesen, Won't do,
 Abgelehnt, Cancelled, Duplicate) und alles unter ihnen fallen ganz heraus, aus Gewicht und Anzahl; eine Story, deren Sub-Tasks alle zurückgewiesen sind, zählt wieder selbst.
 
-**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der geschätzten Tickets **auf gleicher Stufe** (Stufe = Tiefe im Ticket-Baum, wie bei der Ebene „Hierarchiestufe“; gibt es auf der Stufe kein geschätztes Ticket, gilt 1), 1 Story Point oder nicht zählen (Gewicht 0).
+**Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets (A bis F: je Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team oder eine Rückfallkette; gibt es in der Gruppe kein geschätztes Ticket, gilt 1), 1 Story Point (H) oder nicht zählen, Gewicht 0 (I). Stufe heißt Tiefe im Ticket-Baum ab der Wurzel. Die Varianten mit Vor- und Nachteilen stehen im Ausklapper „Berechnungsmöglichkeiten“, ebenso die drei Möglichkeiten für Sub-Tasks (Auswahl „Sub-Tasks einer Story“).
 
 **Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;

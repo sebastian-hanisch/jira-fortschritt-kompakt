@@ -25,7 +25,7 @@ def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], st
     zurückgewiesenen Parent) in einer eigenen Spalte, das Total ohne sie, den Anteil der Status ab 90 % („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix
     folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
-    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep)
+    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({de(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
@@ -179,26 +179,35 @@ def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
     Alles andere (Teilprojekt, Status-Gewichte) wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.UNEST_RULES:
-        b = analyse(issues, replace(a.settings, unest_rule=rule))
+        b = analyse(issues, replace(a.settings, unest_rule=rule), a.plan)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(b.progress) else float(b.progress), "Gewicht gesamt": float(b.weight), "Tickets ohne Story Points": b.n_unestimated})
     return rows
 
 
+def subtask_rule_comparison(issues, a: Analysis) -> list[dict]:
+    """Wirkung der Regeln für Sub-Tasks auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der zählenden Tickets. Alles andere wie in der aktuellen Auswertung."""
+    rows = []
+    for rule in C.SUB_RULES:
+        b = analyse(issues, replace(a.settings, sub_rule=rule), a.plan)
+        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(b.progress) else float(b.progress), "Gewicht gesamt": float(b.weight), "Zählende Tickets": b.n_atoms})
+    return rows
+
+
 UNEST_OPTIONS_MARKDOWN = """
-Ein Ticket ohne Story Points braucht ein Gewicht, sonst fehlt es im Fortschritt. Dafür gibt es mehrere Möglichkeiten. Zwei Fragen sind getrennt zu entscheiden: **aus welcher Vergleichsgruppe** der Ersatzwert kommt
-(Teil 1) und **wie mit Sub-Tasks** umzugehen ist, deren Story Points fehlen (Teil 2). Was „Stand“ als *wählbar* ausweist, steht links in der Seitenleiste zur Wahl; alles andere ist ein **Vorschlag** und noch nicht
+Ein Ticket ohne Story Points braucht ein Gewicht, sonst fehlt es im Fortschritt. Dafür gibt es mehrere Möglichkeiten. Zwei Fragen sind getrennt zu entscheiden (beide haben ein Auswahlmenü in der Seitenleiste): **aus welcher Vergleichsgruppe** der Ersatzwert kommt
+(Teil 1) und **wie mit Sub-Tasks** umzugehen ist, deren Story Points fehlen (Teil 2). Was „Stand“ als *wählbar* ausweist, steht in der Seitenleiste unter „Tickets ohne Story Points“ bzw. „Sub-Tasks einer Story“ zur Wahl (mit dem Buchstaben der Variante); alles andere ist ein **Vorschlag** und noch nicht
 eingebaut. Vor- und Nachteile sind Überlegungen zur Methode, keine Messungen an euren Daten.
 
 ### Teil 1: Woher kommt das Gewicht eines Tickets ohne Story Points?
 
 | Variante | Vergleichsgruppe | Vorteile | Nachteile | Stand |
 |---|---|---|---|---|
-| **A. Median der Stufe im Teilbaum** | geschätzte Blätter derselben Tiefe im gewählten Teilbaum | Das Teilprojekt ist ein eigenständiger Datensatz; einfach zu erklären; Stories und Sub-Tasks werden nicht gemischt | Gewichte und Fortschritt ändern sich mit dem gewählten Teilbaum; „Stufe“ ist die Tiefe, nicht der Typ (ein Bug ohne Epic liegt auf einer anderen Stufe als Stories unter Epics); bei wenigen geschätzten Tickets wackelt der Median | wählbar, Voreinstellung |
-| **B. Median der Stufe im ganzen Plan** | geschätzte Blätter derselben Tiefe im ganzen Plan | Dasselbe Ticket wiegt in jeder Ansicht gleich; ein Teilprojekt ist ein Ausschnitt der Gesamtansicht; größere Datenbasis | Das Teilprojekt ist nicht mehr eigenständig, Tickets außerhalb bestimmen die Gewichte; mischt Teams mit unterschiedlicher Story-Point-Skala | Vorschlag |
-| **C. Median je Ticket-Typ** | geschätzte Tickets desselben Typs (Story, Task, Bug, Sub-Task), im Teilbaum oder im ganzen Plan | Vergleicht Gleiches (Bugs sind oft kleiner als Stories), unabhängig von der Tiefe | Seltene Typen haben kaum geschätzte Tickets; Typnamen und Konventionen unterscheiden sich je Jira-Instanz | Vorschlag |
-| **D. Median der Geschwister** | geschätzte Tickets mit demselben übergeordneten Ticket | Lokal: passt zur Größe des Epics bzw. der Story und zur Skala des Teams | Oft gibt es zu wenige oder keine geschätzten Geschwister (Sub-Tasks einer Story); Gewichte schwanken von Epic zu Epic | Vorschlag |
-| **E. Median je Team** | geschätzte Tickets desselben Teams (Spalte Team) | Story Points gelten nur innerhalb eines Teams: Das ist die vergleichbarste Gruppe | Das Team-Feld ist oft leer; dünne Datenbasis je Team | Vorschlag |
-| **F. Rückfallkette** | Geschwister → gleicher Typ → gleiche Stufe → ganzer Plan → 1 | Nutzt die genaueste vorhandene Basis und fällt nur auf 1 zurück, wenn nirgends etwas geschätzt ist | Das Gewicht eines Tickets hängt davon ab, was in seiner Nähe geschätzt ist; schwerer zu erklären und nachzurechnen | Vorschlag |
+| **A. Median der Stufe im Teilbaum** | geschätzte Blätter derselben Tiefe im gewählten Teilbaum (Tiefe ab der Wurzel) | Das Teilprojekt ist ein eigenständiger Datensatz; einfach zu erklären; Stories und Sub-Tasks werden nicht gemischt | Gewichte und Fortschritt ändern sich mit dem gewählten Teilbaum; „Stufe“ ist die Tiefe, nicht der Typ (ein Bug ohne Epic liegt auf einer anderen Stufe als Stories unter Epics); bei wenigen geschätzten Tickets wackelt der Median | wählbar, Voreinstellung |
+| **B. Median der Stufe im ganzen Plan** | geschätzte Blätter derselben Tiefe im ganzen Plan | Dasselbe Ticket wiegt in jeder Ansicht gleich; ein Teilprojekt ist ein Ausschnitt der Gesamtansicht; größere Datenbasis | Das Teilprojekt ist nicht mehr eigenständig, Tickets außerhalb bestimmen die Gewichte; mischt Teams mit unterschiedlicher Story-Point-Skala | wählbar |
+| **C. Median je Ticket-Typ** | geschätzte Blätter desselben Typs (Story, Task, Bug, Sub-Task) im gewählten Teilbaum | Vergleicht Gleiches (Bugs sind oft kleiner als Stories), unabhängig von der Tiefe | Seltene Typen haben kaum geschätzte Tickets; Typnamen und Konventionen unterscheiden sich je Jira-Instanz | wählbar |
+| **D. Median der Geschwister** | geschätzte Tickets mit demselben übergeordneten Ticket | Lokal: passt zur Größe des Epics bzw. der Story und zur Skala des Teams | Oft gibt es zu wenige oder keine geschätzten Geschwister (Sub-Tasks einer Story); Gewichte schwanken von Epic zu Epic | wählbar |
+| **E. Median je Team** | geschätzte Blätter desselben Teams (Spalte Team; ohne Team bilden die Tickets ohne Team eine Gruppe) im gewählten Teilbaum | Story Points gelten nur innerhalb eines Teams: Das ist die vergleichbarste Gruppe | Das Team-Feld ist oft leer; dünne Datenbasis je Team | wählbar |
+| **F. Rückfallkette** | Geschwister → gleicher Typ → gleiche Stufe (je im Teilbaum) → alle geschätzten Tickets des ganzen Plans → 1 | Nutzt die genaueste vorhandene Basis und fällt nur auf 1 zurück, wenn nirgends etwas geschätzt ist | Das Gewicht eines Tickets hängt davon ab, was in seiner Nähe geschätzt ist; schwerer zu erklären und nachzurechnen | wählbar |
 | **G. Mittelwert statt Median** | wie A oder B | Nutzt alle Werte | Ausreißer (ein Ticket mit 21 Story Points) verschieben ihn stark; der Median ist robuster | Vorschlag, nicht empfohlen |
 | **H. Als 1 Story Point** | keine | Einfach, transparent, unabhängig von den Daten | Verzerrt, wenn typische Tickets größer sind: ungeschätzte Tickets wirken zu leicht, der Fortschritt fällt zu hoch aus, wenn sie offen sind | wählbar |
 | **I. Nicht zählen** | keine | Keine erfundenen Gewichte | Offene, ungeschätzte Tickets verschwinden aus dem Fortschritt, die Zahl wird zu optimistisch; bei vielen ungeschätzten Tickets kaum aussagekräftig | wählbar |
@@ -209,14 +218,14 @@ Seit nur Blätter zählen, zählt eine Story mit Sub-Tasks durch ihre Sub-Tasks.
 
 | Variante | Vorteile | Nachteile | Stand |
 |---|---|---|---|
-| **a. Sub-Tasks wie ungeschätzte Tickets** | Einheitliche Regel für alle Blätter | Die Story Points der Story fallen weg; die Summe der Sub-Tasks weicht von der Story ab; eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen | aktuell |
-| **b. Story Points der Story gleichmäßig auf die Sub-Tasks verteilen** (nur wenn keine Sub-Task eigene Story Points hat) | Das Gewicht der Story bleibt erhalten, „Epic vs. Total“ in der Status-Matrix stimmt, keine erfundenen Zahlen | Annahme gleich großer Sub-Tasks; setzt eine geschätzte Story voraus; Mischformen (einige Sub-Tasks geschätzt, andere nicht) brauchen eine Zusatzregel | Vorschlag |
-| **c. Story zählt selbst, Sub-Tasks bleiben außen vor** (frühere Fassung) | Die Story Points der Planung bleiben das Gewicht | Der Fortschritt der Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt | früher, nicht mehr eingebaut |
+| **a. Sub-Tasks wie ungeschätzte Tickets** | Einheitliche Regel für alle Blätter | Die Story Points der Story fallen weg; die Summe der Sub-Tasks weicht von der Story ab; eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen | wählbar, Voreinstellung |
+| **b. Story Points der Story gleichmäßig auf die Sub-Tasks verteilen** (nur wenn keine Sub-Task eigene Story Points hat) | Das Gewicht der Story bleibt erhalten, „Epic vs. Total“ in der Status-Matrix stimmt, keine erfundenen Zahlen | Annahme gleich großer Sub-Tasks; setzt eine geschätzte Story voraus; Mischformen (einige Sub-Tasks geschätzt, andere nicht) brauchen eine Zusatzregel | wählbar |
+| **c. Story zählt selbst, Sub-Tasks bleiben außen vor** (frühere Fassung) | Die Story Points der Planung bleiben das Gewicht | Der Fortschritt der Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt | wählbar |
 
 ### Einschätzung
 
 Das ist eine Einschätzung, keine Messung. Kommt es auf **vergleichbare Zahlen zwischen Teilprojekten** an (z. B. ein Bericht je Epic), sprechen B oder F dafür, die Vergleichsgruppe nicht vom gewählten Teilbaum abhängen zu lassen. Soll ein **Teilprojekt für sich stehen**, ist A richtig.
-Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie stark die Wahl die Zahl verschiebt, zeigt die Tabelle am Ende für die drei wählbaren Regeln an den geladenen Daten (sobald eine Datei geladen ist); für die Vorschläge gibt es noch keine Zahlen.
+Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie stark die Wahl die Zahl verschiebt, zeigt die Tabelle am Ende für alle wählbaren Regeln an den geladenen Daten (sobald eine Datei geladen ist); für den Vorschlag G gibt es keine Zahlen.
 """
 
 

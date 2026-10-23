@@ -1,4 +1,4 @@
-"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets, Hierarchiestufe der Zusammenfassung und geänderten Status-Gewichten."""
+"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets und von Sub-Tasks und geänderten Status-Gewichten."""
 
 from dataclasses import dataclass
 
@@ -11,6 +11,7 @@ import jira_core as A
 @dataclass(frozen=True, kw_only=True)
 class Settings:
     unest_rule: str = C.DEFAULT_UNEST                    # Gewicht eines Tickets ohne Story Points
+    sub_rule: str = C.DEFAULT_SUB                        # Sub-Tasks einer Story: wie ungeschätzte Tickets, Story Points verteilen oder nur die Story zählen lassen
     level: int = 1                                       # Hierarchiestufe der Zusammenfassung (1 = oberste)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
@@ -34,6 +35,7 @@ class Analysis:
     c: np.ndarray               # Gutschrift je Atom
     done: np.ndarray            # erledigt je Atom
     assign: A.Assignment        # Zuordnung der Atome zur Ebene
+    plan: tuple                 # der ganze Plan, auf den sich die Mediane „im ganzen Plan“ beziehen (ohne Angabe die Tickets der Auswertung selbst)
 
     @property
     def n_excluded(self) -> int:
@@ -54,12 +56,17 @@ def status_list(issues) -> list[str]:
     return sorted({t.status for t in issues}, key=lambda s: (A.status_credit(s), A.new_rank(s), s.lower()))
 
 
-def analyse(issues, settings: Settings = Settings()) -> Analysis:
+def analyse(issues, settings: Settings = Settings(), plan=None) -> Analysis:
+    """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen."""
     credit_of = A.status_credits(status_list(issues), settings.overrides)
     rejected = A.rejected_indices(issues)
-    atoms = A.select_atoms(issues, skip=rejected)
-    rejected_atoms = tuple(i for i in A.select_atoms(issues) if i in rejected)
-    w = A.atom_weights(issues, atoms, settings.unest_rule)
+    if settings.sub_rule not in C.SUB_RULES:
+        raise KeyError(settings.sub_rule)
+    subtasks = frozenset(i for i, t in enumerate(issues) if t.is_subtask) if settings.sub_rule == C.SUB_SELF else frozenset()        # c: Sub-Tasks sind weder Atome noch Kinder
+    atoms = A.select_atoms(issues, skip=rejected | subtasks)
+    rejected_atoms = tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected)
+    plan = tuple(issues) if plan is None else tuple(plan)
+    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE)
     c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
     unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
@@ -67,7 +74,7 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     first = A.assign_groups(issues, atoms, settings.level)
     stats = A.aggregate(first, w, c, done, unest)
     tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
-    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first)
+    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first, plan)
 
 
 def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:

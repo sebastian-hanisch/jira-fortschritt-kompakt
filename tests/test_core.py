@@ -76,7 +76,7 @@ def test_group_by_level_two_by_hand(mini):
 
 def test_every_level_assigns_each_atom_exactly_once(mini):
     atoms = A.select_atoms(mini)
-    for level in range(1, A.max_level(mini) + 2):
+    for level in range(1, 6):
         assign = A.assign_groups(mini, atoms, level)
         assert assign.atom.tolist() == list(range(len(atoms))) and assign.share.tolist() == [1.0] * len(atoms)
     assert A.assign_groups(mini, [], 1).labels == ()
@@ -94,7 +94,7 @@ def test_subtree_and_scope_make_the_root_a_standalone_dataset(mini):
     assert [t.key for t in scoped] == ["E2", "S3", "S4"] and scoped[0].parent == ""
     assert A.scope_issues(mini, C.ROOT_ALL) == tuple(mini)
     story = A.scope_issues(mini, "S2")
-    assert [t.key for t in story] == ["S2", "T1", "T2"] and story[0].parent == "" and A.max_level(story) == 2            # die Wurzel steht auf Stufe 1
+    assert [t.key for t in story] == ["S2", "T1", "T2"] and story[0].parent == "" and A.level_labels(story, [1, 2], 1) == ["S2", "S2"]            # die Wurzel steht auf Stufe 1
     with pytest.raises(ValueError):
         A.subtree_keys(mini, "gibt-es-nicht")
 
@@ -123,15 +123,20 @@ def test_tree_order_lists_every_ticket_once_even_in_a_cycle():
 # ---------------------------------------------------------------- Hierarchiestufen
 
 def test_levels_by_hand(mini):
-    assert A.max_level(mini) == 3
     atoms = A.select_atoms(mini)
     assert A.level_labels(mini, atoms, 1) == ["E1: Epic A", "E2: Epic B", "E2: Epic B", "B1", "E1: Epic A", "E1: Epic A"]
     assert A.level_labels(mini, atoms, 2) == ["S1", "S3", "S4", "(keine Stufe 2)", "S2", "S2"]
     assert A.level_labels(mini, atoms, 3) == ["(keine Stufe 3)"] * 4 + ["T1", "T2"]
     assert A.assign_groups(mini, atoms, 1).labels == ("B1", "E1: Epic A", "E2: Epic B")
-    assert A.max_level(()) == 1
-    deep = tuple(Issue(key=f"N{k}", parent=f"N{k - 1}" if k else "") for k in range(12))
-    assert A.max_level(deep) == C.MAX_LEVELS
+    assert A.level_labels((), [], 1) == []
+
+
+def test_summary_level_is_always_the_tickets_directly_below_the_root(mini):
+    assert A.summary_level(C.ROOT_ALL) == 1 and A.summary_level("E1") == 2 and A.summary_level("S2") == 2
+    scoped = A.scope_issues(mini, "E1")
+    atoms = A.select_atoms(scoped)
+    assert sorted(set(A.level_labels(scoped, atoms, A.summary_level("E1")))) == ["S1", "S2"]            # die Kinder von E1; T1 und T2 zählen zu S2
+    assert sorted(set(A.level_labels(mini, A.select_atoms(mini), A.summary_level(C.ROOT_ALL)))) == ["B1", "E1: Epic A", "E2: Epic B"]         # die obersten Tickets
 
 
 # ---------------------------------------------------------------- Hierarchiegraph
@@ -206,12 +211,67 @@ def test_root_for_click_accepts_containers_and_the_whole_project_only(mini):
     assert A.root_for_click(mini, "S1") is None and A.root_for_click(mini, "T1") is None and A.root_for_click(mini, "Projekt") is None and A.root_for_click(mini, "gibt-es-nicht") is None          # Blätter bewirken nichts
 
 
-def test_default_level_is_the_top_level_that_splits_the_atoms(mini):
+RULE_ITEMS = (
+    Issue(key="E1", type="Epic"), Issue(key="E2", type="Epic"),
+    Issue(key="A1", type="Story", parent="E1", points=8.0, team="Alpha"), Issue(key="A2", type="Story", parent="E1", points=2.0, team="Alpha"),
+    Issue(key="A3", type="Story", parent="E1", team="Alpha"),
+    Issue(key="B1", type="Bug", parent="E1", points=1.0, team="Beta"), Issue(key="B2", type="Bug", parent="E1", team="Beta"),
+    Issue(key="C1", type="Story", parent="E2", points=20.0, team="Beta"), Issue(key="C2", type="Story", parent="E2", team="Beta"),
+)
+
+
+@pytest.mark.parametrize("rule,expected", [
+    (C.UNEST_MEDIAN, [5.0, 5.0, 5.0]),                  # Stufe 1 im Teilbaum: Median von 8, 2, 1, 20
+    (C.UNEST_PLAN, [5.0, 5.0, 5.0]),                    # ohne Teilprojekt dieselbe Datenbasis
+    (C.UNEST_TYPE, [8.0, 1.0, 8.0]),                    # Stories 8, 2, 20 → 8; Bugs: nur 1
+    (C.UNEST_SIBLINGS, [2.0, 2.0, 20.0]),               # unter E1: 8, 2, 1 → 2 (auch für den Bug); unter E2: nur 20
+    (C.UNEST_TEAM, [5.0, 10.5, 10.5]),                  # Alpha: 8, 2 → 5; Beta: 1, 20 → 10,5
+    (C.UNEST_CHAIN, [2.0, 2.0, 20.0]),                  # Geschwister kommen zuerst
+    (C.UNEST_ONE, [1.0, 1.0, 1.0]),
+    (C.UNEST_IGNORE, [0.0, 0.0, 0.0])])
+def test_every_rule_for_unestimated_tickets_by_hand(rule, expected):
+    atoms = A.select_atoms(RULE_ITEMS)
+    assert [RULE_ITEMS[i].key for i in atoms] == ["A1", "A2", "A3", "B1", "B2", "C1", "C2"]
+    w = A.atom_weights(RULE_ITEMS, atoms, rule)
+    assert w[[0, 1, 3, 5]].tolist() == [8.0, 2.0, 1.0, 20.0]                                    # geschätzte Tickets behalten ihre Story Points
+    assert w[[2, 4, 6]].tolist() == expected
+
+
+def test_the_median_of_the_whole_plan_differs_from_the_subtree_only_for_a_subproject():
+    scoped = A.scope_issues(RULE_ITEMS, "E1")
+    atoms = A.select_atoms(scoped)
+    assert A.atom_weights(scoped, atoms, C.UNEST_MEDIAN)[[2]].tolist() == [2.0]                            # im Teilbaum: Median von 8, 2, 1
+    assert A.atom_weights(scoped, atoms, C.UNEST_PLAN, plan=RULE_ITEMS)[[2]].tolist() == [5.0]            # Stufe 1 des ganzen Plans: Median von 8, 2, 1, 20
+    assert A.atom_weights(scoped, atoms, C.UNEST_PLAN)[[2]].tolist() == [2.0]                             # ohne `plan` gilt der Teilbaum selbst
+
+
+def test_the_fallback_chain_goes_from_siblings_to_type_to_level_to_the_plan_to_one():
+    plan = (Issue(key="E", type="Epic"), Issue(key="F", type="Epic"),
+            Issue(key="S1", type="Story", parent="E"), Issue(key="K1", type="Bug", parent="E", points=3.0), Issue(key="K2", type="Bug", parent="E"),
+            Issue(key="T1", type="Task", parent="E", points=7.0), Issue(key="O1", type="Story", parent="F", points=10.0), Issue(key="U1", type="Sub-task", is_subtask=True, parent="T1"))
+    scoped = A.scope_issues(plan, "E")
+    atoms = A.select_atoms(scoped)
+    keys = [scoped[i].key for i in atoms]
+    w = dict(zip(keys, A.atom_weights(scoped, atoms, C.UNEST_CHAIN, plan=plan).tolist()))
+    assert keys == ["S1", "K1", "K2", "U1"]
+    assert w["K2"] == 3.0 and w["S1"] == 3.0                    # die geschätzten Geschwister unter E sind nur K1 (3): T1 hat Kinder und zählt nicht selbst; sie kommen vor Typ und Stufe
+    assert w["U1"] == 6.5                    # keine geschätzten Geschwister, kein Sub-Task, keine geschätzte Stufe 2 im Teilbaum: der Median aller geschätzten Blätter des Plans (K1 = 3, O1 = 10; T1 hat Kinder)
+    empty = (Issue(key="A"),)
+    assert A.atom_weights(empty, [0], C.UNEST_CHAIN).tolist() == [1.0]                                    # nirgends etwas geschätzt: 1
+
+
+def test_story_points_of_a_story_are_distributed_over_its_unestimated_sub_tasks(mini):
     atoms = A.select_atoms(mini)
-    assert A.default_level(mini, atoms) == 1                                                   # B1, E1 und E2 sind drei Gruppen
-    e1 = A.scope_issues(mini, "E1")
-    assert A.default_level(e1, A.select_atoms(e1)) == 2                                        # die Wurzel E1 ist auf Stufe 1 eine einzige Gruppe, auf Stufe 2 sind es S1 und S2
-    s2 = A.scope_issues(mini, "S2")
-    assert A.default_level(s2, A.select_atoms(s2)) == 2
-    single = (Issue(key="A"),)
-    assert A.default_level(single, A.select_atoms(single)) == 1 and A.default_level((), []) == 1
+    assert A.atom_weights(mini, atoms, C.UNEST_MEDIAN, distribute=True).tolist() == [3.0, 2.0, 2.5, 1.0, 2.5, 2.5]          # S2 (5) teilt sich auf T1 und T2
+    assert A.atom_weights(mini, atoms, C.UNEST_MEDIAN).tolist() == [3.0, 2.0, 2.5, 1.0, 1.0, 1.0]                              # ohne: Regel der Stufe
+
+
+def test_distribution_needs_an_estimated_story_and_no_estimated_sub_task():
+    def weights(*items):
+        atoms = A.select_atoms(items)
+        return {items[i].key: w for i, w in zip(atoms, A.atom_weights(items, atoms, C.UNEST_MEDIAN, distribute=True).tolist())}
+    sub = lambda key, parent, points=None: Issue(key=key, type="Sub-task", is_subtask=True, parent=parent, points=points)       # noqa: E731
+    assert weights(Issue(key="S", points=6.0), sub("U1", "S"), sub("U2", "S"), sub("U3", "S")) == {"U1": 2.0, "U2": 2.0, "U3": 2.0}
+    assert weights(Issue(key="S", points=5.0), sub("U1", "S", 2.0), sub("U2", "S")) == {"U1": 2.0, "U2": 2.0}                 # gemischt: die Regel (Median der Stufe 2)
+    assert weights(Issue(key="S"), sub("U1", "S"), sub("U2", "S")) == {"U1": 1.0, "U2": 1.0}                                    # die Story ist ungeschätzt: die Regel
+    assert weights(Issue(key="E", type="Epic", points=10.0), Issue(key="S1", parent="E"), Issue(key="S2", parent="E")) == {"S1": 1.0, "S2": 1.0}      # ein Epic verteilt nichts

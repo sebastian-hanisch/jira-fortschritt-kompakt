@@ -50,7 +50,7 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 
 * **Zählende Tickets:** die Blätter des Ticket-Baums, also Tickets ohne Kinder (Stories, Tasks und Bugs ohne Sub-Tasks und die Sub-Tasks selbst). Epics, Initiativen und Themen zählen nie selbst; eine Story mit Sub-Tasks
   zählt durch ihre Sub-Tasks, ihre eigenen Story Points und ihr eigener Status zählen dann nicht.
-* **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: Median der Tickets mit Story Points auf gleicher Stufe des Baums (Voreinstellung; gibt es auf der Stufe keines, gilt 1; im gewählten Teilbaum), 1 Story Point oder nicht zählen.
+* **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %.
 * **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
@@ -63,9 +63,9 @@ Sonst gibt es nichts einzustellen.
 ## Auswahl (Seitenleiste)
 
 * **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
-* **Tickets ohne Story Points:** Median der geschätzten Tickets auf gleicher Stufe, als 1 Story Point oder nicht zählen. Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
-* **Zusammenfassen auf Hierarchiestufe:** Stufe 1 ist die oberste (bei einem Teilprojekt die Wurzel selbst), Stufe 2 die darunter und so weiter; die Balken zeigen eine Gruppe je Ticket dieser Stufe. Voreingestellt ist die oberste Stufe, auf der
-  die Tickets in mindestens zwei Gruppen zerfallen.
+* **Tickets ohne Story Points:** acht Varianten (A Median der Stufe im Teilbaum, Voreinstellung; B Median der Stufe im ganzen Plan; C je Ticket-Typ; D der Geschwister; E je Team; F Rückfallkette; H als 1 Story Point; I nicht zählen). Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
+* **Sub-Tasks einer Story:** a Sub-Tasks zählen wie ungeschätzte Tickets (Voreinstellung); b die Story Points der Story verteilen sich gleichmäßig auf ihre Sub-Tasks, wenn keine eigene Story Points hat; c die Story zählt selbst, die Sub-Tasks bleiben außen vor.
+* **Zusammenfassung:** Die Balken fassen immer die Tickets direkt unter der Wurzel zusammen (im ganzen Plan die obersten), jedes Ticket mit allem darunter; ein Klick auf eine Kachel oder einen Knoten mit Kindern macht es zur neuen Wurzel.
 
 ## Hoch und runter im Baum
 
@@ -77,7 +77,7 @@ bitte melden.
 
 ## Ausgabe
 
-Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket der gewählten Hierarchiestufe, Kachelansicht, Hierarchiegraph und eine Tabelle: die
+Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Hierarchiegraph und eine Tabelle: die
 **Status-Matrix je Parent** (Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Die Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
 
 ## Datenschutz
@@ -103,11 +103,11 @@ Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`htt
 
 Der Ausklapper „Tickets ohne Story Points: Berechnungsmöglichkeiten“ in der App (nach „Welche Status zählen wie viel?“) stellt die Varianten mit Vor- und Nachteilen gegenüber (Median der Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team,
 Rückfallkette, Mittelwert, 1 Story Point, nicht zählen; dazu drei Möglichkeiten für Sub-Tasks ohne Story Points) und zeigt, wie sich der Fortschritt unter den drei wählbaren Regeln an den geladenen Daten verschiebt.
-Eingebaut sind die Mediane der Stufe im Teilbaum, 1 Story Point und „nicht zählen“; alles andere ist ein Vorschlag.
+Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Points“); G (Mittelwert) ist nur ein Vorschlag. Die drei Möglichkeiten für Sub-Tasks (a bis c) stehen in der Auswahl „Sub-Tasks einer Story“ zur Wahl.
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
 
 ## Aufbau

@@ -55,7 +55,7 @@ def test_the_treemap_and_the_hierarchy_graph_are_shown():
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
     at = _open(plan_csv(make_mini()))
     labels = [s.label for s in at.sidebar.selectbox]
-    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Zusammenfassen auf Hierarchiestufe"]
+    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Sub-Tasks einer Story"]
     assert not at.sidebar.toggle and not at.sidebar.radio and not at.sidebar.slider
     assert not at.radio or [r.label for r in at.radio] == ["Kennzahl je Zelle"]
 
@@ -63,22 +63,27 @@ def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
 def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
     at = _open(plan_csv(make_mini()))
     assert at.sidebar.selectbox(key="unest_rule").value == C.UNEST_MEDIAN and at.sidebar.selectbox(key="unest_rule").options == list(C.UNEST_RULES)
-    expected = {C.UNEST_MEDIAN: ("66,7 %", "10,5"), C.UNEST_ONE: ("64,4 %", "9,0"), C.UNEST_IGNORE: ("66,7 %", "6,0")}          # 7 / 10,5; 5,8 / 9; 4 / 6 (Gewicht gesamt je Regel)
+    expected = {C.UNEST_MEDIAN: ("66,7 %", "10,5"), C.UNEST_PLAN: ("66,7 %", "10,5"), C.UNEST_TYPE: ("66,7 %", "10,5"), C.UNEST_SIBLINGS: ("66,0 %", "10,0"), C.UNEST_TEAM: ("63,3 %", "12,0"),
+                C.UNEST_CHAIN: ("63,3 %", "12,0"), C.UNEST_ONE: ("64,4 %", "9,0"), C.UNEST_IGNORE: ("66,7 %", "6,0")}          # 7 / 10,5; 6,6 / 10; 7,6 / 12; 5,8 / 9; 4 / 6 (Gewicht gesamt je Regel)
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="unest_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
         assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})" and any(f"Regel: {rule}" in w.value for w in at.warning)
 
 
-def test_every_hierarchy_level_runs_without_error():
+def test_the_summary_is_always_one_level_below_the_root():
+    import json
     at = _open(plan_csv(make_mini()))
-    level = at.sidebar.selectbox(key="level")
-    assert level.value == 1 and level.options == ["Stufe 1 (oberste)", "Stufe 2", "Stufe 3"]
-    for n in (1, 2, 3):
-        at.sidebar.selectbox(key="level").set_value(n).run(timeout=TIMEOUT)
-        _ok(at, n)
-        assert at.metric[0].value == "66,7 %"                                                   # die Stufe ändert den Gesamtwert nicht
-        assert any(f"Hierarchiestufe {n}" in m.value for m in at.markdown)
+    assert not [s for s in at.sidebar.selectbox if s.key == "level"]                           # keine Auswahl der Stufe
+    assert any("direkt unter dem Plan" in m.value for m in at.markdown)
+    bars = lambda: json.loads(at.get("plotly_chart")[0].proto.spec)["data"][0]["y"]          # noqa: E731
+    assert bars() == ["B1", "E1: Epic A", "E2: Epic B"]                                        # im ganzen Plan die obersten Tickets
+    at.sidebar.selectbox(key="root").set_value("E1").run(timeout=TIMEOUT)
+    _ok(at)
+    assert any("direkt unter der Wurzel" in m.value for m in at.markdown) and bars() == ["S1", "S2"]          # die Kinder von E1; T1 und T2 zählen zu S2
+    assert at.metric[0].value == "80,0 %"
+    at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
+    assert bars() == ["T1", "T2"]
 
 
 def test_the_subproject_selection_rescopes_the_numbers():
@@ -133,12 +138,14 @@ def test_all_tickets_rejected_shows_a_dash_and_no_error():
 
 
 @pytest.mark.parametrize("seed", [0, 3, 7])
-def test_random_projects_render_on_every_level(seed):
-    at = _open(plan_csv(random_project(seed, n_epics=6)))
+def test_random_projects_render_below_every_root(seed):
+    import jira_core as A
+    project = random_project(seed, n_epics=6)
+    at = _open(plan_csv(project))
     _ok(at, seed)
-    for n in range(1, len(at.sidebar.selectbox(key="level").options) + 1):
-        at.sidebar.selectbox(key="level").set_value(n).run(timeout=TIMEOUT)
-        _ok(at, seed, n)
+    for root, _ in A.root_choices(project):
+        at.sidebar.selectbox(key="root").set_value(root).run(timeout=TIMEOUT)
+        _ok(at, seed, root)
 
 
 def test_the_options_box_describes_the_variants_and_shows_the_effect_on_the_data():
@@ -150,7 +157,7 @@ def test_the_options_box_describes_the_variants_and_shows_the_effect_on_the_data
     text = " ".join(m.value for m in at.markdown)
     assert "Teil 1: Woher kommt das Gewicht" in text and "Teil 2: Sub-Tasks ohne Story Points" in text and "Wirkung der wählbaren Regeln" in text
     table = next(t.value for t in at.dataframe if "Regel" in t.value.columns)
-    assert list(table["Regel"]) == list(C.UNEST_RULES) and list(table["Gewicht gesamt"]) == [10.5, 9.0, 6.0]
+    assert list(table["Regel"]) == list(C.UNEST_RULES) and list(table["Gewicht gesamt"]) == [10.5, 10.5, 10.5, 10.0, 12.0, 12.0, 9.0, 6.0]
 
 
 def test_the_options_box_is_there_before_a_file_is_loaded_without_the_table():
@@ -163,8 +170,8 @@ def test_up_buttons_stand_above_the_selection_in_the_sidebar():
     at = _open(plan_csv(make_mini()))
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
     assert [b.key for b in at.sidebar.button] == ["nav_top", "nav_up"] and not [b for b in at.main.button if str(b.key).startswith("nav_")]
-    elements = [e.key for e in at.sidebar if getattr(e, "key", None) in ("nav_up", "nav_top", "root", "unest_rule", "level")]
-    assert elements[:3] == ["nav_top", "nav_up", "root"] and elements[-2:] == ["unest_rule", "level"]
+    elements = [e.key for e in at.sidebar if getattr(e, "key", None) in ("nav_up", "nav_top", "root", "unest_rule")]
+    assert elements[:3] == ["nav_top", "nav_up", "root"] and elements[-2:] == ["root", "unest_rule"]
 
 
 def test_navigation_up_and_down_changes_the_root():
@@ -198,3 +205,16 @@ def test_both_charts_report_clicks_as_a_selection():
     clickable = [n for n in charts if {k.arg for k in n.keywords} >= {"on_select", "selection_mode"}]
     assert len(charts) == 3 and len(clickable) == 2                                      # Kachelansicht und Graph; die Balken nicht
     assert not any(isinstance(n, ast.Name) and n.id == "child_pick" for n in ast.walk(tree)) and "Darunter öffnen" not in open(APP_PATH, encoding="utf-8").read()
+
+
+def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
+    at = _open(plan_csv(make_mini()))
+    pick = at.sidebar.selectbox(key="sub_rule")
+    assert pick.value == C.SUB_RULE and pick.options == list(C.SUB_RULES)
+    expected = {C.SUB_RULE: ("66,7 %", "10,5"), C.SUB_SHARE: ("63,0 %", "13,5"), C.SUB_SELF: ("45,7 %", "14,0")}          # 7 / 10,5; 8,5 / 13,5; 6,4 / 14
+    for rule, (value, weight) in expected.items():
+        at.sidebar.selectbox(key="sub_rule").set_value(rule).run(timeout=TIMEOUT)
+        _ok(at, rule)
+        assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})"
+    table = next(t.value for t in at.dataframe if "Zählende Tickets" in t.value.columns)
+    assert list(table["Regel"]) == list(C.SUB_RULES)

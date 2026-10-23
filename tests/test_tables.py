@@ -160,18 +160,18 @@ def test_status_rules_text_lists_the_credits_and_the_examples():
 
 def test_rule_comparison_by_hand(mini):
     rows = T.unestimated_rule_comparison(mini, ev.analyse(mini))
-    assert [r["Regel"] for r in rows] == list(C.UNEST_RULES)
-    assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 5.8 / 9, 4 / 6])           # Median der Stufe, als 1 Story Point, nicht zählen
-    assert [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 9.0, 6.0]) and [r["Tickets ohne Story Points"] for r in rows] == [3, 3, 3]
+    assert [r["Regel"] for r in rows] == list(C.UNEST_RULES) and len(rows) == 8
+    assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 7 / 10.5, 7 / 10.5, 6.6 / 10, 7.6 / 12, 7.6 / 12, 5.8 / 9, 4 / 6])
+    assert [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 10.5, 10.5, 10.0, 12.0, 12.0, 9.0, 6.0]) and [r["Tickets ohne Story Points"] for r in rows] == [3] * 8
 
 
 def test_rule_comparison_keeps_root_and_status_weights_and_handles_no_weight():
     from jira_core import scope_issues
     sub = scope_issues(ITEMS, "E2")
     rows = T.unestimated_rule_comparison(sub, ev.analyse(sub, ev.Settings(root="E2")))
-    assert rows[0]["Gewicht gesamt"] == 15.0 and rows[2]["Gewicht gesamt"] == 10.0          # Median 5 für S12 gegen „nicht zählen“
+    assert rows[0]["Gewicht gesamt"] == 15.0 and rows[-1]["Gewicht gesamt"] == 10.0          # Median 5 für S12 gegen „nicht zählen“
     none = (Issue(key="A", status="Done"),)
-    assert [r["Fortschritt"] for r in T.unestimated_rule_comparison(none, ev.analyse(none))] == [pytest.approx(1.0), pytest.approx(1.0), None]
+    assert [r["Fortschritt"] for r in T.unestimated_rule_comparison(none, ev.analyse(none))] == [pytest.approx(1.0)] * 7 + [None]
     changed = ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),)))
     assert T.unestimated_rule_comparison(ITEMS, changed)[0]["Fortschritt"] == ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),))).progress
 
@@ -183,3 +183,12 @@ def test_the_options_text_names_every_variant_with_pros_and_cons_and_its_status(
     for letter in "abc":
         assert f"**{letter}. " in text, letter
     assert text.count("wählbar") >= 3 and "Vorschlag" in text and "Vorteile" in text and "Nachteile" in text and "Einschätzung" in text and "keine Messungen" in text
+
+
+def test_sub_task_rule_comparison_by_hand(mini):
+    rows = T.subtask_rule_comparison(mini, ev.analyse(mini))
+    assert [r["Regel"] for r in rows] == list(C.SUB_RULES)
+    assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 8.5 / 13.5, 6.4 / 14]) and [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 13.5, 14.0])
+    assert [r["Zählende Tickets"] for r in rows] == [6, 6, 5]
+    other = T.subtask_rule_comparison(mini, ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_ONE)))
+    assert other[0]["Gewicht gesamt"] == pytest.approx(9.0)                                       # die gewählte Regel für Tickets ohne Story Points gilt mit

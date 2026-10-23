@@ -1,7 +1,7 @@
 """Kern (nur numpy/Standardbibliothek): gewichteter Fortschritt aus Status, Story Points und Aggregationsebenen.
 
 Modell: Ein *Atom* ist ein Blatt des Ticket-Baums, also ein Ticket ohne Kinder (Story, Task, Bug oder Sub-Task; Epics, Initiativen und Themen zählen nie selbst, und eine Story mit
-Sub-Tasks zählt durch ihre Sub-Tasks). Es hat ein Gewicht w (die Story Points; fehlt sie, nach der gewählten Regel: Median der geschätzten Atome derselben Stufe, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
+Sub-Tasks zählt durch ihre Sub-Tasks). Es hat ein Gewicht w (die Story Points; fehlen sie, nach der gewählten Regel: ein Median geschätzter Atome, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
 P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sind keine Atome."""
 
 import re
@@ -273,25 +273,65 @@ def root_choices(issues) -> list[tuple[str, int]]:
 
 # ---------------------------------------------------------------- Gewichte
 
-def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None) -> np.ndarray:
-    """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel: nicht zählen = 0, als 1 Story Point oder der Median der geschätzten Atome **derselben Stufe**
-    (Tiefe im Ticket-Baum; gibt es auf dieser Stufe kein geschätztes Atom, gilt 1). Die Mediane bilden die geschätzten Atome aus `basis` (Voreinstellung: `atoms`), z. B. die gezählten
-    Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden."""
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False) -> np.ndarray:
+    """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (die Buchstaben stehen in `jira_constants`). Die Regeln mit Median nehmen den Median der geschätzten Atome
+    aus `basis` (Voreinstellung: `atoms`, z. B. die gezählten Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden), und zwar aus derselben Gruppe wie das Ticket: A gleiche Stufe
+    (Tiefe im Ticket-Baum), C gleicher Typ, D gleiches übergeordnetes Ticket, E gleiches Team; B gleiche Stufe im ganzen Plan (`plan`, Voreinstellung `issues`: die Stufe zählt dann in
+    den Tiefen des ganzen Plans, nicht des Teilbaums); F die erste Gruppe der Kette Geschwister, Typ, Stufe, sonst der Median aller geschätzten Atome des ganzen Plans. Gibt es in der
+    Gruppe kein geschätztes Atom, gilt 1. H setzt 1, I setzt 0 (das Ticket zählt dann nicht im Gewicht). Mit `distribute` teilen die Atome unter einer geschätzten, nicht
+    zusammenfassenden Eltern-Story die Story Points der Story gleichmäßig unter sich auf, wenn keines von ihnen eigene Story Points hat; sonst gilt die Regel."""
+    if rule not in C.UNEST_RULES:
+        raise KeyError(rule)
+    pool = [i for i in (atoms if basis is None else basis) if issues[i].points is not None]
     depth = tree_depths(issues)
-    given: dict[int, list[float]] = {}
-    for i in (atoms if basis is None else basis):
-        if issues[i].points is not None:
-            given.setdefault(depth[i], []).append(issues[i].points)
 
-    def fill(level: int) -> float:
-        if rule == C.UNEST_IGNORE:
-            return 0.0
+    def table(key_of, members, source=issues):
+        groups: dict = {}
+        for i in members:
+            groups.setdefault(key_of(i), []).append(source[i].points)
+        return {k: float(median(v)) for k, v in groups.items()}
+    by_level = table(lambda i: depth[i], pool)
+    by_type = table(lambda i: issues[i].type.strip().lower(), pool)
+    by_parent = table(lambda i: issues[i].parent, pool)
+    by_team = table(lambda i: issues[i].team, pool)
+    plan_issues = issues if plan is None else plan
+    plan_atoms = select_atoms(plan_issues, skip=rejected_indices(plan_issues))
+    plan_pool = [j for j in plan_atoms if plan_issues[j].points is not None]
+    plan_depth = dict(zip((t.key for t in plan_issues), tree_depths(plan_issues)))
+    plan_by_level = table(lambda j: plan_depth[plan_issues[j].key], plan_pool, plan_issues)
+    plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
+
+    def fill(i: int) -> float:
+        t = issues[i]
         if rule == C.UNEST_ONE:
             return 1.0
-        if rule != C.UNEST_MEDIAN:
-            raise KeyError(rule)
-        return float(median(given[level])) if level in given else 1.0
-    return np.array([issues[i].points if issues[i].points is not None else fill(depth[i]) for i in atoms], dtype=float)
+        if rule == C.UNEST_IGNORE:
+            return 0.0
+        if rule == C.UNEST_MEDIAN:
+            return by_level.get(depth[i], 1.0)
+        if rule == C.UNEST_PLAN:
+            return plan_by_level.get(plan_depth.get(t.key), 1.0)
+        if rule == C.UNEST_TYPE:
+            return by_type.get(t.type.strip().lower(), 1.0)
+        if rule == C.UNEST_SIBLINGS:
+            return by_parent.get(t.parent, 1.0)
+        if rule == C.UNEST_TEAM:
+            return by_team.get(t.team, 1.0)
+        for found in (by_parent.get(t.parent), by_type.get(t.type.strip().lower()), by_level.get(depth[i]), plan_median):         # Rückfallkette
+            if found is not None:
+                return found
+        return 1.0
+    share: dict[int, float] = {}
+    if distribute:
+        by_key = {t.key: t for t in issues}
+        members: dict[str, list[int]] = {}
+        for i in atoms:
+            members.setdefault(issues[i].parent, []).append(i)
+        for parent_key, group in members.items():
+            parent = by_key.get(parent_key)
+            if parent is not None and not parent.is_epic and parent.points is not None and all(issues[i].points is None for i in group):
+                share.update({i: parent.points / len(group) for i in group})
+    return np.array([issues[i].points if issues[i].points is not None else share.get(i, fill(i)) for i in atoms], dtype=float)
 
 
 # ---------------------------------------------------------------- Aggregationsebenen
@@ -319,9 +359,9 @@ def hierarchy_chains(issues) -> list[list[int]]:
     return chains
 
 
-def max_level(issues) -> int:
-    """Tiefste vorkommende Hierarchiestufe (1 = oberste Stufe), höchstens `C.MAX_LEVELS`."""
-    return min(max((len(c) for c in hierarchy_chains(issues)), default=1), C.MAX_LEVELS)
+def summary_level(root: str) -> int:
+    """Hierarchiestufe der Zusammenfassung: immer die Tickets direkt unter der Wurzel, also Stufe 2 (Stufe 1 ist die Wurzel selbst); im ganzen Projekt, das keine Wurzel hat, die obersten Tickets (Stufe 1)."""
+    return 1 if root == C.ROOT_ALL else 2
 
 
 def level_labels(issues, atoms, level: int) -> list[str]:
@@ -337,14 +377,6 @@ def level_labels(issues, atoms, level: int) -> list[str]:
         else:
             out.append(f"(keine Stufe {level})")
     return out
-
-
-def default_level(issues, atoms) -> int:
-    """Die oberste Hierarchiestufe, auf der die Atome in mindestens zwei Gruppen zerfallen (sonst 1): So zeigt die Zusammenfassung zuerst eine Aufteilung statt eines einzigen Balkens."""
-    for level in range(1, max_level(issues) + 1):
-        if len(set(level_labels(issues, atoms, level))) >= 2:
-            return level
-    return 1
 
 
 def assign_groups(issues, atoms, level: int = 1) -> Assignment:

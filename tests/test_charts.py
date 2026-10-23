@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 import jira_constants as C
-import jira_core as A
 import jira_evaluation as ev
 from conftest import random_project
 from jira_core import Issue
@@ -38,7 +37,7 @@ def test_tree_graph_has_one_marker_per_node_and_names_unmeasurable_nodes_grey(mi
 @pytest.mark.parametrize("seed", range(6))
 def test_all_charts_build_for_random_projects_on_every_level(seed):
     project = random_project(seed, n_epics=3 + seed)
-    for level in range(1, A.max_level(project) + 2):
+    for level in range(1, 6):
         a = ev.analyse(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
         assert build_progress_bars(a.stats, "SP") is not None and build_tree_graph(a.tree, "SP") is not None and build_tiles(a.tree, "SP") is not None
 

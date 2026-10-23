@@ -7,13 +7,26 @@ UNIT = "SP"                 # Einheit der Gewichte: Story Points
 
 # Gutschrift je Klasse, in die der Name eines Status fällt (jira_core.status_class); alles andere zählt 0, zurückgewiesene Tickets zählen gar nicht
 STATUS_CLASS_CREDIT = {"done": 1.0, "merged": 0.8, "review": 0.8, "test": 0.9}
-UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE = "Median der geschätzten Tickets auf gleicher Stufe", "als 1 Story Point", "nicht zählen"      # Gewicht eines Tickets ohne Story Points
-UNEST_RULES = (UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE)
+# Gewicht eines Tickets ohne Story Points; die Buchstaben entsprechen den Varianten im Ausklapper „Berechnungsmöglichkeiten“ (G, der Mittelwert, ist nicht eingebaut)
+UNEST_MEDIAN = "A. Median der Stufe im Teilbaum"
+UNEST_PLAN = "B. Median der Stufe im ganzen Plan"
+UNEST_TYPE = "C. Median je Ticket-Typ"
+UNEST_SIBLINGS = "D. Median der Geschwister"
+UNEST_TEAM = "E. Median je Team"
+UNEST_CHAIN = "F. Rückfallkette (Geschwister, Typ, Stufe, ganzer Plan)"
+UNEST_ONE = "H. als 1 Story Point"
+UNEST_IGNORE = "I. nicht zählen"
+UNEST_RULES = (UNEST_MEDIAN, UNEST_PLAN, UNEST_TYPE, UNEST_SIBLINGS, UNEST_TEAM, UNEST_CHAIN, UNEST_ONE, UNEST_IGNORE)
 DEFAULT_UNEST = UNEST_MEDIAN
+# Sub-Tasks einer Story (die Buchstaben entsprechen Teil 2 im Ausklapper „Berechnungsmöglichkeiten“)
+SUB_RULE = "a. Sub-Tasks zählen wie ungeschätzte Tickets"
+SUB_SHARE = "b. Story Points der Story auf ihre Sub-Tasks verteilen"
+SUB_SELF = "c. Story zählt selbst, Sub-Tasks bleiben außen vor"
+SUB_RULES = (SUB_RULE, SUB_SHARE, SUB_SELF)
+DEFAULT_SUB = SUB_RULE
 COMPLETED_MIN_CREDIT = 0.9      # „Completed“ der Status-Matrix: alle Status ab diesem Gewicht
 
 ROOT_ALL = ""              # Wurzel der Auswertung: leer = ganzes Projekt
-MAX_LEVELS = 8             # höchste wählbare Hierarchiestufe
 GRAPH_MAX_NODES = 250      # Hierarchiegraph: mehr Knoten lassen sich nicht lesen; die tiefste Ebene wird dann zusammengefasst
 GRAPH_LABEL_MAX = 60       # bis zu dieser Knotenzahl trägt jeder Knoten seinen Schlüssel, darüber nur die Knoten mit Kindern
 

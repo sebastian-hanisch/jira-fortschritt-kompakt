@@ -111,7 +111,7 @@ def test_subproject_equals_the_full_analysis_restricted_to_its_atoms_when_everyt
 @pytest.mark.parametrize("seed", range(30))
 def test_random_projects_pass_the_internal_consistency_check_on_every_level(seed):
     project = random_project(seed, n_epics=2 + seed % 6)
-    for level in range(1, A.max_level(project) + 2):
+    for level in range(1, 6):
         a = ev.analyse(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
         assert ev.check_consistency(a) == [], (seed, level)
         assert math.isnan(a.progress) or 0.0 <= a.progress <= 1.0
@@ -131,5 +131,43 @@ def test_unestimated_note():
     kind, text = ev.unestimated_note(1, 10)
     assert kind == "info" and "1 von 10 Tickets (10,0 %)" in text and "Median" in text
     assert ev.unestimated_note(2, 10)[0] == "warning"                                      # ab 20 % ein Warnhinweis
-    assert "Regel: als 1 Story Point" in ev.unestimated_note(1, 10, C.UNEST_ONE)[1] and "im Fortschritt nicht auf" not in ev.unestimated_note(1, 10, C.UNEST_ONE)[1]
-    assert "Regel: nicht zählen" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1] and "im Fortschritt nicht auf" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1]
+    assert "Regel: H. als 1 Story Point" in ev.unestimated_note(1, 10, C.UNEST_ONE)[1] and "im Fortschritt nicht auf" not in ev.unestimated_note(1, 10, C.UNEST_ONE)[1]
+    assert "Regel: I. nicht zählen" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1] and "im Fortschritt nicht auf" in ev.unestimated_note(1, 10, C.UNEST_IGNORE)[1]
+
+
+def test_every_rule_changes_weight_and_progress_by_hand(mini):
+    expected = {                                       # Regel: (Gesamtgewicht, angerechnet); Gutschriften S1 1, S3 0, S4 0,8, B1 1, T1 1, T2 0
+        C.UNEST_MEDIAN: (10.5, 7.0), C.UNEST_PLAN: (10.5, 7.0), C.UNEST_TYPE: (10.5, 7.0), C.UNEST_SIBLINGS: (10.0, 6.6), C.UNEST_TEAM: (12.0, 7.6), C.UNEST_CHAIN: (12.0, 7.6),
+        C.UNEST_ONE: (9.0, 5.8), C.UNEST_IGNORE: (6.0, 4.0)}
+    assert list(expected) == list(C.UNEST_RULES)
+    for rule, (weight, credited) in expected.items():
+        a = ev.analyse(mini, ev.Settings(unest_rule=rule))
+        assert a.weight == pytest.approx(weight) and a.progress == pytest.approx(credited / weight) and a.n_unestimated == 3 and ev.check_consistency(a) == [], rule
+
+
+def test_a_subproject_uses_the_whole_plan_for_the_plan_rules(mini):
+    sub = A.scope_issues(mini, "E2")
+    own = ev.analyse(sub, ev.Settings(root="E2", unest_rule=C.UNEST_PLAN))                       # ohne Plan: nur der Teilbaum (S3 = 2)
+    with_plan = ev.analyse(sub, ev.Settings(root="E2", unest_rule=C.UNEST_PLAN), mini)         # Stufe 1 des ganzen Plans: Median von 3 und 2 = 2,5
+    assert own.weight == 4.0 and with_plan.weight == 4.5 and with_plan.plan == tuple(mini)
+    assert ev.analyse(sub, ev.Settings(root="E2")).plan == tuple(sub)
+
+
+def test_every_sub_task_rule_by_hand(mini):
+    # a: S2 zählt durch T1 (Done) und T2; b: T1 und T2 teilen sich die 5 Story Points von S2; c: S2 zählt selbst (In Progress, 5), T1 und T2 bleiben außen vor
+    expected = {C.SUB_RULE: (6, 10.5, 7.0), C.SUB_SHARE: (6, 13.5, 8.5), C.SUB_SELF: (5, 14.0, 6.4)}          # (zählende Tickets, Gesamtgewicht, angerechnet); bei c wiegt S4 den Median 3 von S1, S2, S3
+    assert list(expected) == list(C.SUB_RULES)
+    for rule, (n, weight, credited) in expected.items():
+        a = ev.analyse(mini, ev.Settings(sub_rule=rule))
+        assert (a.n_atoms, a.weight) == (n, pytest.approx(weight)) and a.progress == pytest.approx(credited / weight) and ev.check_consistency(a) == [], rule
+    c = ev.analyse(mini, ev.Settings(sub_rule=C.SUB_SELF))
+    assert [mini[i].key for i in c.atoms] == ["S1", "S2", "S3", "S4", "B1"] and c.progress_done == pytest.approx(4 / 14) and c.progress_count == pytest.approx(2 / 5)
+    with pytest.raises(KeyError):
+        ev.analyse(mini, ev.Settings(sub_rule="Unsinn"))
+
+
+def test_the_sub_task_rule_c_keeps_the_rejected_logic():
+    a = ev.analyse(TREE, ev.Settings(sub_rule=C.SUB_SELF))
+    # S3 zählt selbst (4, In Progress), seine Sub-Tasks bleiben außen vor; S2 und S4 (unter dem zurückgewiesenen E2) sind die zurückgewiesenen Blätter
+    assert [TREE[i].key for i in a.atoms] == ["S1", "S3", "X"] and [TREE[i].key for i in a.rejected_atoms] == ["S2", "S4"]
+    assert a.weight == 9.0 and a.progress == pytest.approx((2 * 1.0 + 4 * 0.0 + 3 * 0.8) / 9)
