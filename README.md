@@ -68,11 +68,11 @@ Sonst gibt es nichts einzustellen.
 
 ## Hoch und runter im Baum
 
-**Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. **Hoch:** Die Knöpfe
-über der Auswahl in der Seitenleiste gehen eine Stufe hoch oder zurück zum ganzen Plan. Alternativ wechselt die Auswahl „Teilprojekt“ die Wurzel, und „Darunter öffnen“ bietet die Tickets mit Kindern direkt unter der
-aktuellen Wurzel an. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an
-(`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Versuch im Browser mit einer ausgelösten Auswahl, den Mausklick selbst konnte ich in meiner Testumgebung nicht auslösen
-(dort kam auch in einem minimalen Streamlit-Diagramm keine Auswahl an). Wenn der Klick bei euch nichts bewirkt, bitte melden.
+**Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. Ein Klick auf
+ein Blatt (ein Ticket ohne Kinder) bewirkt nichts. **Hoch:** Die Knöpfe über der Auswahl in der Seitenleiste gehen eine Stufe hoch („Eine Stufe hoch“) oder zurück zum ganzen Plan („Ganzer Plan“). Alternativ
+wechselt die Auswahl „Teilprojekt“ die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an (`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Versuch im Browser
+mit einer ausgelösten Auswahl, den Mausklick selbst konnte ich in meiner Testumgebung nicht auslösen (dort kam auch in einem minimalen Streamlit-Diagramm keine Auswahl an). Wenn der Klick bei euch nichts bewirkt,
+bitte melden.
 
 ## Ausgabe
 

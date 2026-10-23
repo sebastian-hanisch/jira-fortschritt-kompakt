@@ -228,12 +228,4 @@ def test_parent_root_goes_one_level_up_to_a_ticket_that_can_be_a_root(mini):
 
 def test_root_for_click_accepts_containers_and_the_whole_project_only(mini):
     assert A.root_for_click(mini, "E2") == "E2" and A.root_for_click(mini, "S2") == "S2" and A.root_for_click(mini, C.ROOT_ALL) == C.ROOT_ALL
-    assert A.root_for_click(mini, "S1") is None and A.root_for_click(mini, "T1") is None and A.root_for_click(mini, "Projekt") is None and A.root_for_click(mini, "gibt-es-nicht") is None
-
-
-def test_child_roots_are_the_tickets_with_children_directly_below_the_root(mini):
-    assert A.child_roots(mini, C.ROOT_ALL) == ["E1", "E2"]               # S2 hängt unter E1, nicht unter dem Projekt
-    assert A.child_roots(mini, "E1") == ["S2"] and A.child_roots(mini, "S2") == [] and A.child_roots(mini, "E2") == []        # S3 und S4 haben keine Kinder
-    deep = (Issue(key="I", type="Initiative"), Issue(key="E", type="Epic", parent="I"), Issue(key="S", parent="E"), Issue(key="U", type="Sub-task", is_subtask=True, parent="S"),
-            Issue(key="O", parent="Fremd"), Issue(key="P", parent="O"))
-    assert A.child_roots(deep, C.ROOT_ALL) == ["I", "O"] and A.child_roots(deep, "I") == ["E"] and A.child_roots(deep, "E") == ["S"] and A.child_roots(deep, "S") == []        # „O“ hat Eltern außerhalb der Daten
+    assert A.root_for_click(mini, "S1") is None and A.root_for_click(mini, "T1") is None and A.root_for_click(mini, "Projekt") is None and A.root_for_click(mini, "gibt-es-nicht") is None          # Blätter bewirken nichts

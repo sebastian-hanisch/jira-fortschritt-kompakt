@@ -78,10 +78,8 @@ def test_tile_layout_of_the_mini_project_by_hand(mini):
     level1 = [t for t in tiles if t.level == 1]
     assert [t.key for t in level1] == ["E1", "E2", "B1"] and [t.weight for t in level1] == [5.0, 4.5, 1.0]            # nach Gewicht, Kinder der Wurzel (Projekt)
     assert sum(t.w * t.h for t in level1) == pytest.approx(TILE_W * TILE_H) and [t.framed for t in level1] == [True, True, False]
-    assert [t.drillable for t in level1] == [True, True, False]                                                       # B1 hat keine Kinder
     level2 = {(t.key): t for t in tiles if t.level == 2}
     assert sorted(level2) == ["S1", "S2", "S3", "S4"] and level2["S2"].weight == 2.0 and level2["S2"].progress == pytest.approx(0.5)
-    assert level2["S2"].drillable and not level2["S1"].drillable                                                      # S2 hat Sub-Tasks, S1 ist ein Blatt
     for t in level2.values():                                                                                         # die kleinen Kacheln liegen in ihrer großen
         outer = next(o for o in level1 if o.key == ("E1" if t.key in ("S1", "S2") else "E2"))
         assert outer.x <= t.x + 1e-9 and outer.y <= t.y + 1e-9 and t.x + t.w <= outer.x + outer.w + 1e-9 and t.y + t.h <= outer.y + outer.h + 1e-9
@@ -123,6 +121,11 @@ def test_progress_color_runs_from_red_over_yellow_to_green():
     assert progress_color(0.0) == "rgba(201,83,75,1.0)" and progress_color(0.5) == "rgba(242,213,126,1.0)" and progress_color(1.0) == "rgba(47,107,101,1.0)"
     assert progress_color(2.0) == progress_color(1.0) and progress_color(-1.0) == progress_color(0.0) and progress_color(float("nan"), 0.5) == "rgba(190,190,190,0.5)"
     assert progress_color(0.25, 0.35).endswith(",0.35)")
+
+
+def test_only_tiles_with_children_are_drillable(mini):
+    tiles = {t.key: t for t in tile_layout(ev.analyse(mini).tree)}
+    assert [tiles[k].drillable for k in ("E1", "E2", "B1")] == [True, True, False] and tiles["S2"].drillable and not tiles["S1"].drillable          # S2 hat Sub-Tasks, S1 und B1 sind Blätter
 
 
 def test_selected_key_reads_the_key_from_the_customdata_of_a_clicked_point():

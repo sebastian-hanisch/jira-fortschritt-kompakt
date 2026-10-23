@@ -80,7 +80,7 @@ def squarify(values, x: float, y: float, w: float, h: float) -> list[tuple[float
 
 @dataclass(frozen=True)
 class Tile:
-    """Eine Kachel der Kachelansicht: Rechteck, Schlüssel des Tickets, Stufe (1 = unter der Wurzel, 2 = darunter), Gewicht, Fortschritt (NaN = nichts messbar) und ob sie sich öffnen lässt."""
+    """Eine Kachel der Kachelansicht: Rechteck, Schlüssel des Tickets, Stufe (1 = unter der Wurzel, 2 = darunter), Gewicht, Fortschritt (NaN = nichts messbar) und ob sie sich öffnen lässt (hat Kinder)."""
 
     key: str
     title: str
@@ -154,7 +154,7 @@ def selected_key(points) -> str:
 
 def build_tiles(g, unit: str):
     """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken und in der
-    ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen."""
+    ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen, Kacheln ohne Kinder reagieren nicht."""
     tiles = tile_layout(g)
     fig = go.Figure()
     total = TILE_W * TILE_H
