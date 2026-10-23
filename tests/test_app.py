@@ -55,7 +55,7 @@ def test_the_treemap_and_the_hierarchy_graph_are_shown():
 def test_the_sidebar_has_only_the_selections_and_no_weighting_options():
     at = _open(plan_csv(make_mini()))
     labels = [s.label for s in at.sidebar.selectbox]
-    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Zusammenfassen nach"]
+    assert labels == ["Teilprojekt (Wurzel)", "Tickets ohne Story Points", "Zusammenfassen auf Hierarchiestufe"]
     assert not at.sidebar.toggle and not at.sidebar.radio and not at.sidebar.slider
     assert not at.radio or [r.label for r in at.radio] == ["Kennzahl je Zelle"]
 
@@ -70,16 +70,15 @@ def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
         assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})" and any(f"Regel: {rule}" in w.value for w in at.warning)
 
 
-def test_every_dimension_runs_without_error():
+def test_every_hierarchy_level_runs_without_error():
     at = _open(plan_csv(make_mini()))
-    for dim in C.DIMENSIONS:
-        at.sidebar.selectbox(key="dimension").set_value(dim).run(timeout=TIMEOUT)
-        _ok(at, dim)
-        assert at.metric[0].value == "66,7 %"                                                   # die Ebene ändert den Gesamtwert nicht
-    at.sidebar.selectbox(key="dimension").set_value(C.DIM_LEVEL).run(timeout=TIMEOUT)
-    for level in (1, 2, 3):
-        at.sidebar.selectbox(key="level").set_value(level).run(timeout=TIMEOUT)
-        _ok(at, level)
+    level = at.sidebar.selectbox(key="level")
+    assert level.value == 1 and level.options == ["Stufe 1 (oberste)", "Stufe 2", "Stufe 3"]
+    for n in (1, 2, 3):
+        at.sidebar.selectbox(key="level").set_value(n).run(timeout=TIMEOUT)
+        _ok(at, n)
+        assert at.metric[0].value == "66,7 %"                                                   # die Stufe ändert den Gesamtwert nicht
+        assert any(f"Hierarchiestufe {n}" in m.value for m in at.markdown)
 
 
 def test_the_subproject_selection_rescopes_the_numbers():
@@ -134,15 +133,12 @@ def test_all_tickets_rejected_shows_a_dash_and_no_error():
 
 
 @pytest.mark.parametrize("seed", [0, 3, 7])
-def test_random_projects_render_in_every_dimension(seed):
+def test_random_projects_render_on_every_level(seed):
     at = _open(plan_csv(random_project(seed, n_epics=6)))
     _ok(at, seed)
-    for dim in C.DIMENSIONS:
-        at.sidebar.selectbox(key="dimension").set_value(dim).run(timeout=TIMEOUT)
-        _ok(at, seed, dim)
-    for tab_metric in ("Gewicht", "Tickets", "Angerechnet"):
-        at.radio(key="table_metric").set_value(tab_metric).run(timeout=TIMEOUT)
-        _ok(at, seed, tab_metric)
+    for n in range(1, len(at.sidebar.selectbox(key="level").options) + 1):
+        at.sidebar.selectbox(key="level").set_value(n).run(timeout=TIMEOUT)
+        _ok(at, seed, n)
 
 
 def test_the_options_box_describes_the_variants_and_shows_the_effect_on_the_data():
@@ -167,8 +163,8 @@ def test_up_buttons_stand_above_the_selection_in_the_sidebar():
     at = _open(plan_csv(make_mini()))
     at.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
     assert [b.key for b in at.sidebar.button] == ["nav_top", "nav_up"] and not [b for b in at.main.button if str(b.key).startswith("nav_")]
-    elements = [e.key for e in at.sidebar if getattr(e, "key", None) in ("nav_up", "nav_top", "root", "unest_rule", "dimension")]
-    assert elements[:3] == ["nav_top", "nav_up", "root"] and elements[-2:] == ["unest_rule", "dimension"]
+    elements = [e.key for e in at.sidebar if getattr(e, "key", None) in ("nav_up", "nav_top", "root", "unest_rule", "level")]
+    assert elements[:3] == ["nav_top", "nav_up", "root"] and elements[-2:] == ["unest_rule", "level"]
 
 
 def test_navigation_up_and_down_changes_the_root():

@@ -10,50 +10,9 @@ import numpy as np
 
 import jira_constants as C
 import jira_core as A
-from jira_evaluation import Analysis, analyse, de, pct, status_list
+from jira_evaluation import Analysis, analyse, de, pct
 
-METRIC_WEIGHT, METRIC_COUNT, METRIC_CREDITED = "Gewicht", "Tickets", "Angerechnet"
-METRICS = (METRIC_WEIGHT, METRIC_COUNT, METRIC_CREDITED)
 SUM_LABEL = "Summe"
-MAX_LIST_ROWS = 200      # so viele Tickets nennt die Liste „ohne Story Points“ höchstens
-
-
-def atom_statuses(issues, a: Analysis) -> list[str]:
-    """Statusnamen der Atome in der Reihenfolge ihrer Gutschrift und ihres Namens (nur Status, die bei Atomen vorkommen)."""
-    used = {issues[i].status for i in a.atoms}
-    return [s for s in status_list(issues) if s in used]
-
-
-def group_table(a: Analysis, dimension: str, unit: str) -> list[dict]:
-    """Je Gruppe der gewählten Ebene: Gewicht, Fortschritt, nur Done nach Gewicht, Tickets und Tickets ohne Story Points."""
-    s = a.stats
-    return [{dimension: label, f"Gewicht ({unit})": float(w), "Fortschritt": None if p != p else float(p), "Nur Done (Gewicht)": None if d != d else float(d),
-             "Tickets": float(n), "ohne Story Points": float(u)}
-            for label, w, p, d, n, u in zip(s.labels, s.weight, s.progress, s.progress_done, s.count, s.unestimated)]
-
-
-def status_by_group(issues, a: Analysis, metric: str) -> list[dict]:
-    """Gruppen der gewählten Ebene als Zeilen, Status als Spalten; Zelle = Gewicht, Ticketzahl oder angerechnetes Gewicht (anteilig bei Mehrfachwerten).
-    Dazu je Zeile die Summe und der Fortschritt der Gruppe, am Ende eine Summenzeile."""
-    if metric not in METRICS:
-        raise ValueError(f"unbekannte Kennzahl {metric!r}")
-    statuses = atom_statuses(issues, a)
-    pos = {s: k for k, s in enumerate(statuses)}
-    status_of = np.array([pos[issues[i].status] for i in a.atoms], dtype=int)
-    base = {METRIC_WEIGHT: a.w, METRIC_COUNT: np.ones(len(a.w)), METRIC_CREDITED: a.w * a.c}[metric]
-    n_groups, n_status = len(a.assign.labels), len(statuses)
-    cells = np.bincount(a.assign.group * n_status + status_of[a.assign.atom], weights=base[a.assign.atom] * a.assign.share,
-                        minlength=n_groups * n_status).reshape(n_groups, n_status)
-    rows = []
-    for g, label in enumerate(a.assign.labels):
-        row = {"Gruppe": label, **{s: float(cells[g, k]) for k, s in enumerate(statuses)}, SUM_LABEL: float(cells[g].sum())}
-        row["Fortschritt"] = None if np.isnan(a.stats.progress[g]) else float(a.stats.progress[g])
-        rows.append(row)
-    if rows:
-        total = {"Gruppe": SUM_LABEL, **{s: float(cells[:, k].sum()) for k, s in enumerate(statuses)}, SUM_LABEL: float(cells.sum())}
-        total["Fortschritt"] = None if np.isnan(a.progress) else float(a.progress)
-        rows.append(total)
-    return rows
 
 
 PARENT_COL, EPIC_COL, TOTAL_COL, EPIC_CHECK_COL = "Parent Ticket", "Epic-level Story Points", "Total", "Epic vs. Total"
@@ -116,38 +75,6 @@ def parent_status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], st
         own = [r[EPIC_COL] for r in rows if r[EPIC_COL] is not None]
         rows.append(build(SUM_LABEL, merged, sum(own) if own else None, ""))
     return rows, [heads[st] for st in statuses], completed_col
-
-
-def data_quality(issues, a: Analysis) -> list[dict]:
-    """Prüfungen der Eingangsdaten mit Anzahl, Anteil an den Atomen und dem Hinweis, wie sich der Befund auf die Zahl auswirkt."""
-    atoms = list(a.atoms)
-    n = len(atoms)
-    by_key = {t.key: t for t in issues}
-    epics = A.epic_of(issues)
-    no_epic_names: dict[str, str] = {}
-    checks = {
-        "Ohne Story Points": sum(issues[i].points is None for i in atoms),
-        "Story Points = 0": sum(issues[i].points == 0 for i in atoms),
-        "Ohne Epic": sum(epics[i] == "" for i in atoms),
-        "Ohne Sprint": sum(A.group_labels(by_key, issues[i], epics[i], no_epic_names, C.DIM_SPRINT) == ["(ohne Sprint)"] for i in atoms),
-        "Status ohne erkannte Bedeutung (zählt 0)": sum(A.status_class(issues[i].status) == "other" for i in atoms),
-    }
-    hints = {
-        "Ohne Story Points": "Gewicht nach der gewählten Regel; bei „nicht zählen“ fehlen sie im Fortschritt ganz.",
-        "Story Points = 0": "Zählen als geschätzt mit Gewicht 0: Das Ticket hat keinen Einfluss auf den Fortschritt.",
-        "Ohne Epic": "Landen in der Gruppe „(ohne Epic)“ der Ebene Epic.",
-        "Ohne Sprint": "Landen in der Gruppe „(ohne Sprint)“ der Ebene Sprint.",
-        "Status ohne erkannte Bedeutung (zählt 0)": "Der Name klingt weder nach fertig noch nach Test, Merged oder Review (z. B. In Arbeit, To Do). Passt das nicht, die Gewichte der Status ändern.",
-    }
-    return [{"Prüfung": name, "Anzahl": count, "Anteil an den Tickets": count / n if n else None, "Wirkung": hints[name]} for name, count in checks.items()]
-
-
-def unestimated_tickets(issues, a: Analysis, limit: int = MAX_LIST_ROWS) -> tuple[list[dict], int]:
-    """Atome ohne Story Points als Liste (Schlüssel, Titel, Typ, Status, Epic), höchstens `limit`; dazu die Gesamtzahl."""
-    epics = A.epic_of(issues)
-    found = [i for i in a.atoms if issues[i].points is None]
-    rows = [{"Schlüssel": issues[i].key, "Titel": issues[i].summary, "Typ": issues[i].type, "Status": issues[i].status, "Epic": epics[i]} for i in found[:limit]]
-    return rows, len(found)
 
 
 # ---------------------------------------------------------------- Ausgabe: CSV, Wiki-Markup, HTML
@@ -252,7 +179,7 @@ def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
     Alles andere (Teilprojekt, Status-Gewichte) wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.UNEST_RULES:
-        b = analyse(issues, replace(a.settings, unest_rule=rule, dimension=C.DIM_ALL))
+        b = analyse(issues, replace(a.settings, unest_rule=rule))
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(b.progress) else float(b.progress), "Gewicht gesamt": float(b.weight), "Tickets ohne Story Points": b.n_unestimated})
     return rows
 

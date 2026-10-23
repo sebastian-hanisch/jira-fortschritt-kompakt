@@ -119,7 +119,7 @@ with options_box:
     st.markdown(T.UNEST_OPTIONS_MARKDOWN)
 pseudo = st.checkbox(
     "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
-    help="Gilt beim Laden. Betrifft Anzeige, Tabellen und Diagramme (z. B. beim Teilen eines Bildschirms). Die Datei hat den Server beim Hochladen schon erreicht.")
+    help="Gilt beim Laden und ersetzt die Namen in den Daten der Sitzung. Diese Fassung zeigt Bearbeiter nirgends an; die Option begrenzt, was im Arbeitsspeicher bleibt. Die Datei hat den Server beim Hochladen schon erreicht.")
 drop = st.checkbox(
     "Titel der Tickets verwerfen (Titel der Epics bleiben)", value=True, key="drop_titles", disabled=loaded is not None,
     help="Gilt beim Laden. Titel werden für keine Rechnung gebraucht; die Epic-Titel benennen die Gruppen. Die Liste der Tickets ohne Story Points zeigt dann nur Schlüssel.")
@@ -192,15 +192,12 @@ with st.sidebar:
     unest_rule = st.selectbox(
         "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
         help="Was ein Ticket ohne Story Points wiegt: der Median der geschätzten Tickets auf gleicher Stufe des Ticket-Baums (im gewählten Teilbaum), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Varianten stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
-    dimension = st.selectbox("Zusammenfassen nach", C.DIMENSIONS, index=C.DIMENSIONS.index(C.DEFAULT_DIM), key="dimension",
-                             help="Wonach die Tickets zusammengefasst werden. Tickets mit mehreren Werten (Stichwörter, Komponenten) zählen anteilig.")
-    level = 1
-    if dimension == C.DIM_LEVEL:
-        max_level = A.max_level(issues)
-        if st.session_state.get("level", 1) > max_level:
-            st.session_state["level"] = 1
-        level = st.selectbox("Hierarchiestufe", list(range(1, max_level + 1)), key="level", format_func=lambda n: f"Stufe {n}" + (" (oberste)" if n == 1 else ""),
-                             help="Auf welcher Stufe des Ticket-Baums zusammengefasst wird: Stufe 1 ist die oberste (z. B. Initiative oder Epic ohne Eltern), Stufe 2 die darunter und so weiter.")
+    max_level = A.max_level(issues)
+    if not 1 <= st.session_state.get("level", 0) <= max_level:                        # noch nicht gewählt oder der Teilbaum ist flacher: die oberste Stufe mit einer Aufteilung
+        st.session_state["level"] = A.default_level(issues, A.select_atoms(issues, skip=A.rejected_indices(issues)))
+    level = st.selectbox("Zusammenfassen auf Hierarchiestufe", list(range(1, max_level + 1)), key="level", format_func=lambda n: f"Stufe {n}" + (" (oberste)" if n == 1 else ""),
+                         help="Auf welcher Stufe des Ticket-Baums die Balken zusammenfassen: Stufe 1 ist die oberste (bei einem Teilprojekt die Wurzel selbst), Stufe 2 die darunter und so weiter. Ein Ticket, das "
+                              "höher steht, bekommt „(keine Stufe n)“; Tickets auf der Stufe bilden je eine Gruppe, alles darunter zählt zu ihr.")
 
 with guard("Auswertung"):
     # --- Status-Gewichte -----------------------------------------------------------------------------------------------------------------------
@@ -224,7 +221,7 @@ with guard("Auswertung"):
     # --- Ergebnis ------------------------------------------------------------------------------------------------------------------------------
 
     unit = C.UNIT
-    settings = Settings(dimension=dimension, level=level, root=root, unest_rule=unest_rule, overrides=overrides)
+    settings = Settings(level=level, root=root, unest_rule=unest_rule, overrides=overrides)
     a = analyse(issues, settings)
 
     st.markdown("## 🎯 Ergebnis")
@@ -254,7 +251,7 @@ with guard("Auswertung"):
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
 
-    st.markdown(f"### Fortschritt je {dimension}" if dimension != C.DIM_ALL else "### Fortschritt des gesamten Plans")
+    st.markdown(f"### Fortschritt je Ticket der Hierarchiestufe {level}")
     st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
     st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch den Status angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
                + (f" Gezeigt werden die 30 gewichtsstärksten von {len(a.stats.labels)} Gruppen; die Tabelle unten enthält alle." if len(a.stats.labels) > 30 else ""))
@@ -278,8 +275,12 @@ with guard("Auswertung"):
 
     # --- Tabellen ------------------------------------------------------------------------------------------------------------------------------
 
-    st.markdown("## 📋 Tabellen")
-    st.caption("Alle Tabellen folgen der Auswahl links; jede lässt sich als CSV für Excel laden (Semikolon, Dezimalkomma) und als Tabelle in Jira oder Confluence einfügen.")
+    st.markdown("## 📋 Status-Matrix je Parent")
+    st.caption(
+        "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
+        "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
+        "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet. "
+        "Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalkomma) und als Tabelle für Jira oder Confluence zu übernehmen.")
 
 
     def show_table(rows, key, formats=None, file_name="tabelle"):
@@ -302,33 +303,10 @@ with guard("Auswertung"):
                 st.html(T.rows_to_html(rows, formats))
 
 
-    tab_parent, tab_group, tab_status, tab_quality = st.tabs(["Status-Matrix je Parent", "Je Gruppe", "Status × Gruppe", "Datenqualität"])
-    with tab_parent:
-        st.caption(
-            "Je übergeordnetem Ticket (Parent, meist das Epic): die Summe der Story Points der Tickets darunter je Status, die Status des Teilbaums nach Gewicht geordnet und mit ihrem Gewicht im Kopf. "
-            "„Epic-level Story Points“ sind die eigenen Story Points des Parents; weicht sie vom Total der Tickets darunter ab, steht eine Markierung in „Epic vs. Total“. Zurückgewiesene Tickets stehen in einer "
-            "eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach Status und Story Points gewichtet.")
-        matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
-        matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
-        matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
-        show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
-    with tab_group:
-        show_table(T.group_table(a, dimension, unit), "group", {f"Gewicht ({unit})": "%.1f", "Fortschritt": "percent", "Nur Done (Gewicht)": "percent", "Tickets": "%.1f", "ohne Story Points": "%.1f"},
-                   "fortschritt-je-gruppe")
-    with tab_status:
-        st.caption(f"Wie verteilt sich jede Gruppe der Ebene „{dimension}“ auf die Status? Tickets mit mehreren Werten zählen anteilig.")
-        metric = st.radio("Kennzahl je Zelle", T.METRICS, key="table_metric", horizontal=True, help="Gewicht = Story Points, Tickets = Anzahl, Angerechnet = Gewicht mal Gutschrift des Status.")
-        status_names = T.atom_statuses(issues, a)
-        show_table(T.status_by_group(issues, a, metric), "status", {**{name: "%.1f" for name in (*status_names, T.SUM_LABEL)}, "Fortschritt": "percent"}, "status-je-gruppe")
-    with tab_quality:
-        st.caption("Prüfungen der Eingangsdaten: Was davon die Zahl verzerren kann und wie das Werkzeug damit umgeht.")
-        show_table(T.data_quality(issues, a), "quality", {"Anteil an den Tickets": "percent"}, "datenqualitaet")
-        unest_rows, unest_total = T.unestimated_tickets(issues, a)
-        if not any(r["Titel"] for r in unest_rows):
-            unest_rows = [{k: v for k, v in r.items() if k != "Titel"} for r in unest_rows]
-        if unest_total:
-            st.markdown(f"**Tickets ohne Story Points** ({unest_total}" + (f", gezeigt die ersten {len(unest_rows)}" if unest_total > len(unest_rows) else "") + ")")
-            show_table(unest_rows, "unest", None, "ohne-story-points")
+    matrix_rows, matrix_status, completed_col = T.parent_status_matrix(issues, a)
+    matrix_formats = {name: "%.1f" for name in (T.EPIC_COL, T.TOTAL_COL, *matrix_status, T.REJECTED_COL, T.TOTAL_NET_COL)}
+    matrix_formats.update({completed_col: "percent", T.PROGRESS_COL: "percent"})
+    show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
 
 with options_box, guard("Berechnungsmöglichkeiten"):
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")

@@ -39,10 +39,10 @@ def test_changed_status_weights_change_the_progress_by_hand(mini):
     assert a.progress_done == pytest.approx(5 / 10.5)                                # „nur Done“ hängt nicht von den Gewichten ab
 
 
-def test_group_by_dimension_is_part_of_the_analysis(mini):
-    a = ev.analyse(mini, ev.Settings(dimension=C.DIM_EPIC))
-    assert a.stats.labels == ("E1: Epic A", "E2: Epic B", "(ohne Epic)") and a.stats.progress.tolist() == pytest.approx([4 / 5, 2 / 4.5, 1.0])
-    assert ev.analyse(mini, ev.Settings(dimension=C.DIM_ALL)).stats.labels == ("Gesamtes Projekt",)
+def test_groups_by_hierarchy_level_are_part_of_the_analysis(mini):
+    a = ev.analyse(mini, ev.Settings(level=1))
+    assert a.stats.labels == ("B1", "E1: Epic A", "E2: Epic B") and a.stats.progress.tolist() == pytest.approx([1.0, 4 / 5, 2 / 4.5])
+    assert ev.analyse(mini, ev.Settings(level=2)).stats.labels == ("S1", "S2", "S3", "S4", "(keine Stufe 2)")
 
 
 def test_status_list_orders_by_credit_then_not_started_first(mini):
@@ -109,11 +109,11 @@ def test_subproject_equals_the_full_analysis_restricted_to_its_atoms_when_everyt
 # ---------------------------------------------------------------- Eigenschaften über Zufallsprojekte
 
 @pytest.mark.parametrize("seed", range(30))
-def test_random_projects_pass_the_internal_consistency_check_in_every_dimension(seed):
+def test_random_projects_pass_the_internal_consistency_check_on_every_level(seed):
     project = random_project(seed, n_epics=2 + seed % 6)
-    for dim in C.DIMENSIONS:
-        a = ev.analyse(project, ev.Settings(dimension=dim, level=1 + seed % 3, unest_rule=C.UNEST_RULES[seed % 3]))
-        assert ev.check_consistency(a) == [], (seed, dim)
+    for level in range(1, A.max_level(project) + 2):
+        a = ev.analyse(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
+        assert ev.check_consistency(a) == [], (seed, level)
         assert math.isnan(a.progress) or 0.0 <= a.progress <= 1.0
         assert a.progress_done <= a.progress + 1e-12 or math.isnan(a.progress)                 # fertig zählt 100 %: nie mehr als der gewichtete Fortschritt
 

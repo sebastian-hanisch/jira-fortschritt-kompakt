@@ -12,11 +12,6 @@ UNEST_RULES = (UNEST_MEDIAN, UNEST_ONE, UNEST_IGNORE)
 DEFAULT_UNEST = UNEST_MEDIAN
 COMPLETED_MIN_CREDIT = 0.9      # „Completed“ der Status-Matrix: alle Status ab diesem Gewicht
 
-DIM_ALL, DIM_EPIC, DIM_LEVEL, DIM_SPRINT, DIM_RELEASE, DIM_COMPONENT, DIM_LABEL, DIM_ASSIGNEE, DIM_TEAM, DIM_AREA, DIM_PRIORITY, DIM_TYPE, DIM_STATUS = (
-    "Gesamtes Projekt", "Epic", "Hierarchiestufe", "Sprint", "Release (Fix Version)", "Komponente", "Label", "Bearbeiter", "Team", "Bereich", "Priorität", "Ticket-Typ", "Status")
-DIMENSIONS = (DIM_ALL, DIM_EPIC, DIM_LEVEL, DIM_SPRINT, DIM_RELEASE, DIM_COMPONENT, DIM_LABEL, DIM_ASSIGNEE, DIM_TEAM, DIM_AREA, DIM_PRIORITY, DIM_TYPE, DIM_STATUS)
-DEFAULT_DIM = DIM_EPIC
-
 ROOT_ALL = ""              # Wurzel der Auswertung: leer = ganzes Projekt
 MAX_LEVELS = 8             # höchste wählbare Hierarchiestufe
 GRAPH_MAX_NODES = 250      # Hierarchiegraph: mehr Knoten lassen sich nicht lesen; die tiefste Ebene wird dann zusammengefasst

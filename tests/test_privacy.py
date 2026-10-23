@@ -156,7 +156,6 @@ def test_titles_are_dropped_by_default_but_epic_titles_stay():
     tables = " ".join(t.value.to_string() for t in at.dataframe)
     page = " ".join(str(m.value) for m in at.markdown) + " ".join(c.value for c in at.caption) + tables
     assert "Geheimer Kundenname" not in page and "Noch ein Titel" not in page and "Kundenprojekt Alpha" in tables
-    assert not any("Titel" in t.value.columns for t in at.dataframe if "Schlüssel" in t.value.columns)          # Liste der Tickets ohne Story Points ohne Titelspalte
 
 
 def test_titles_and_names_can_be_kept_when_switched_off_before_loading():
@@ -165,18 +164,15 @@ def test_titles_and_names_can_be_kept_when_switched_off_before_loading():
     at.checkbox(key="pseudo").set_value(False)
     at.file_uploader(key="upload_0").set_value(("plan.csv", TITLES, "text/csv")).run(timeout=TIMEOUT)
     _ok(at)
-    unest = next(t.value for t in at.dataframe if "Schlüssel" in t.value.columns)
-    assert list(unest["Titel"]) == ["Geheimer Kundenname"]
-    at.sidebar.selectbox(key="dimension").set_value(C.DIM_ASSIGNEE).run(timeout=TIMEOUT)
-    assert "Erika Mustermann" in " ".join(t.value.to_string() for t in at.dataframe)
+    loaded = at.session_state["loaded"][1]
+    assert [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"] and [t.assignee for t in loaded] == ["", "Erika Mustermann", "Max Beispiel"]
 
 
 def test_assignee_names_are_replaced_by_numbers_by_default():
     at = _open(TITLES)
-    at.sidebar.selectbox(key="dimension").set_value(C.DIM_ASSIGNEE).run(timeout=TIMEOUT)
     _ok(at)
-    tables = " ".join(t.value.to_string() for t in at.dataframe)
-    assert "Erika Mustermann" not in tables and "Max Beispiel" not in tables and "Person 1" in tables and "Person 2" in tables
+    loaded = at.session_state["loaded"][1]
+    assert [t.assignee for t in loaded] == ["", "Person 1", "Person 2"] and [t.summary for t in loaded] == ["Kundenprojekt Alpha", "", ""]          # Epic-Titel bleiben, Ticket-Titel sind verworfen
 
 
 # ---------------------------------------------------------------- Anleitung zum Export

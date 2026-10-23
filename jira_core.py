@@ -172,22 +172,6 @@ def new_rank(name: str) -> int:
 
 # ---------------------------------------------------------------- Hierarchie
 
-def epic_of(issues) -> list[str]:
-    """Schlüssel des Epics je Ticket (Elternkette bis zu einem Ticket vom Typ Epic oder höher), leer ohne Epic. Zyklen und fehlende Eltern enden mit leer."""
-    by_key = {i.key: i for i in issues}
-    result = []
-    for issue in issues:
-        current, found, steps = issue, "", 0
-        while current is not None and steps < 10:
-            if current.is_epic:
-                found = current.key
-                break
-            current = by_key.get(current.parent)
-            steps += 1
-        result.append(found)
-    return result
-
-
 def children_of(issues) -> dict[str, list[int]]:
     """Indizes der direkten Kinder je Eltern-Schlüssel."""
     out: dict[str, list[int]] = {}
@@ -314,8 +298,7 @@ def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None) -> np.n
 
 @dataclass(frozen=True)
 class Assignment:
-    """Zuordnung der Atome zu Gruppen in Koordinatenform: Eintrag k ordnet Atom `atom[k]` der Gruppe `group[k]` mit Anteil `share[k]` zu.
-    Mehrfachwerte (mehrere Labels, Komponenten) teilen das Atom gleichmäßig auf, damit die Summe über alle Gruppen die Gesamtsumme bleibt."""
+    """Zuordnung der Atome zu Gruppen in Koordinatenform: Eintrag k ordnet Atom `atom[k]` der Gruppe `group[k]` mit Anteil `share[k]` zu (hier immer 1: ein Atom liegt in genau einer Gruppe)."""
 
     labels: tuple[str, ...]
     atom: np.ndarray    # Position in der Atomliste
@@ -326,13 +309,6 @@ class Assignment:
 def natural_key(label: str):
     """Sortierschlüssel mit Zahlen als Zahlen (Sprint 2 vor Sprint 10); Gruppen „(ohne …)“ zuletzt."""
     return (label.startswith("("), [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", label)])
-
-
-def _inherited(by_key: dict[str, Issue], issue: Issue, getter):
-    """Wert des Tickets, bei leerem Wert der des übergeordneten Tickets (Sub-Tasks erben Sprint, Komponente und Release)."""
-    value = getter(issue)
-    parent = by_key.get(issue.parent) if not value else None
-    return getter(parent) if parent is not None else value
 
 
 def hierarchy_chains(issues) -> list[list[int]]:
@@ -363,45 +339,17 @@ def level_labels(issues, atoms, level: int) -> list[str]:
     return out
 
 
-def group_labels(by_key: dict[str, Issue], t: Issue, epic_key: str, epic_names: dict[str, str], dim: str) -> list[str]:
-    """Gruppenbezeichnungen eines Tickets in der Ebene `dim` (eine, bei Mehrfachwerten mehrere)."""
-    if dim == C.DIM_ALL:
-        return ["Gesamtes Projekt"]
-    if dim == C.DIM_EPIC:
-        return [f"{epic_key}: {epic_names[epic_key]}" if epic_key else "(ohne Epic)"]
-    if dim == C.DIM_SPRINT:
-        sprints = _inherited(by_key, t, lambda x: x.sprints)
-        return [sprints[-1]] if sprints else ["(ohne Sprint)"]       # bei übernommenen Tickets zählt der letzte Sprint
-    if dim == C.DIM_RELEASE:
-        return list(_inherited(by_key, t, lambda x: x.versions)) or ["(ohne Release)"]
-    if dim == C.DIM_COMPONENT:
-        return list(_inherited(by_key, t, lambda x: x.components)) or ["(ohne Komponente)"]
-    if dim == C.DIM_LABEL:
-        return list(t.labels) or ["(ohne Label)"]
-    if dim == C.DIM_ASSIGNEE:
-        return [t.assignee or "(nicht zugewiesen)"]
-    if dim == C.DIM_TEAM:
-        return [t.team or "(ohne Team)"]
-    if dim == C.DIM_AREA:
-        return [t.area or "(ohne Bereich)"]
-    if dim == C.DIM_PRIORITY:
-        return [t.priority or "(ohne Priorität)"]
-    if dim == C.DIM_TYPE:
-        return [t.type]
-    if dim == C.DIM_STATUS:
-        return [t.status]
-    raise ValueError(f"unbekannte Ebene {dim!r}")
+def default_level(issues, atoms) -> int:
+    """Die oberste Hierarchiestufe, auf der die Atome in mindestens zwei Gruppen zerfallen (sonst 1): So zeigt die Zusammenfassung zuerst eine Aufteilung statt eines einzigen Balkens."""
+    for level in range(1, max_level(issues) + 1):
+        if len(set(level_labels(issues, atoms, level))) >= 2:
+            return level
+    return 1
 
 
-def assign_groups(issues, atoms, dim: str, level: int = 1) -> Assignment:
-    """Ordnet jedes Atom den Gruppen der Ebene `dim` zu (bei der Ebene Hierarchiestufe die Stufe `level`)."""
-    epics = epic_of(issues)
-    epic_names = {i.key: i.summary or i.key for i in issues if i.is_epic}
-    by_key = {i.key: i for i in issues}
-    if dim == C.DIM_LEVEL:
-        per_atom = [[label] for label in level_labels(issues, atoms, level)]
-    else:
-        per_atom = [group_labels(by_key, issues[i], epics[i], epic_names, dim) for i in atoms]
+def assign_groups(issues, atoms, level: int = 1) -> Assignment:
+    """Ordnet jedes Atom der Gruppe seiner Hierarchiestufe `level` zu (siehe `level_labels`)."""
+    per_atom = [[label] for label in level_labels(issues, atoms, level)]
     labels = tuple(sorted({g for gs in per_atom for g in gs}, key=natural_key))
     index = {g: n for n, g in enumerate(labels)}
     a_idx, g_idx, share = [], [], []

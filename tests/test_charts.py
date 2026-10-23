@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import jira_constants as C
+import jira_core as A
 import jira_evaluation as ev
 from conftest import random_project
 from jira_core import Issue
@@ -13,18 +14,18 @@ from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_til
 def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):
     a = ev.analyse(mini)
     fig = build_progress_bars(a.stats, "SP")
-    assert list(fig.data[0].y) == ["E1: Epic A", "E2: Epic B", "(ohne Epic)"]
+    assert list(fig.data[0].y) == ["B1", "E1: Epic A", "E2: Epic B"]
     total = sum(np.array(t.x) for t in fig.data)
-    assert total.tolist() == pytest.approx([5.0, 4.5, 1.0])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
+    assert total.tolist() == pytest.approx([1.0, 5.0, 4.5])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
     assert len(fig.layout.annotations) == 3 and fig.layout.xaxis.fixedrange and fig.layout.yaxis.fixedrange
 
 
 def test_progress_bars_show_at_most_the_heaviest_groups():
-    items = tuple(Issue(key=f"S-{n}", points=float(n + 1), sprints=(f"Sprint {n}",)) for n in range(MAX_BARS + 10))
-    a = ev.analyse(items, ev.Settings(dimension=C.DIM_SPRINT))
+    items = tuple(Issue(key=f"S-{n}", points=float(n + 1)) for n in range(MAX_BARS + 10))
+    a = ev.analyse(items, ev.Settings(level=1))
     assert len(a.stats.labels) == MAX_BARS + 10
     shown = list(build_progress_bars(a.stats, "SP").data[0].y)
-    assert len(shown) == MAX_BARS and "Sprint 39" in shown and "Sprint 0" not in shown          # die schwersten Gruppen (Gewicht n + 1), in natürlicher Reihenfolge
+    assert len(shown) == MAX_BARS and "S-39" in shown and "S-0" not in shown                 # die schwersten Gruppen (Gewicht n + 1), in natürlicher Reihenfolge
 
 
 def test_tree_graph_has_one_marker_per_node_and_names_unmeasurable_nodes_grey(mini):
@@ -35,10 +36,10 @@ def test_tree_graph_has_one_marker_per_node_and_names_unmeasurable_nodes_grey(mi
 
 
 @pytest.mark.parametrize("seed", range(6))
-def test_all_charts_build_for_random_projects_in_every_dimension(seed):
+def test_all_charts_build_for_random_projects_on_every_level(seed):
     project = random_project(seed, n_epics=3 + seed)
-    for dim in C.DIMENSIONS:
-        a = ev.analyse(project, ev.Settings(dimension=dim, level=2, unest_rule=C.UNEST_RULES[seed % 3]))
+    for level in range(1, A.max_level(project) + 2):
+        a = ev.analyse(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
         assert build_progress_bars(a.stats, "SP") is not None and build_tree_graph(a.tree, "SP") is not None and build_tiles(a.tree, "SP") is not None
 
 

@@ -52,59 +52,34 @@ def test_the_median_is_taken_per_level_not_over_the_whole_tree():
     assert A.atom_weights(items, atoms).tolist() == [2.0, 2.0, 1.0, 2.0, 3.0]          # S3: Median der Stufe 1 (nur S2, da S1 Sub-Tasks hat) = 2; U2: Median von 1 und 3 = 2
 
 
-def test_epic_of_follows_the_parent_chain_and_survives_cycles(mini):
-    assert A.epic_of(mini) == ["E1", "E2", "E1", "E1", "E2", "E2", "", "E1", "E1"]
-    loop = (Issue(key="A", parent="B"), Issue(key="B", parent="A"))
-    assert A.epic_of(loop) == ["", ""]
-
-
-def test_group_by_epic_by_hand(mini):
+def test_group_by_level_one_by_hand(mini):
     atoms = A.select_atoms(mini)
     w = A.atom_weights(mini, atoms)
     c = np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0])
     done = np.array([True, False, False, True, True, False])
-    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_EPIC), w, c, done, np.array([False, False, True, False, True, True]))
-    assert stats.labels == ("E1: Epic A", "E2: Epic B", "(ohne Epic)")
-    assert stats.weight.tolist() == [5.0, 4.5, 1.0] and stats.credited.tolist() == pytest.approx([4.0, 2.0, 1.0])          # E1: S1 (3) + T1 (1) + T2 (1)
-    assert stats.progress.tolist() == pytest.approx([4 / 5, 2 / 4.5, 1.0]) and stats.unestimated.tolist() == [2.0, 1.0, 0.0]
-    assert stats.done_weight.tolist() == [4.0, 0.0, 1.0] and stats.count.tolist() == [3.0, 2.0, 1.0]
+    stats = A.aggregate(A.assign_groups(mini, atoms, 1), w, c, done, np.array([False, False, True, False, True, True]))
+    assert stats.labels == ("B1", "E1: Epic A", "E2: Epic B")
+    assert stats.weight.tolist() == [1.0, 5.0, 4.5] and stats.credited.tolist() == pytest.approx([1.0, 4.0, 2.0])          # E1: S1 (3) + T1 (1) + T2 (1)
+    assert stats.progress.tolist() == pytest.approx([1.0, 4 / 5, 2 / 4.5]) and stats.unestimated.tolist() == [0.0, 2.0, 1.0]
+    assert stats.done_weight.tolist() == [1.0, 4.0, 0.0] and stats.count.tolist() == [1.0, 3.0, 2.0]
 
 
-def test_multi_valued_dimension_splits_a_ticket_evenly(mini):
+def test_group_by_level_two_by_hand(mini):
     atoms = A.select_atoms(mini)
     w = A.atom_weights(mini, atoms)
     c = np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0])
-    stats = A.aggregate(A.assign_groups(mini, atoms, C.DIM_COMPONENT), w, c, np.zeros(6, dtype=bool), np.zeros(6, dtype=bool))
-    by = dict(zip(stats.labels, zip(stats.weight.tolist(), stats.credited.tolist())))
-    assert by["Backend"] == pytest.approx((4.5, 3.5)) and by["Frontend"] == pytest.approx((4.0, 3.5)) and by["(ohne Komponente)"] == pytest.approx((2.0, 0.0))        # die Sub-Tasks erben Backend von S2
-    assert stats.weight.sum() == pytest.approx(w.sum())                               # die Summe über alle Gruppen bleibt die Gesamtsumme
+    stats = A.aggregate(A.assign_groups(mini, atoms, 2), w, c, np.zeros(6, dtype=bool), np.zeros(6, dtype=bool))
+    assert stats.labels == ("S1", "S2", "S3", "S4", "(keine Stufe 2)")                         # S2 fasst T1 und T2 zusammen; B1 steht auf Stufe 1
+    assert stats.weight.tolist() == [3.0, 2.0, 2.0, 2.5, 1.0] and stats.credited.tolist() == pytest.approx([3.0, 1.0, 0.0, 2.0, 1.0])
+    assert stats.weight.sum() == pytest.approx(w.sum())                                         # die Summe über alle Gruppen bleibt die Gesamtsumme
 
 
-def test_sprint_dimension_uses_the_last_sprint(mini):
+def test_every_level_assigns_each_atom_exactly_once(mini):
     atoms = A.select_atoms(mini)
-    assign = A.assign_groups(mini, atoms, C.DIM_SPRINT)
-    assert assign.labels == ("Sprint 1", "Sprint 2", "(ohne Sprint)")
-    assert [assign.labels[g] for g in assign.group] == ["Sprint 1", "(ohne Sprint)", "Sprint 2", "Sprint 2", "Sprint 2", "Sprint 2"]          # die Sub-Tasks erben den letzten Sprint von S2
-
-
-def test_every_dimension_assigns_each_atom_with_shares_summing_to_one(mini):
-    atoms = A.select_atoms(mini)
-    for dim in C.DIMENSIONS:
-        assign = A.assign_groups(mini, atoms, dim, 2)
-        per_atom = np.bincount(assign.atom, weights=assign.share, minlength=len(atoms))
-        assert per_atom.tolist() == pytest.approx([1.0] * len(atoms)), dim
-    with pytest.raises(ValueError):
-        A.assign_groups(mini, atoms, "Unsinn")
-
-
-def test_other_dimensions_by_hand():
-    items = (Issue(key="A", team="Alpha", area="Nord", priority="Hoch", type="Story", status="Done", labels=("x", "y"), versions=("R1",), assignee="P"),
-             Issue(key="B", type="Bug"))
-    atoms = [0, 1]
-    labels = lambda dim: [A.assign_groups(items, atoms, dim).labels[g] for g in A.assign_groups(items, atoms, dim).group]       # noqa: E731
-    assert labels(C.DIM_TEAM) == ["Alpha", "(ohne Team)"] and labels(C.DIM_AREA) == ["Nord", "(ohne Bereich)"] and labels(C.DIM_PRIORITY) == ["Hoch", "(ohne Priorität)"]
-    assert labels(C.DIM_TYPE) == ["Story", "Bug"] and labels(C.DIM_STATUS) == ["Done", "To Do"] and labels(C.DIM_ASSIGNEE) == ["P", "(nicht zugewiesen)"]
-    assert labels(C.DIM_RELEASE) == ["R1", "(ohne Release)"] and labels(C.DIM_LABEL) == ["x", "y", "(ohne Label)"]
+    for level in range(1, A.max_level(mini) + 2):
+        assign = A.assign_groups(mini, atoms, level)
+        assert assign.atom.tolist() == list(range(len(atoms))) and assign.share.tolist() == [1.0] * len(atoms)
+    assert A.assign_groups(mini, [], 1).labels == ()
 
 
 def test_natural_key_sorts_numbers_as_numbers_and_empty_groups_last():
@@ -119,7 +94,7 @@ def test_subtree_and_scope_make_the_root_a_standalone_dataset(mini):
     assert [t.key for t in scoped] == ["E2", "S3", "S4"] and scoped[0].parent == ""
     assert A.scope_issues(mini, C.ROOT_ALL) == tuple(mini)
     story = A.scope_issues(mini, "S2")
-    assert [t.key for t in story] == ["S2", "T1", "T2"] and story[0].parent == "" and A.epic_of(story) == ["", "", ""]
+    assert [t.key for t in story] == ["S2", "T1", "T2"] and story[0].parent == "" and A.max_level(story) == 2            # die Wurzel steht auf Stufe 1
     with pytest.raises(ValueError):
         A.subtree_keys(mini, "gibt-es-nicht")
 
@@ -153,7 +128,7 @@ def test_levels_by_hand(mini):
     assert A.level_labels(mini, atoms, 1) == ["E1: Epic A", "E2: Epic B", "E2: Epic B", "B1", "E1: Epic A", "E1: Epic A"]
     assert A.level_labels(mini, atoms, 2) == ["S1", "S3", "S4", "(keine Stufe 2)", "S2", "S2"]
     assert A.level_labels(mini, atoms, 3) == ["(keine Stufe 3)"] * 4 + ["T1", "T2"]
-    assert A.assign_groups(mini, atoms, C.DIM_LEVEL, 1).labels == ("B1", "E1: Epic A", "E2: Epic B")
+    assert A.assign_groups(mini, atoms, 1).labels == ("B1", "E1: Epic A", "E2: Epic B")
     assert A.max_level(()) == 1
     deep = tuple(Issue(key=f"N{k}", parent=f"N{k - 1}" if k else "") for k in range(12))
     assert A.max_level(deep) == C.MAX_LEVELS
@@ -229,3 +204,14 @@ def test_parent_root_goes_one_level_up_to_a_ticket_that_can_be_a_root(mini):
 def test_root_for_click_accepts_containers_and_the_whole_project_only(mini):
     assert A.root_for_click(mini, "E2") == "E2" and A.root_for_click(mini, "S2") == "S2" and A.root_for_click(mini, C.ROOT_ALL) == C.ROOT_ALL
     assert A.root_for_click(mini, "S1") is None and A.root_for_click(mini, "T1") is None and A.root_for_click(mini, "Projekt") is None and A.root_for_click(mini, "gibt-es-nicht") is None          # Blätter bewirken nichts
+
+
+def test_default_level_is_the_top_level_that_splits_the_atoms(mini):
+    atoms = A.select_atoms(mini)
+    assert A.default_level(mini, atoms) == 1                                                   # B1, E1 und E2 sind drei Gruppen
+    e1 = A.scope_issues(mini, "E1")
+    assert A.default_level(e1, A.select_atoms(e1)) == 2                                        # die Wurzel E1 ist auf Stufe 1 eine einzige Gruppe, auf Stufe 2 sind es S1 und S2
+    s2 = A.scope_issues(mini, "S2")
+    assert A.default_level(s2, A.select_atoms(s2)) == 2
+    single = (Issue(key="A"),)
+    assert A.default_level(single, A.select_atoms(single)) == 1 and A.default_level((), []) == 1

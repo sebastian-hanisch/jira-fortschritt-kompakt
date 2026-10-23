@@ -1,4 +1,4 @@
-"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets, Ebene und geänderten Status-Gewichten."""
+"""Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets, Hierarchiestufe der Zusammenfassung und geänderten Status-Gewichten."""
 
 from dataclasses import dataclass
 
@@ -10,9 +10,8 @@ import jira_core as A
 
 @dataclass(frozen=True, kw_only=True)
 class Settings:
-    dimension: str = C.DEFAULT_DIM
     unest_rule: str = C.DEFAULT_UNEST                    # Gewicht eines Tickets ohne Story Points
-    level: int = 1                                       # Hierarchiestufe der Ebene „Hierarchiestufe“ (1 = oberste)
+    level: int = 1                                       # Hierarchiestufe der Zusammenfassung (1 = oberste)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
 
@@ -65,7 +64,7 @@ def analyse(issues, settings: Settings = Settings()) -> Analysis:
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
     unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
     p_w, p_d, p_n = A.overall(w, c, done)
-    first = A.assign_groups(issues, atoms, settings.dimension, settings.level)
+    first = A.assign_groups(issues, atoms, settings.level)
     stats = A.aggregate(first, w, c, done, unest)
     tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
     return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first)

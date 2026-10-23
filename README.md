@@ -1,7 +1,7 @@
 # Jira-Fortschritt kompakt
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
-Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Hierarchiegraph und Tabellen, die sich direkt in Jira oder Confluence einfügen lassen.
+Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Hierarchiegraph und die Status-Matrix je Parent, die sich direkt in Jira oder Confluence einfügen lässt.
 Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
@@ -64,7 +64,8 @@ Sonst gibt es nichts einzustellen.
 
 * **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
 * **Tickets ohne Story Points:** Median der geschätzten Tickets auf gleicher Stufe, als 1 Story Point oder nicht zählen. Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
-* **Zusammenfassen nach:** Epic, Hierarchiestufe, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Ticket-Typ oder Status.
+* **Zusammenfassen auf Hierarchiestufe:** Stufe 1 ist die oberste (bei einem Teilprojekt die Wurzel selbst), Stufe 2 die darunter und so weiter; die Balken zeigen eine Gruppe je Ticket dieser Stufe. Voreingestellt ist die oberste Stufe, auf der
+  die Tickets in mindestens zwei Gruppen zerfallen.
 
 ## Hoch und runter im Baum
 
@@ -76,9 +77,8 @@ bitte melden.
 
 ## Ausgabe
 
-Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken, Hierarchiegraph und vier Tabellen: **Status-Matrix je Parent**
-(Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt), Je Gruppe, Status × Gruppe und
-Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
+Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket der gewählten Hierarchiestufe, Kachelansicht, Hierarchiegraph und eine Tabelle: die
+**Status-Matrix je Parent** (Summe der Story Points je Status mit dem Gewicht im Kopf, Epic-level Story Points gegen Total, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Die Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma) und als Wiki-Markup bzw. HTML-Tabelle zum Einfügen in Jira und Confluence.
 
 ## Datenschutz
 
@@ -86,7 +86,7 @@ Datenqualität. Jede Tabelle gibt es als CSV für Excel (Semikolon, Dezimalkomma
   (kein `st.cache_data`, kein Schreiben auf die Platte), gibt sie nicht weiter und hat keine Anbindung an die Jira-Schnittstelle und kein Eingabefeld für Zugangsdaten. Die Plattform kann die Datei bis zum
   Sitzungsende im Speicher halten; den Server betreibt, wer die App bereitstellt.
 * Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Beim Laden lassen sich die Namen der Bearbeiter durch Nummern ersetzen und die Titel der Tickets (außer Epics) verwerfen (beides ist voreingestellt); „Daten jetzt löschen“
-  verwirft die geladenen Tickets der Sitzung und stellt das Upload-Feld zurück. Das betrifft nur Anzeige und Tabellen: Die Datei hat den Server beim Hochladen schon erreicht.
+  verwirft die geladenen Tickets der Sitzung und stellt das Upload-Feld zurück. Das betrifft nur die Daten der Sitzung: Die Datei hat den Server beim Hochladen schon erreicht.
 * Fehlermeldungen nennen nur den Fehlertyp, und ein Filter ersetzt die Meldung unbehandelter Ausnahmen im Protokoll durch den Typ (sie könnte Ticketdaten enthalten). Das ist nur gegen die eigene Testsuite
   geprüft, nicht gegen die Server einer Plattform.
 * Obergrenzen: 50 MB (`server.maxUploadSize`) und 5000 Tickets je Datei. Vor dem Hochladen weist die App darauf hin, nur die gebrauchten Spalten zu exportieren.
@@ -107,7 +107,7 @@ Eingebaut sind die Mediane der Stufe im Teilbaum, 1 Story Point und „nicht zä
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas, der Zählebene und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), Sub-Task-Mischung, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
 
 ## Aufbau

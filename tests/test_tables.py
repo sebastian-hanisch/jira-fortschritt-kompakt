@@ -99,7 +99,6 @@ def test_no_status_at_90_percent_gives_a_named_empty_completed_column():
 def test_a_plan_without_countable_tickets_gives_no_rows():
     only_epic = (Issue(key="E", type="Epic"),)
     assert T.parent_status_matrix(only_epic, ev.analyse(only_epic))[0] == []
-    assert T.status_by_group(only_epic, ev.analyse(only_epic), T.METRIC_WEIGHT) == []
 
 
 def test_tickets_without_a_parent_form_their_own_row_after_the_parents_in_natural_order():
@@ -116,62 +115,7 @@ def test_fractional_totals_below_one_still_give_the_shares():
 
 # ---------------------------------------------------------------- Gruppen und Status
 
-def test_group_table_by_hand(mini):
-    rows = T.group_table(ev.analyse(mini), "Epic", "T")
-    assert [r["Epic"] for r in rows] == ["E1: Epic A", "E2: Epic B", "(ohne Epic)"] and list(rows[0]) == ["Epic", "Gewicht (T)", "Fortschritt", "Nur Done (Gewicht)", "Tickets", "ohne Story Points"]
-    assert [r["Gewicht (T)"] for r in rows] == [5.0, 4.5, 1.0] and [r["Tickets"] for r in rows] == [3.0, 2.0, 1.0] and [r["ohne Story Points"] for r in rows] == [2.0, 1.0, 0.0]
-    assert [r["Fortschritt"] for r in rows] == pytest.approx([4 / 5, 2 / 4.5, 1.0]) and [r["Nur Done (Gewicht)"] for r in rows] == pytest.approx([4 / 5, 0.0, 1.0])
-
-
-def test_group_without_weight_has_no_progress():
-    items = (Issue(key="A", points=0.0, labels=("x",)),)
-    assert T.group_table(ev.analyse(items, ev.Settings(dimension="Label")), "Label", "T")[0]["Fortschritt"] is None
-
-
-def test_status_by_group_by_hand(mini):
-    a = ev.analyse(mini)
-    rows = T.status_by_group(mini, a, T.METRIC_WEIGHT)
-    assert T.atom_statuses(mini, a) == ["To Do", "In Review", "Done"]                          # „In Progress“ steht nur bei S2, das durch seine Sub-Tasks zählt
-    assert [r["Gruppe"] for r in rows] == ["E1: Epic A", "E2: Epic B", "(ohne Epic)", "Summe"]
-    assert [rows[0][s] for s in ("To Do", "In Review", "Done")] == [1.0, 0.0, 4.0] and rows[0]["Summe"] == 5.0 and rows[0]["Fortschritt"] == pytest.approx(4 / 5)
-    assert [rows[1][s] for s in ("To Do", "In Review", "Done")] == [2.0, 2.5, 0.0]
-    assert [rows[3][s] for s in ("To Do", "In Review", "Done", "Summe")] == [3.0, 2.5, 5.0, 10.5] and rows[3]["Fortschritt"] == pytest.approx(7 / 10.5)
-    counts = T.status_by_group(mini, a, T.METRIC_COUNT)
-    assert counts[3]["Summe"] == 6.0 and counts[0]["Done"] == 2.0 and counts[0]["To Do"] == 1.0
-    credited = T.status_by_group(mini, a, T.METRIC_CREDITED)
-    assert credited[1]["In Review"] == pytest.approx(2.0) and credited[3]["Summe"] == pytest.approx(7.0)
-    with pytest.raises(ValueError):
-        T.status_by_group(mini, a, "Unsinn")
-
-
-def test_status_by_group_with_multi_valued_dimension_keeps_the_total(mini):
-    a = ev.analyse(mini, ev.Settings(dimension="Komponente"))
-    rows = T.status_by_group(mini, a, T.METRIC_WEIGHT)
-    assert rows[-1]["Summe"] == pytest.approx(10.5) and sum(r["Summe"] for r in rows[:-1]) == pytest.approx(10.5)
-
-
 # ---------------------------------------------------------------- Datenqualität
-
-def test_data_quality_by_hand(mini):
-    rows = {r["Prüfung"]: r for r in T.data_quality(mini, ev.analyse(mini))}
-    assert {k: v["Anzahl"] for k, v in rows.items()} == {
-        "Ohne Story Points": 3, "Story Points = 0": 0, "Ohne Epic": 1, "Ohne Sprint": 1, "Status ohne erkannte Bedeutung (zählt 0)": 2}       # S4, T1, T2; B1; S3; S3 und T2 (To Do)
-    assert rows["Ohne Story Points"]["Anteil an den Tickets"] == pytest.approx(0.5) and all(r["Wirkung"] for r in rows.values())
-
-
-def test_data_quality_without_tickets_has_no_shares():
-    only_epic = (Issue(key="E", type="Epic"),)
-    assert all(r["Anzahl"] == 0 and r["Anteil an den Tickets"] is None for r in T.data_quality(only_epic, ev.analyse(only_epic)))
-
-
-def test_unestimated_list(mini):
-    a = ev.analyse(mini)
-    rows, total = T.unestimated_tickets(mini, a)
-    assert total == 3 and rows == [{"Schlüssel": "S4", "Titel": "", "Typ": "Story", "Status": "In Review", "Epic": "E2"},
-                                   {"Schlüssel": "T1", "Titel": "", "Typ": "Sub-task", "Status": "Done", "Epic": "E1"},
-                                   {"Schlüssel": "T2", "Titel": "", "Typ": "Sub-task", "Status": "To Do", "Epic": "E1"}]
-    assert T.unestimated_tickets(mini, a, limit=0) == ([], 3)
-
 
 # ---------------------------------------------------------------- Ausgabe
 
