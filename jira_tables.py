@@ -22,7 +22,7 @@ REJECTED_COL, TOTAL_NET_COL, PROGRESS_COL = "Rejected", "Total (ohne Rejected)",
 def _row_tickets(issues, a: Analysis):
     """Die Zeilen der Tabellen je Ticket unter der Wurzel: `ticket_of(i)` ist das Ticket der Zusammenfassungsstufe, zu dem das Atom `i` gehört (None, wenn es keine solche Stufe gibt), `label(t)` seine Beschriftung."""
     level = a.level
-    chains = A.hierarchy_chains(issues)
+    chains = A.hierarchy_chains(issues, a.ctx)
 
     def ticket_of(i):
         chain = chains[i]
@@ -169,7 +169,7 @@ def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
     Alles andere (Teilprojekt, Status-Gewichte) wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.UNEST_RULES:
-        progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan)
+        progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan, a.ctx)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Tickets ohne Story Points": n_unestimated})
     return rows
 
@@ -178,7 +178,7 @@ def subtask_rule_comparison(issues, a: Analysis) -> list[dict]:
     """Wirkung der Regeln für Sub-Tasks auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der zählenden Tickets. Alles andere wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.SUB_RULES:
-        progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan)
+        progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan, a.ctx)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Zählende Tickets": n_atoms})
     return rows
 

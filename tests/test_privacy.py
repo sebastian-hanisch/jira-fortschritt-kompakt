@@ -120,7 +120,7 @@ def test_privacy_explanation_is_in_the_data_expander():
     _ok(at)
     explanation = next(m.value for e in at.expander if "Datenquelle und Datenschutz" in e.label for m in e.markdown)
     for part in ("**Plan-Export.**", "Vorgangsschlüssel", "Story Points", "(hochrechnen)", "**Datenschutz.**", "nie gespeichert und nie zwischengespeichert", "nur der Fehlertyp",
-                 "nicht im Protokoll der App", "Zugangsdaten", "50 MB und 5000 Tickets", "eigenen Rechner oder im eigenen Netz"):
+                 "nicht im Protokoll der App", "Zugangsdaten", "50 MB und 20000 Tickets", "eigenen Rechner oder im eigenen Netz"):
         assert part in explanation or part.replace("nur der", "nur den") in explanation, part
 
 

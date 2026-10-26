@@ -1,6 +1,6 @@
 """Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets und von Sub-Tasks und geänderten Status-Gewichten."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -36,6 +36,7 @@ class Analysis:
     done: np.ndarray            # erledigt je Atom
     assign: A.Assignment        # Zuordnung der Atome zur Ebene
     plan: tuple                 # der ganze Plan, auf den sich die Mediane „im ganzen Plan“ beziehen (ohne Angabe die Tickets der Auswertung selbst)
+    ctx: dict = field(default_factory=dict, compare=False, repr=False)      # Zwischenergebnisse zu diesen Tickets (siehe `A.cached`); die Tabellen und Regelvergleiche zu dieser Auswertung nutzen sie mit
 
     @property
     def level(self) -> int:
@@ -97,35 +98,41 @@ class _Counted:
     overall: tuple[float, float, float]      # gewichtet, nur Done nach Gewicht, nur Done nach Anzahl
 
 
-def _count(issues, settings: Settings, plan) -> _Counted:
-    credit_of = A.status_credits(status_list(issues), settings.overrides)
-    rejected = A.rejected_indices(issues)
+def _count(issues, settings: Settings, plan, ctx: dict | None = None) -> _Counted:
+    """Die zählenden Tickets nach `settings`. Mit `ctx` (siehe `A.cached`) werden Teile, die von der Regel für ungeschätzte Tickets nicht abhängen, bei gleichen `issues` und `plan` nur einmal berechnet."""
     if settings.sub_rule not in C.SUB_RULES:
         raise KeyError(settings.sub_rule)
-    subtasks = frozenset(i for i, t in enumerate(issues) if t.is_subtask) if settings.sub_rule == C.SUB_SELF else frozenset()        # c: Sub-Tasks sind weder Atome noch Kinder
-    atoms = A.select_atoms(issues, skip=rejected | subtasks)
-    rejected_atoms = tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected)
-    plan = tuple(issues) if plan is None else tuple(plan)
-    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE)
-    c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
-    done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
-    unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
+    if ctx is not None and ctx.setdefault("size", len(issues)) != len(issues):
+        raise ValueError("Der Zwischenspeicher gehört zu anderen Tickets")
+    subtasks_out = settings.sub_rule == C.SUB_SELF            # c: Sub-Tasks sind weder Atome noch Kinder
+    credit_of = A.cached(ctx, ("credit_of", settings.overrides), lambda: A.status_credits(status_list(issues), settings.overrides))
+    rejected = A.cached(ctx, "rejected", lambda: A.rejected_indices(issues))
+    subtasks = frozenset(i for i, t in enumerate(issues) if t.is_subtask) if subtasks_out else frozenset()
+    atoms = A.cached(ctx, ("atoms", subtasks_out), lambda: A.select_atoms(issues, skip=rejected | subtasks))
+    rejected_atoms = A.cached(ctx, ("rejected_atoms", subtasks_out), lambda: tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected))
+    plan = A.cached(ctx, "plan", lambda: tuple(issues) if plan is None else tuple(plan))
+    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx)
+    c, done, unest = A.cached(ctx, ("atom_arrays", subtasks_out, settings.overrides), lambda: (
+        np.array([credit_of[issues[i].status] for i in atoms], dtype=float), np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool),
+        np.array([issues[i].points is None for i in atoms], dtype=bool)))
     return _Counted(credit_of, rejected, atoms, rejected_atoms, plan, w, c, done, unest, A.overall(w, c, done))
 
 
 def analyse(issues, settings: Settings | None = None, plan=None) -> Analysis:
     """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen."""
     settings = Settings() if settings is None else settings
-    n = _count(issues, settings, plan)
-    first = A.assign_groups(issues, n.atoms, level_of(settings))
+    ctx: dict = {}
+    n = _count(issues, settings, plan, ctx)
+    first = A.assign_groups(issues, n.atoms, level_of(settings), ctx)
     stats = A.aggregate(first, n.w, n.c, n.done, n.unest)
-    tree = A.tree_graph(issues, n.atoms, n.w, n.c, n.credit_of, settings.root, excluded=n.rejected)
-    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan)
+    tree = A.tree_graph(issues, n.atoms, n.w, n.c, n.credit_of, settings.root, excluded=n.rejected, ctx=ctx)
+    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan, ctx)
 
 
-def headline(issues, settings: Settings, plan=None) -> tuple[float, float, int, int]:
-    """Gesamtfortschritt, Gesamtgewicht, Zahl der Tickets ohne Story Points und Zahl der zählenden Tickets: dieselben Werte wie `analyse`, aber ohne Gruppen und Graph (für den Vergleich der Regeln)."""
-    n = _count(issues, settings, plan)
+def headline(issues, settings: Settings, plan=None, ctx: dict | None = None) -> tuple[float, float, int, int]:
+    """Gesamtfortschritt, Gesamtgewicht, Zahl der Tickets ohne Story Points und Zahl der zählenden Tickets: dieselben Werte wie `analyse`, aber ohne Gruppen und Graph (für den Vergleich der Regeln).
+    `ctx`: ein leeres Wörterbuch, das der Aufrufer für eine Reihe von Aufrufen mit denselben Tickets und demselben Plan teilt (siehe `A.cached`)."""
+    n = _count(issues, settings, plan, ctx)
     return n.overall[0], float(n.w.sum()), int(n.unest.sum()), len(n.atoms)
 
 

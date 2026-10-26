@@ -169,9 +169,9 @@ def render_loaded(file_name, issues_all, report):
 
 # --- Auswahl (Seitenleiste) ---------------------------------------------------------------------------------------------------------------------
 
-def root_labeller(issues_all):
-    """Funktion Schlüssel -> Beschriftung der Wurzel-Auswahl (eingerückt nach Tiefe im Baum)."""
-    root_depth = dict(A.root_choices(issues_all))
+def root_labeller(issues_all, ctx):
+    """Funktion Schlüssel -> Beschriftung der Wurzel-Auswahl (eingerückt nach Tiefe im Baum). `ctx`: Zwischenergebnisse zu `issues_all` (siehe `A.cached`)."""
+    root_depth = dict(A.root_choices(issues_all, ctx))
     by_key = {t.key: t for t in issues_all}
 
     def root_label(key):
@@ -182,9 +182,9 @@ def root_labeller(issues_all):
     return root_label
 
 
-def render_sidebar(issues_all, root_label):
+def render_sidebar(issues_all, root_label, ctx):
     """Teilprojekt, Regel für Tickets ohne Story Points und Regel für Sub-Tasks. Rückgabe: Wurzel, die Tickets des Teilprojekts und die beiden Regeln."""
-    root_depth = dict(A.root_choices(issues_all))
+    root_depth = dict(A.root_choices(issues_all, ctx))
     root_options = (C.ROOT_ALL, *root_depth)
     if st.session_state.get("root", C.ROOT_ALL) not in root_options:        # die Datei hat gewechselt: die alte Wurzel gibt es nicht mehr
         st.session_state["root"] = C.ROOT_ALL
@@ -192,7 +192,7 @@ def render_sidebar(issues_all, root_label):
     with st.sidebar:
         st.header("Teilprojekt")
         if current_root != C.ROOT_ALL:
-            up_key = A.parent_root(issues_all, current_root)
+            up_key = A.parent_root(issues_all, current_root, ctx)
             if up_key != C.ROOT_ALL:
                 st.button("⏫ Ganzer Plan", on_click=_go_to, args=(C.ROOT_ALL,), key="nav_top", width="stretch")
             st.button("⬆ Eine Stufe hoch: " + root_label(up_key).lstrip("↳ "), on_click=_go_to, args=(up_key,), key="nav_up", width="stretch",
@@ -335,8 +335,9 @@ def main():
         return
     file_name, issues_all, report = loaded
     render_loaded(file_name, issues_all, report)
-    root_label = root_labeller(issues_all)
-    root, issues, unest_rule, sub_rule = render_sidebar(issues_all, root_label)
+    all_ctx: dict = {}            # Zwischenergebnisse zum ganzen Plan (Baumreihenfolge), nur für diesen Durchlauf
+    root_label = root_labeller(issues_all, all_ctx)
+    root, issues, unest_rule, sub_rule = render_sidebar(issues_all, root_label, all_ctx)
     with guard("Auswertung"):
         overrides = render_status_weights(issues)
         a = analyse(issues, Settings(root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides), issues_all)

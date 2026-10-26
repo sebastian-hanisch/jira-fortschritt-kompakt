@@ -217,17 +217,24 @@ def select_atoms(issues, skip: frozenset[int] = frozenset()) -> list[int]:
     return [i for i, t in enumerate(issues) if i not in skip and not t.is_epic and t.key not in parents]
 
 
-def tree_depths(issues) -> list[int]:
-    """Tiefe jedes Tickets im Ticket-Baum (0 = oberste Stufe der Daten, bei einem Teilprojekt die Wurzel); die Stufe des Tickets im Sinne von „gleiche Stufe“."""
-    depth = [0] * len(issues)
-    for i, d, _ in tree_order(issues):
-        depth[i] = d
-    return depth
+def tree_depths(issues, ctx: dict | None = None) -> list[int]:
+    """Tiefe jedes Tickets im Ticket-Baum (0 = oberste Stufe der Daten, bei einem Teilprojekt die Wurzel); die Stufe des Tickets im Sinne von „gleiche Stufe“. `ctx`: siehe `cached`."""
+    def build():
+        depth = [0] * len(issues)
+        for i, d, _ in tree_order(issues, C.ROOT_ALL, ctx):
+            depth[i] = d
+        return depth
+    return cached(ctx, "depths", build)
 
 
-def tree_order(issues, root: str = C.ROOT_ALL) -> list[tuple[int, int, int]]:
+def tree_order(issues, root: str = C.ROOT_ALL, ctx: dict | None = None) -> list[tuple[int, int, int]]:
     """Die Tickets als Wald in Tiefensuche-Reihenfolge: (Index, Tiefe, Index des Elternknotens im Baum oder -1). Wurzeln sind Tickets ohne Eltern in der Datei; ein Zyklus
-    ohne Wurzel folgt am Ende und beginnt bei seinem ersten Ticket. Mit `root` nur dieser Teilbaum, die Wurzel in Tiefe 0."""
+    ohne Wurzel folgt am Ende und beginnt bei seinem ersten Ticket. Mit `root` nur dieser Teilbaum, die Wurzel in Tiefe 0. Mit `ctx` (siehe `cached`) wird die Reihenfolge je Wurzel nur einmal
+    berechnet; die Liste gehört dann dem Zwischenspeicher und wird nicht verändert."""
+    return cached(ctx, ("tree_order", root), lambda: _tree_order(issues, root))
+
+
+def _tree_order(issues, root: str) -> list[tuple[int, int, int]]:
     index = {t.key: n for n, t in enumerate(issues)}
     kids = children_of(issues)
     out: list[tuple[int, int, int]] = []
@@ -257,12 +264,12 @@ def tree_order(issues, root: str = C.ROOT_ALL) -> list[tuple[int, int, int]]:
     return out
 
 
-def parent_root(issues, root: str) -> str:
+def parent_root(issues, root: str, ctx: dict | None = None) -> str:
     """Die Wurzel eine Stufe höher: das übergeordnete Ticket von `root`, wenn es als Wurzel taugt (siehe `root_choices`), sonst das ganze Projekt. Für das ganze Projekt selbst gibt es nichts darüber."""
     if root == C.ROOT_ALL:
         return C.ROOT_ALL
     parent = next((t.parent for t in issues if t.key == root), "")
-    return parent if parent in dict(root_choices(issues)) else C.ROOT_ALL
+    return parent if parent in dict(root_choices(issues, ctx)) else C.ROOT_ALL
 
 
 def root_for_click(issues, key: str) -> str | None:
@@ -271,13 +278,25 @@ def root_for_click(issues, key: str) -> str | None:
     return key if key == C.ROOT_ALL or key in dict(root_choices(issues)) else None
 
 
-def root_choices(issues) -> list[tuple[str, int]]:
-    """Tickets, die als Wurzel einer Teilauswertung taugen (alle mit Kindern, außer Sub-Tasks), in der Reihenfolge des Baums mit ihrer Tiefe."""
-    kids = children_of(issues)
-    return [(issues[i].key, depth) for i, depth, _ in tree_order(issues) if issues[i].key in kids and not issues[i].is_subtask]
+def root_choices(issues, ctx: dict | None = None) -> list[tuple[str, int]]:
+    """Tickets, die als Wurzel einer Teilauswertung taugen (alle mit Kindern, außer Sub-Tasks), in der Reihenfolge des Baums mit ihrer Tiefe. `ctx`: siehe `cached`."""
+    def build():
+        kids = children_of(issues)
+        return [(issues[i].key, depth) for i, depth, _ in tree_order(issues, C.ROOT_ALL, ctx) if issues[i].key in kids and not issues[i].is_subtask]
+    return cached(ctx, "root_choices", build)
 
 
 # ---------------------------------------------------------------- Gewichte
+
+def cached(ctx: dict | None, key, make):
+    """Ergebnis von `make()`, bei gleichem `key` nur einmal berechnet und in `ctx` abgelegt (ohne `ctx` einfach berechnet). `ctx` gehört dem Aufrufer, lebt nur für eine Reihe von Aufrufen mit denselben
+    Tickets und ist keine globale Ablage; der Schlüssel muss nennen, was das Ergebnis sonst noch ändert."""
+    if ctx is None:
+        return make()
+    if key not in ctx:
+        ctx[key] = make()
+    return ctx[key]
+
 
 def _type_of(issue: Issue) -> str:
     return issue.type.strip().lower()
@@ -291,22 +310,22 @@ def _median_table(source, members, key_of) -> dict:
     return {k: float(median(v)) for k, v in groups.items()}
 
 
-def _plan_pool(plan_issues) -> list[int]:
+def _plan_pool(plan_issues, ctx=None) -> list[int]:
     """Die geschätzten zählenden Tickets des ganzen Plans (ohne zurückgewiesene): Grundlage der Mediane „im ganzen Plan“."""
-    return [j for j in select_atoms(plan_issues, skip=rejected_indices(plan_issues)) if plan_issues[j].points is not None]
+    return cached(ctx, "plan_pool", lambda: [j for j in select_atoms(plan_issues, skip=rejected_indices(plan_issues)) if plan_issues[j].points is not None])
 
 
-def _unestimated_weight(issues, pool, rule: str, plan_issues):
+def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None):
     """Funktion Ticketindex -> Gewicht für ein Ticket ohne Story Points nach `rule`. Gebaut werden nur die Mediantabellen, die die Regel braucht."""
     if rule == C.UNEST_ONE:
         return lambda i: 1.0
     if rule == C.UNEST_IGNORE:
         return lambda i: 0.0
     if rule == C.UNEST_PLAN:
-        plan_depth = dict(zip((t.key for t in plan_issues), tree_depths(plan_issues), strict=True))
-        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues), lambda j: plan_depth[plan_issues[j].key])
+        plan_depth = cached(ctx, "plan_depth", lambda: dict(zip((t.key for t in plan_issues), tree_depths(plan_issues), strict=True)))
+        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues, ctx), lambda j: plan_depth[plan_issues[j].key])
         return lambda i: by_plan_level.get(plan_depth.get(issues[i].key), 1.0)
-    depth = tree_depths(issues)
+    depth = tree_depths(issues, ctx)
     by_level = _median_table(issues, pool, lambda i: depth[i])
     if rule == C.UNEST_MEDIAN:
         return lambda i: by_level.get(depth[i], 1.0)
@@ -319,7 +338,7 @@ def _unestimated_weight(issues, pool, rule: str, plan_issues):
     if rule == C.UNEST_TEAM:
         by_team = _median_table(issues, pool, lambda i: issues[i].team)
         return lambda i: by_team.get(issues[i].team, 1.0)
-    plan_pool = _plan_pool(plan_issues)
+    plan_pool = _plan_pool(plan_issues, ctx)
     plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
 
     def chain(i: int) -> float:         # Rückfallkette: Geschwister, Typ, Stufe, Median des ganzen Plans, sonst 1
@@ -344,17 +363,18 @@ def _shared_points(issues, atoms) -> dict[int, float]:
     return share
 
 
-def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False) -> np.ndarray:
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False, ctx: dict | None = None) -> np.ndarray:
     """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (die Buchstaben stehen in `jira_constants`). Die Regeln mit Median nehmen den Median der geschätzten Atome
     aus `basis` (Voreinstellung: `atoms`, z. B. die gezählten Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden), und zwar aus derselben Gruppe wie das Ticket: A gleiche Stufe
     (Tiefe im Ticket-Baum), C gleicher Typ, D gleiches übergeordnetes Ticket, E gleiches Team; B gleiche Stufe im ganzen Plan (`plan`, Voreinstellung `issues`: die Stufe zählt dann in
     den Tiefen des ganzen Plans, nicht des Teilbaums); F die erste Gruppe der Kette Geschwister, Typ, Stufe, sonst der Median aller geschätzten Atome des ganzen Plans. Gibt es in der
     Gruppe kein geschätztes Atom, gilt 1. H setzt 1, I setzt 0 (das Ticket zählt dann nicht im Gewicht). Mit `distribute` teilen die Atome unter einer geschätzten, nicht
-    zusammenfassenden Eltern-Story die Story Points der Story gleichmäßig unter sich auf, wenn keines von ihnen eigene Story Points hat; sonst gilt die Regel."""
+    zusammenfassenden Eltern-Story die Story Points der Story gleichmäßig unter sich auf, wenn keines von ihnen eigene Story Points hat; sonst gilt die Regel. `ctx` (siehe `cached`) lässt
+    viele Aufrufe mit denselben `issues` und `plan`, aber verschiedenen Regeln die Stufen und den Pool des Plans nur einmal berechnen."""
     if rule not in C.UNEST_RULES:
         raise KeyError(rule)
     pool = [i for i in (atoms if basis is None else basis) if issues[i].points is not None]
-    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan)
+    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan, ctx)
     share = _shared_points(issues, atoms) if distribute else {}
     return np.array([issues[i].points if issues[i].points is not None else share.get(i, fill(i)) for i in atoms], dtype=float)
 
@@ -376,12 +396,14 @@ def natural_key(label: str):
     return (label.startswith("("), [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", label)])
 
 
-def hierarchy_chains(issues) -> list[list[int]]:
-    """Je Ticket die Kette der Tickets von der obersten Stufe bis zu ihm selbst (Indizes); Zyklen und fehlende Eltern enden an der Stelle, an der der Baum aufhört."""
-    chains: list[list[int]] = [[] for _ in issues]
-    for i, _, parent in tree_order(issues):
-        chains[i] = (chains[parent] if parent >= 0 else []) + [i]
-    return chains
+def hierarchy_chains(issues, ctx: dict | None = None) -> list[list[int]]:
+    """Je Ticket die Kette der Tickets von der obersten Stufe bis zu ihm selbst (Indizes); Zyklen und fehlende Eltern enden an der Stelle, an der der Baum aufhört. `ctx`: siehe `cached`."""
+    def build():
+        chains: list[list[int]] = [[] for _ in issues]
+        for i, _, parent in tree_order(issues, C.ROOT_ALL, ctx):
+            chains[i] = (chains[parent] if parent >= 0 else []) + [i]
+        return chains
+    return cached(ctx, "chains", build)
 
 
 def summary_level(root: str) -> int:
@@ -389,10 +411,10 @@ def summary_level(root: str) -> int:
     return 1 if root == C.ROOT_ALL else 2
 
 
-def level_labels(issues, atoms, level: int) -> list[str]:
+def level_labels(issues, atoms, level: int, ctx: dict | None = None) -> list[str]:
     """Gruppe je Atom auf der Hierarchiestufe `level` (1 = oberste Stufe): das Ticket der Kette auf dieser Stufe, bei einem Atom auf genau dieser Stufe es selbst. Ein Atom, das höher
     steht, bekommt „(keine Stufe n)“."""
-    chains = hierarchy_chains(issues)
+    chains = hierarchy_chains(issues, ctx)
     out = []
     for i in atoms:
         chain = chains[i]
@@ -404,9 +426,9 @@ def level_labels(issues, atoms, level: int) -> list[str]:
     return out
 
 
-def assign_groups(issues, atoms, level: int = 1) -> Assignment:
+def assign_groups(issues, atoms, level: int = 1, ctx: dict | None = None) -> Assignment:
     """Ordnet jedes Atom der Gruppe seiner Hierarchiestufe `level` zu (siehe `level_labels`)."""
-    per_atom = [[label] for label in level_labels(issues, atoms, level)]
+    per_atom = [[label] for label in level_labels(issues, atoms, level, ctx)]
     labels = tuple(sorted({g for gs in per_atom for g in gs}, key=natural_key))
     index = {g: n for n, g in enumerate(labels)}
     a_idx, g_idx, share = [], [], []
@@ -507,11 +529,11 @@ def _layout_rows(keep: list[int], parent: np.ndarray) -> tuple[dict[int, float],
 
 
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, max_nodes: int = C.GRAPH_MAX_NODES,
-               excluded: frozenset[int] = frozenset()) -> TreeGraph:
+               excluded: frozenset[int] = frozenset(), ctx: dict | None = None) -> TreeGraph:
     """Gewicht und Fortschritt je Knoten des Hierarchiebaums. Ein Knoten trägt die Summe seiner Atome (er selbst, falls er eins ist, und alle darunter), der Fortschritt ist
     die gewichtete Gutschrift dieser Summe. Ein Blatt ohne Gewicht zeigt die Gutschrift seines Status (z. B. Sub-Tasks); alles andere ohne Gewicht bleibt leer. Ohne `root` steht
     ein Knoten „Projekt“ über allen Wurzeln. Über `max_nodes` hinaus wird die tiefste Ebene so lange zusammengefasst, bis der Graph passt."""
-    order = tree_order(issues, root)
+    order = tree_order(issues, root, ctx)
     shift = 0 if root != C.ROOT_ALL else 1
     n = len(order) + shift
     keys = [""] * n

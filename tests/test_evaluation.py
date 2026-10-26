@@ -188,3 +188,24 @@ def test_headline_equals_the_numbers_of_the_full_analysis_for_every_rule(seed):
             progress, weight, n_unestimated, n_atoms = ev.headline(issues, settings)
             assert (weight, n_unestimated, n_atoms) == (a.weight, a.n_unestimated, a.n_atoms)
             assert progress == a.progress or (math.isnan(progress) and math.isnan(a.progress))
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_shared_intermediate_results_do_not_change_any_number(seed):
+    """Mit dem Zwischenspeicher der Analyse (`ctx`) kommt dasselbe heraus wie bei jedem Aufruf allein: Baumreihenfolge, Tiefen, Ketten und die Zahlen der Regelvergleiche."""
+    issues = random_project(seed)
+    ctx: dict = {}
+    assert A.tree_order(issues, C.ROOT_ALL, ctx) == A.tree_order(issues) and A.tree_order(issues, C.ROOT_ALL, ctx) is A.tree_order(issues, C.ROOT_ALL, ctx)
+    assert A.tree_depths(issues, ctx) == A.tree_depths(issues) and A.hierarchy_chains(issues, ctx) == A.hierarchy_chains(issues)
+    a = ev.analyse(issues)
+    for rule in C.UNEST_RULES:
+        alone = ev.headline(issues, dataclasses.replace(a.settings, unest_rule=rule), a.plan)
+        shared = ev.headline(issues, dataclasses.replace(a.settings, unest_rule=rule), a.plan, a.ctx)
+        assert shared[1:] == alone[1:] and (shared[0] == alone[0] or (math.isnan(shared[0]) and math.isnan(alone[0])))
+
+
+def test_an_intermediate_store_of_other_tickets_is_refused():
+    ctx: dict = {}
+    ev.headline(random_project(0), ev.Settings(), None, ctx)
+    with pytest.raises(ValueError):
+        ev.headline(random_project(0, n_epics=2), ev.Settings(), None, ctx)
