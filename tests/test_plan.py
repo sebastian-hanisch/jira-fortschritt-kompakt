@@ -171,3 +171,19 @@ def test_pseudonymize_assignees_numbers_by_sorted_name_and_keeps_empty_names():
     issues = (Issue(key="A", assignee="Zoe"), Issue(key="B", assignee="Anna"), Issue(key="C"), Issue(key="D", assignee="Zoe"))
     assert [i.assignee for i in J.pseudonymize_assignees(issues)] == ["Person 2", "Person 1", "", "Person 2"]          # unabhängig von der Reihenfolge der Tickets
     assert [i.assignee for i in J.pseudonymize_assignees(tuple(reversed(issues)))] == ["Person 2", "", "Person 1", "Person 2"]
+
+
+SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")]
+
+
+def test_export_header_with_story_points_as_the_estimate_unit_finds_all_fields():
+    """Kopfzeile eines Exports, dessen Schätzung in Story Points läuft (Fortschritt abgeschlossen (SP)): alle 14 Felder werden gefunden, die Hochrechnungs-Spalten nicht gelesen."""
+    cells = dict.fromkeys(SP_HEADER, "")
+    cells.update({"Hierarchie": "Story", "Vorgangsschlüssel": "A-2", "Vorgangsstatus": "Done", "Story Points": "3,5", "Story Points (hochrechnen)": "99", "Übergeordnetes Element": "A-1"})
+    parent = dict.fromkeys(SP_HEADER, "")
+    parent.update({"Hierarchie": "Epic", "Vorgangsschlüssel": "A-1", "Vorgangsstatus": "In Arbeit"})
+    data = ("\n".join(";".join(r[h] for h in SP_HEADER) for r in ({h: h for h in SP_HEADER}, parent, cells)) + "\n").encode("utf-8")
+    issues, report = J.read_plan(data)
+    story = next(i for i in issues if i.key == "A-2")
+    assert story.points == 3.5 and story.parent == "A-1" and next(i for i in issues if i.key == "A-1").points is None
+    assert all(row["Gefunden in"] != J.NOT_FOUND for row in report.columns) and report.notes == []

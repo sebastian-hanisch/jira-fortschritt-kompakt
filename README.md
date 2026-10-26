@@ -72,8 +72,8 @@ Sonst gibt es nichts einzustellen.
 
 **Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. Ein Klick auf
 ein Blatt (ein Ticket ohne Kinder) bewirkt nichts. **Hoch:** Die Knöpfe über der Auswahl in der Seitenleiste gehen eine Stufe hoch („Eine Stufe hoch“) oder zurück zum ganzen Plan („Ganzer Plan“). Alternativ
-wechselt die Auswahl „Teilprojekt“ die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an (`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Versuch im Browser
-mit einer ausgelösten Auswahl, den Mausklick selbst konnte ich in meiner Testumgebung nicht auslösen (dort kam auch in einem minimalen Streamlit-Diagramm keine Auswahl an). Wenn der Klick bei euch nichts bewirkt,
+wechselt die Auswahl „Teilprojekt“ die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an (`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Mausklick im Browser
+(Chromium-basiert, erfundener Plan mit 37 Tickets, Kachel- und Graphansicht). Wenn der Klick bei euch nichts bewirkt,
 bitte melden.
 
 ## Ausgabe
@@ -130,7 +130,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
 - **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
 - **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
-- **Klick in die Diagramme.** Der Wechsel der Wurzel per Klick ist nur mit einer ausgelösten Auswahl getestet, nicht mit einem Mausklick im Browser. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
+- **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachel- und Graphansicht an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
 

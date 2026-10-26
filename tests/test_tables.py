@@ -135,7 +135,7 @@ def test_html_table_has_a_header_aligned_numbers_and_escaped_text():
 
 def test_csv_for_excel_uses_semicolon_decimal_comma_and_a_byte_order_mark():
     raw = T.rows_to_csv([{"Gruppe": "a;b", "Gewicht": 0.5, "Fortschritt": None, "Tickets": 3}])
-    assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig") == "Gruppe;Gewicht;Fortschritt;Tickets\na,b;0.5;;3\n"
+    assert raw.startswith(b"\xef\xbb\xbf") and raw.decode("utf-8-sig") == "Gruppe;Gewicht;Fortschritt;Tickets\na,b;0,5;;3\n"
     assert T.rows_to_csv([]) == b"\xef\xbb\xbf"
     assert T.rows_to_csv([{"x": float("nan"), "y": "z\nw"}]).decode("utf-8-sig") == "x;y\n;z w\n"
 

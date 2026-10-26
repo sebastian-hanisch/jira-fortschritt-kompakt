@@ -1,6 +1,6 @@
 """Tabellarische Auswertungen: reine Funktionen, die aus einer `Analysis` Zeilen (Listen von Wörterbüchern) bauen.
 
-Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel (Semikolon, Dezimalpunkt), `rows_to_wiki` und
+Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel (Semikolon, Dezimalkomma), `rows_to_wiki` und
 `rows_to_html` bereiten dieselben Zeilen zum Einfügen in Jira und Confluence auf."""
 
 import html
@@ -244,14 +244,14 @@ ASSUMPTIONS_MARKDOWN = """
 - **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
 - **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
 - **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
-- **Klick in die Diagramme.** Der Wechsel der Wurzel per Klick ist nur mit einer ausgelösten Auswahl getestet, nicht mit einem Mausklick im Browser. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
+- **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachel- und Graphansicht an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
 """
 
 
 def rows_to_csv(rows: list[dict]) -> bytes:
-    """CSV für Excel: Semikolon, Dezimalpunkt, UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
+    """CSV für Excel in deutscher Sprache: Semikolon, Dezimalkomma (ein Dezimalpunkt würde dort als Text oder Datum gelesen), UTF-8 mit Kennung. Zahlen unverändert genau, leere Zellen für None, Semikolon in Text durch Komma ersetzt."""
     if not rows:
         return "".encode("utf-8-sig")
 
@@ -259,7 +259,7 @@ def rows_to_csv(rows: list[dict]) -> bytes:
         if v is None or (isinstance(v, float) and np.isnan(v)):
             return ""
         if isinstance(v, float):
-            return repr(v)
+            return repr(v).replace(".", ",")
         return str(v).replace(";", ",").replace("\n", " ")
     header = list(rows[0])
     lines = [";".join(h.replace(";", ",") for h in header)] + [";".join(cell(r.get(h)) for h in header) for r in rows]

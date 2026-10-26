@@ -273,7 +273,7 @@ with guard("Auswertung"):
     st.caption(
         "Eine Zeile je Ticket direkt unter der Wurzel (im ganzen Plan die obersten), mit allem darunter: die Summe der Story Points der zählenden Tickets je Status, die Status nach Gewicht geordnet und mit ihrem "
         "Gewicht im Kopf. Zurückgewiesene Tickets stehen in einer eigenen Spalte und fehlen im Total ohne Rejected. „Completed“ ist der Anteil der Status ab 90 % Gewicht am Total ohne Rejected; der Fortschritt ist nach "
-        "Status und Story Points gewichtet. Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalpunkt) und als Tabelle für Jira oder Confluence zu übernehmen.")
+        "Status und Story Points gewichtet. Die Tabelle folgt dem Teilprojekt und den Status-Gewichten; als CSV für Excel (Semikolon, Dezimalkomma) und als Tabelle für Jira oder Confluence zu übernehmen.")
 
 
     def show_table(rows, key, formats=None, file_name="tabelle"):
