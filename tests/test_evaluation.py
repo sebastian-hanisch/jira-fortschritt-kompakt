@@ -175,3 +175,16 @@ def test_the_sub_task_rule_c_keeps_the_rejected_logic():
 
 def test_credit_text_shows_one_decimal_and_two_when_needed():
     assert [ev.credit_text(c) for c in (0.8, 0.85, 1.0, 0.9, 0.125, 0.05)] == ["0.8", "0.85", "1.0", "0.9", "0.12", "0.05"]
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_headline_equals_the_numbers_of_the_full_analysis_for_every_rule(seed):
+    """Der Vergleich der Regeln rechnet mit `headline` ohne Gruppen und Graph; die vier Zahlen müssen genau die von `analyse` sein."""
+    issues = random_project(seed)
+    for unest_rule in C.UNEST_RULES:
+        for sub_rule in C.SUB_RULES:
+            settings = ev.Settings(unest_rule=unest_rule, sub_rule=sub_rule)
+            a = ev.analyse(issues, settings)
+            progress, weight, n_unestimated, n_atoms = ev.headline(issues, settings)
+            assert (weight, n_unestimated, n_atoms) == (a.weight, a.n_unestimated, a.n_atoms)
+            assert progress == a.progress or (math.isnan(progress) and math.isnan(a.progress))

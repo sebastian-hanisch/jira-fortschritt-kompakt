@@ -7,6 +7,7 @@ P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sin
 import re
 import unicodedata
 from dataclasses import dataclass, replace
+from functools import lru_cache
 from statistics import median
 
 import numpy as np
@@ -35,6 +36,9 @@ class Issue:
     team: str = ""
     area: str = ""                   # Bereich
     priority: str = ""
+    jira_progress: float | None = None      # Jiras eigene Spalte „Fortschritt (%)“ als Anteil 0..1 (nur zum Vergleich, geht in keine Rechnung ein)
+    jira_done: float | None = None          # Jiras „Fortschritt abgeschlossen (SP)“
+    jira_left: float | None = None          # Jiras „Verbleibender Fortschritt (SP)“
 
     @property
     def is_epic(self) -> bool:
@@ -44,6 +48,7 @@ class Issue:
 
 # ---------------------------------------------------------------- Status und Gutschriften
 
+@lru_cache(maxsize=2048)       # je Auswertung kommen nur wenige Statusnamen vor, aber jedes Ticket fragt sie viele Male ab (nur Namen, keine Ticketdaten; begrenzt)
 def name_key(name: str) -> str:
     """Statusname für den Vergleich: klein geschrieben, ohne Akzente und Umlaut-Punkte, nur Buchstaben und Ziffern („Won't do“ → „wontdo“, „Zurückgewiesen“ → „zuruckgewiesen“)."""
     plain = unicodedata.normalize("NFKD", (name or "").lower())
@@ -79,6 +84,7 @@ STATUS_EXAMPLES = {
 }
 
 
+@lru_cache(maxsize=2048)       # siehe name_key
 def status_class(name: str) -> str:
     """Klasse eines Status nach seinem Namen (deutsch und englisch): rejected, done, merged, test, review oder other. Reihenfolge: zurückgewiesen; Verneinungen
     („Not done“) sind other; dann fertig-klingende Namen („Done“, „Closed“, „Erledigt“, „Released“, „…Prod“), merged, Test („In Test“, „Testing“, „QA“, „Abnahme“) und
@@ -273,6 +279,71 @@ def root_choices(issues) -> list[tuple[str, int]]:
 
 # ---------------------------------------------------------------- Gewichte
 
+def _type_of(issue: Issue) -> str:
+    return issue.type.strip().lower()
+
+
+def _median_table(source, members, key_of) -> dict:
+    """Median der Story Points je Gruppe: `members` sind Indizes in `source`, `key_of(i)` ordnet ein Ticket seiner Gruppe zu."""
+    groups: dict = {}
+    for i in members:
+        groups.setdefault(key_of(i), []).append(source[i].points)
+    return {k: float(median(v)) for k, v in groups.items()}
+
+
+def _plan_pool(plan_issues) -> list[int]:
+    """Die geschätzten zählenden Tickets des ganzen Plans (ohne zurückgewiesene): Grundlage der Mediane „im ganzen Plan“."""
+    return [j for j in select_atoms(plan_issues, skip=rejected_indices(plan_issues)) if plan_issues[j].points is not None]
+
+
+def _unestimated_weight(issues, pool, rule: str, plan_issues):
+    """Funktion Ticketindex -> Gewicht für ein Ticket ohne Story Points nach `rule`. Gebaut werden nur die Mediantabellen, die die Regel braucht."""
+    if rule == C.UNEST_ONE:
+        return lambda i: 1.0
+    if rule == C.UNEST_IGNORE:
+        return lambda i: 0.0
+    if rule == C.UNEST_PLAN:
+        plan_depth = dict(zip((t.key for t in plan_issues), tree_depths(plan_issues), strict=True))
+        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues), lambda j: plan_depth[plan_issues[j].key])
+        return lambda i: by_plan_level.get(plan_depth.get(issues[i].key), 1.0)
+    depth = tree_depths(issues)
+    by_level = _median_table(issues, pool, lambda i: depth[i])
+    if rule == C.UNEST_MEDIAN:
+        return lambda i: by_level.get(depth[i], 1.0)
+    by_type = _median_table(issues, pool, lambda i: _type_of(issues[i]))
+    by_parent = _median_table(issues, pool, lambda i: issues[i].parent)
+    if rule == C.UNEST_TYPE:
+        return lambda i: by_type.get(_type_of(issues[i]), 1.0)
+    if rule == C.UNEST_SIBLINGS:
+        return lambda i: by_parent.get(issues[i].parent, 1.0)
+    if rule == C.UNEST_TEAM:
+        by_team = _median_table(issues, pool, lambda i: issues[i].team)
+        return lambda i: by_team.get(issues[i].team, 1.0)
+    plan_pool = _plan_pool(plan_issues)
+    plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
+
+    def chain(i: int) -> float:         # Rückfallkette: Geschwister, Typ, Stufe, Median des ganzen Plans, sonst 1
+        for found in (by_parent.get(issues[i].parent), by_type.get(_type_of(issues[i])), by_level.get(depth[i]), plan_median):
+            if found is not None:
+                return found
+        return 1.0
+    return chain
+
+
+def _shared_points(issues, atoms) -> dict[int, float]:
+    """Regel b der Sub-Tasks: Atome unter einer geschätzten, nicht zusammenfassenden Eltern-Story, von denen keines eigene Story Points hat, teilen sich deren Story Points gleichmäßig."""
+    by_key = {t.key: t for t in issues}
+    members: dict[str, list[int]] = {}
+    for i in atoms:
+        members.setdefault(issues[i].parent, []).append(i)
+    share: dict[int, float] = {}
+    for parent_key, group in members.items():
+        parent = by_key.get(parent_key)
+        if parent is not None and not parent.is_epic and parent.points is not None and all(issues[i].points is None for i in group):
+            share.update({i: parent.points / len(group) for i in group})
+    return share
+
+
 def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False) -> np.ndarray:
     """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (die Buchstaben stehen in `jira_constants`). Die Regeln mit Median nehmen den Median der geschätzten Atome
     aus `basis` (Voreinstellung: `atoms`, z. B. die gezählten Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden), und zwar aus derselben Gruppe wie das Ticket: A gleiche Stufe
@@ -283,54 +354,8 @@ def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=No
     if rule not in C.UNEST_RULES:
         raise KeyError(rule)
     pool = [i for i in (atoms if basis is None else basis) if issues[i].points is not None]
-    depth = tree_depths(issues)
-
-    def table(key_of, members, source=issues):
-        groups: dict = {}
-        for i in members:
-            groups.setdefault(key_of(i), []).append(source[i].points)
-        return {k: float(median(v)) for k, v in groups.items()}
-    by_level = table(lambda i: depth[i], pool)
-    by_type = table(lambda i: issues[i].type.strip().lower(), pool)
-    by_parent = table(lambda i: issues[i].parent, pool)
-    by_team = table(lambda i: issues[i].team, pool)
-    plan_issues = issues if plan is None else plan
-    plan_atoms = select_atoms(plan_issues, skip=rejected_indices(plan_issues))
-    plan_pool = [j for j in plan_atoms if plan_issues[j].points is not None]
-    plan_depth = dict(zip((t.key for t in plan_issues), tree_depths(plan_issues)))
-    plan_by_level = table(lambda j: plan_depth[plan_issues[j].key], plan_pool, plan_issues)
-    plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
-
-    def fill(i: int) -> float:
-        t = issues[i]
-        if rule == C.UNEST_ONE:
-            return 1.0
-        if rule == C.UNEST_IGNORE:
-            return 0.0
-        if rule == C.UNEST_MEDIAN:
-            return by_level.get(depth[i], 1.0)
-        if rule == C.UNEST_PLAN:
-            return plan_by_level.get(plan_depth.get(t.key), 1.0)
-        if rule == C.UNEST_TYPE:
-            return by_type.get(t.type.strip().lower(), 1.0)
-        if rule == C.UNEST_SIBLINGS:
-            return by_parent.get(t.parent, 1.0)
-        if rule == C.UNEST_TEAM:
-            return by_team.get(t.team, 1.0)
-        for found in (by_parent.get(t.parent), by_type.get(t.type.strip().lower()), by_level.get(depth[i]), plan_median):         # Rückfallkette
-            if found is not None:
-                return found
-        return 1.0
-    share: dict[int, float] = {}
-    if distribute:
-        by_key = {t.key: t for t in issues}
-        members: dict[str, list[int]] = {}
-        for i in atoms:
-            members.setdefault(issues[i].parent, []).append(i)
-        for parent_key, group in members.items():
-            parent = by_key.get(parent_key)
-            if parent is not None and not parent.is_epic and parent.points is not None and all(issues[i].points is None for i in group):
-                share.update({i: parent.points / len(group) for i in group})
+    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan)
+    share = _shared_points(issues, atoms) if distribute else {}
     return np.array([issues[i].points if issues[i].points is not None else share.get(i, fill(i)) for i in atoms], dtype=float)
 
 
@@ -462,6 +487,25 @@ class TreeGraph:
     ignored: np.ndarray | None = None      # zurückgewiesene Knoten: zählen nicht, nichts messbar
 
 
+def _layout_rows(keep: list[int], parent: np.ndarray) -> tuple[dict[int, float], dict[int, list[int]]]:
+    """Zeile (y) je gezeichnetem Knoten und die gezeichneten Kinder je Knoten: Blätter stehen in Tiefensuche-Reihenfolge untereinander, ein Elternknoten mittig vor seinen Kindern.
+    `keep` sind die gezeichneten Knoten in Tiefensuche-Reihenfolge (Eltern vor Kindern)."""
+    kept_kids: dict[int, list[int]] = {}
+    for p in keep:
+        if parent[p] >= 0:
+            kept_kids.setdefault(parent[p], []).append(p)
+    y: dict[int, float] = {}
+    row = 0
+    for p in keep:
+        if p not in kept_kids:
+            y[p] = float(row)
+            row += 1
+    for p in reversed(keep):
+        if p in kept_kids:
+            y[p] = (y[kept_kids[p][0]] + y[kept_kids[p][-1]]) / 2
+    return y, kept_kids
+
+
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, max_nodes: int = C.GRAPH_MAX_NODES,
                excluded: frozenset[int] = frozenset()) -> TreeGraph:
     """Gewicht und Fortschritt je Knoten des Hierarchiebaums. Ein Knoten trägt die Summe seiner Atome (er selbst, falls er eins ist, und alle darunter), der Fortschritt ist
@@ -479,7 +523,7 @@ def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str,
     node_issue = [-1] * n
     if shift:
         keys[0] = "Projekt"
-    for p, (i, d, par) in enumerate(order, start=shift):
+    for p, (i, d, _) in enumerate(order, start=shift):
         node_issue[p] = i
         keys[p], titles[p], types[p], statuses[p] = issues[i].key, issues[i].summary, issues[i].type, issues[i].status
         depth[p] = d + shift
@@ -505,19 +549,7 @@ def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str,
     shown_depth = int(fits[-1]) if len(fits) else 0
     keep = [p for p in range(n) if depth[p] <= shown_depth]
     slot = {p: s for s, p in enumerate(keep)}
-    kept_kids: dict[int, list[int]] = {}
-    for p in keep:
-        if parent[p] >= 0:
-            kept_kids.setdefault(parent[p], []).append(p)
-    y = {}
-    row = 0
-    for p in keep:                           # Blätter in Tiefensuche-Reihenfolge untereinander
-        if p not in kept_kids:
-            y[p] = float(row)
-            row += 1
-    for p in reversed(keep):
-        if p in kept_kids:
-            y[p] = (y[kept_kids[p][0]] + y[kept_kids[p][-1]]) / 2
+    y, kept_kids = _layout_rows(keep, parent)
     progress, weight, hidden = [], [], []
     for p in keep:
         weight.append(float(wsum[p]))

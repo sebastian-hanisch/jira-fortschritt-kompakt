@@ -1,0 +1,12 @@
+# Lint für Code und Tests: ruff check .
+# E/F: Pyflakes und Pycodestyle (ungenutzte Importe, undefinierte Namen), I: Import-Reihenfolge, B: häufige Fehlerquellen (flake8-bugbear).
+# E501 (Zeilenlänge) ist aus, weil die deutschen Erklärtexte und Streamlit-Aufrufe bewusst in langen Zeilen stehen; B905 (zip ohne strict) ist aus, weil alle zip-Aufrufe gleich lange Felder verbinden.
+target-version = "py312"
+line-length = 200
+
+[lint]
+select = ["E", "F", "I", "B"]
+ignore = ["E501", "B905"]
+
+[lint.isort]
+known-first-party = ["app", "conftest", "jira_charts", "jira_constants", "jira_core", "jira_evaluation", "jira_plan", "jira_privacy", "jira_tables", "test_app", "test_status"]

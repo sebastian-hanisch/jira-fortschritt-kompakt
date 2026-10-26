@@ -6,8 +6,8 @@ import pytest
 import jira_constants as C
 import jira_evaluation as ev
 from conftest import random_project
-from jira_core import Issue
 from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, progress_rgb, selected_key, squarify, text_color_on, tile_label, tile_layout
+from jira_core import Issue
 
 
 def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):

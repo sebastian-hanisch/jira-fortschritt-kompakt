@@ -66,13 +66,38 @@ def pct(x: float) -> str:
     return de(100 * x) + " %"
 
 
+def or_dash(x: float, fmt) -> str:
+    """`fmt(x)`, bei NaN (kein Gewicht, nichts messbar) ein Strich."""
+    return "–" if np.isnan(x) else fmt(x)
+
+
+def delta_points(value: float, reference: float) -> str | None:
+    """Abstand „Wert minus Referenz“ in Prozentpunkten mit Vorzeichen; ohne Abstand (None), wenn einer der beiden Werte fehlt (NaN)."""
+    return None if np.isnan(value) or np.isnan(reference) else f"{de(100 * (value - reference), sign=True)} Punkte"
+
+
 def status_list(issues) -> list[str]:
     """Alle vorkommenden Status, sortiert nach Gutschrift (nach dem Namen), bei gleicher Gutschrift „noch nicht begonnen“ zuerst, dann nach Name."""
     return sorted({t.status for t in issues}, key=lambda s: (A.status_credit(s), A.new_rank(s), s.lower()))
 
 
-def analyse(issues, settings: Settings = Settings(), plan=None) -> Analysis:
-    """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen."""
+@dataclass(frozen=True)
+class _Counted:
+    """Die zählenden Tickets mit Gewicht, Gutschrift und den drei Gesamtwerten: der Teil von `analyse`, den auch der Vergleich der Regeln braucht (ohne Gruppen und Graph)."""
+
+    credit_of: dict[str, float]
+    rejected: frozenset[int]
+    atoms: list[int]
+    rejected_atoms: tuple[int, ...]
+    plan: tuple
+    w: np.ndarray
+    c: np.ndarray
+    done: np.ndarray
+    unest: np.ndarray
+    overall: tuple[float, float, float]      # gewichtet, nur Done nach Gewicht, nur Done nach Anzahl
+
+
+def _count(issues, settings: Settings, plan) -> _Counted:
     credit_of = A.status_credits(status_list(issues), settings.overrides)
     rejected = A.rejected_indices(issues)
     if settings.sub_rule not in C.SUB_RULES:
@@ -85,11 +110,23 @@ def analyse(issues, settings: Settings = Settings(), plan=None) -> Analysis:
     c = np.array([credit_of[issues[i].status] for i in atoms], dtype=float)
     done = np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool)
     unest = np.array([issues[i].points is None for i in atoms], dtype=bool)
-    p_w, p_d, p_n = A.overall(w, c, done)
-    first = A.assign_groups(issues, atoms, level_of(settings))
-    stats = A.aggregate(first, w, c, done, unest)
-    tree = A.tree_graph(issues, atoms, w, c, credit_of, settings.root, excluded=rejected)
-    return Analysis(settings, credit_of, len(atoms), float(w.sum()), p_w, p_d, p_n, int(unest.sum()), stats, tree, tuple(atoms), rejected_atoms, w, c, done, first, plan)
+    return _Counted(credit_of, rejected, atoms, rejected_atoms, plan, w, c, done, unest, A.overall(w, c, done))
+
+
+def analyse(issues, settings: Settings | None = None, plan=None) -> Analysis:
+    """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen."""
+    settings = Settings() if settings is None else settings
+    n = _count(issues, settings, plan)
+    first = A.assign_groups(issues, n.atoms, level_of(settings))
+    stats = A.aggregate(first, n.w, n.c, n.done, n.unest)
+    tree = A.tree_graph(issues, n.atoms, n.w, n.c, n.credit_of, settings.root, excluded=n.rejected)
+    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan)
+
+
+def headline(issues, settings: Settings, plan=None) -> tuple[float, float, int, int]:
+    """Gesamtfortschritt, Gesamtgewicht, Zahl der Tickets ohne Story Points und Zahl der zählenden Tickets: dieselben Werte wie `analyse`, aber ohne Gruppen und Graph (für den Vergleich der Regeln)."""
+    n = _count(issues, settings, plan)
+    return n.overall[0], float(n.w.sum()), int(n.unest.sum()), len(n.atoms)
 
 
 def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:

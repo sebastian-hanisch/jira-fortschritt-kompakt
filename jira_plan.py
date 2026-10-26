@@ -1,7 +1,8 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Story Points, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und Komponenten. Spalten mit „(hochrechnen)“ sind Summen über die
+Story Points, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und Komponenten. Dazu Jiras eigene Fortschrittsspalten („Fortschritt (%)“, „Fortschritt
+abgeschlossen (SP)“, „Verbleibender Fortschritt (SP)“), die nur der Gegenprobe dienen und in keine Rechnung eingehen. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
 import csv
@@ -29,7 +30,7 @@ class ImportReport:
 FIELD_LABELS = (
     ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
     ("sprint", "Sprint"), ("components", "Komponente"), ("labels", "Label"), ("assignee", "Bearbeiter"), ("versions", "Release"), ("team", "Team"), ("area", "Bereich"),
-    ("priority", "Priorität"))
+    ("priority", "Priorität"), ("jira_progress", "Jira: Fortschritt (%)"), ("jira_done", "Jira: Fortschritt abgeschlossen (SP)"), ("jira_left", "Jira: Verbleibender Fortschritt (SP)"))
 NOT_FOUND = "nicht gefunden"
 
 _ALIASES = {
@@ -47,6 +48,9 @@ _ALIASES = {
     "team": ("team",),
     "area": ("bereich", "area"),
     "priority": ("priorität", "priority", "prioritaet"),
+    "jira_progress": ("fortschritt (%)",),
+    "jira_done": ("fortschritt abgeschlossen (sp)",),
+    "jira_left": ("verbleibender fortschritt (sp)",),
 }
 DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # die Schätzung in Tagen des Plan-Exports: wird nicht gelesen, nur gemeldet
 _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgabe", "untervorgang"}
@@ -65,6 +69,12 @@ def parse_number(text) -> float | None:
         return float(t)
     except ValueError:
         return None
+
+
+def parse_percent(text) -> float | None:
+    """Prozentwert aus Text („35“, „35,5“, „35 %“) als Anteil 0..1; leer oder unlesbar = None."""
+    value = parse_number(str(text).replace("%", "")) if text is not None else None
+    return None if value is None else value / 100
 
 
 def _split_list(text: str) -> tuple[str, ...]:
@@ -102,7 +112,8 @@ def field_counts(issues) -> dict[str, int]:
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
         "sprint": sum(bool(i.sprints) for i in issues), "components": sum(bool(i.components) for i in issues), "labels": sum(bool(i.labels) for i in issues),
         "assignee": sum(bool(i.assignee) for i in issues), "versions": sum(bool(i.versions) for i in issues), "team": sum(bool(i.team) for i in issues),
-        "area": sum(bool(i.area) for i in issues), "priority": sum(bool(i.priority) for i in issues)}
+        "area": sum(bool(i.area) for i in issues), "priority": sum(bool(i.priority) for i in issues), "jira_progress": sum(i.jira_progress is not None for i in issues),
+        "jira_done": sum(i.jira_done is not None for i in issues), "jira_left": sum(i.jira_left is not None for i in issues)}
 
 
 def coverage_rows(issues, found_in: dict[str, str]) -> list[dict]:
@@ -137,6 +148,51 @@ def _resolve_parents(issues: list[Issue]) -> list[Issue]:
     return out
 
 
+def _cell(row: list[str], cols: dict[str, list[int]], name: str) -> str:
+    """Erster nicht leere Wert der Spalte(n) `name` in der Zeile, sonst leer."""
+    return next((row[i].strip() for i in cols.get(name, []) if i < len(row) and row[i].strip()), "")
+
+
+def _cells(row: list[str], cols: dict[str, list[int]], name: str) -> list[str]:
+    """Alle nicht leeren Werte der Spalten `name` (Sprint, Stichwörter und Komponenten kommen mehrfach vor)."""
+    return [row[i].strip() for i in cols.get(name, []) if i < len(row) and row[i].strip()]
+
+
+def _listed(row: list[str], cols: dict[str, list[int]], name: str) -> tuple[str, ...]:
+    return tuple(part for value in _cells(row, cols, name) for part in _split_list(value))
+
+
+def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, bool]:
+    """Ein Ticket aus einer Zeile des Exports; der zweite Wert sagt, ob die Story Points einen Text enthielten, der keine Zahl ist."""
+    type_name = _cell(row, cols, "type") or "Story"
+    raw_points = _cell(row, cols, "points")
+    points = parse_number(raw_points)
+    issue = Issue(
+        key=_cell(row, cols, "key"), summary=_cell(row, cols, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=_cell(row, cols, "status"), points=points,
+        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), labels=_listed(row, cols, "labels"), components=_listed(row, cols, "components"),
+        assignee=_cell(row, cols, "assignee"), versions=_listed(row, cols, "versions"), team=_cell(row, cols, "team"), area=_cell(row, cols, "area"), priority=_cell(row, cols, "priority"),
+        jira_progress=parse_percent(_cell(row, cols, "jira_progress")), jira_done=parse_number(_cell(row, cols, "jira_done")), jira_left=parse_number(_cell(row, cols, "jira_left")))
+    return issue, bool(raw_points) and points is None
+
+
+def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: int, bad_points: int) -> list[str]:
+    """Was dem Nutzer vor der ersten Zahl gesagt werden muss: fehlende Spalten, verlorene Eltern, unlesbare Story Points."""
+    notes = []
+    if "points" not in cols:
+        days = [h.strip() for h in header if _norm(h) in DAY_ESTIMATE_HEADERS]
+        unread = f" Die Schätzung in Tagen („{', '.join(days)}“) wird nicht gelesen." if days else ""
+        notes.append(f"Keine Story-Points-Spalte gefunden.{unread} Alle Tickets gelten als ungeschätzt und wiegen gleich viel.")
+    if "parent" not in cols:
+        notes.append("Keine Spalte „Übergeordnetes Element“: Epics und Hierarchie lassen sich nicht zuordnen.")
+    if "sprint" not in cols:
+        notes.append("Keine Sprint-Spalte gefunden.")
+    if lost_parents:
+        notes.append(f"{lost_parents} Verweise auf übergeordnete Tickets konnten keinem Ticket der Datei zugeordnet werden (Eltern außerhalb der Datei, oder ein Titel statt eines Schlüssels, der nicht eindeutig ist).")
+    if bad_points:
+        notes.append(f"Nicht lesbare Story Points (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+    return notes
+
+
 def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple[Issue, ...], ImportReport]:
     """Liest den CSV-Export aus Jira Plans (Trennzeichen Semikolon oder Komma). Pflicht sind Schlüssel und Status; alles andere ist optional."""
     text = _decode(data)
@@ -154,41 +210,19 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     if len(body) > max_issues:
         raise PlanImportError(f"{len(body)} Tickets sind mehr als die Obergrenze von {max_issues}. Bitte den Plan einschränken (Filter in Jira Plans) und neu exportieren.")
 
-    def cell(row, name, first_only=True):
-        vals = [row[i].strip() for i in cols.get(name, []) if i < len(row) and row[i].strip()]
-        return (vals[0] if vals else "") if first_only else vals
-
     issues, bad_points = [], 0
     for row in body:
-        key = cell(row, "key")
-        if not key:
+        if not _cell(row, cols, "key"):
             continue
-        type_name = cell(row, "type") or "Story"
-        raw_points = cell(row, "points")
-        points = parse_number(raw_points)
-        bad_points += bool(raw_points) and points is None
-        issues.append(Issue(
-            key=key, summary=cell(row, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=cell(row, "status"), points=points,
-            parent=cell(row, "parent"), sprints=tuple(p for v in cell(row, "sprint", False) for p in _split_list(v)), labels=tuple(p for v in cell(row, "labels", False) for p in _split_list(v)),
-            components=tuple(p for v in cell(row, "components", False) for p in _split_list(v)), assignee=cell(row, "assignee"),
-            versions=tuple(p for v in cell(row, "versions", False) for p in _split_list(v)), team=cell(row, "team"), area=cell(row, "area"), priority=cell(row, "priority")))
+        issue, unreadable = _issue_from_row(row, cols)
+        issues.append(issue)
+        bad_points += unreadable
     with_parent = sum(bool(i.parent) for i in issues)
     issues = _resolve_parents(issues)
     lost_parents = with_parent - sum(bool(i.parent) for i in issues)
     report = ImportReport(issues=len(issues))
     report.columns = coverage_rows(issues, {name: ", ".join(dict.fromkeys(header[i].strip() for i in idx)) for name, idx in cols.items()})
-    if "points" not in cols:
-        days = [h.strip() for h in header if _norm(h) in DAY_ESTIMATE_HEADERS]
-        unread = f" Die Schätzung in Tagen („{', '.join(days)}“) wird nicht gelesen." if days else ""
-        report.notes.append(f"Keine Story-Points-Spalte gefunden.{unread} Alle Tickets gelten als ungeschätzt und wiegen gleich viel.")
-    if "parent" not in cols:
-        report.notes.append("Keine Spalte „Übergeordnetes Element“: Epics und Hierarchie lassen sich nicht zuordnen.")
-    if "sprint" not in cols:
-        report.notes.append("Keine Sprint-Spalte gefunden.")
-    if lost_parents:
-        report.notes.append(f"{lost_parents} Verweise auf übergeordnete Tickets konnten keinem Ticket der Datei zugeordnet werden (Eltern außerhalb der Datei, oder ein Titel statt eines Schlüssels, der nicht eindeutig ist).")
-    if bad_points:
-        report.notes.append(f"Nicht lesbare Story Points (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+    report.notes = _report_notes(cols, header, lost_parents, bad_points)
     return tuple(issues), report
 
 

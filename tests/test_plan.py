@@ -61,7 +61,7 @@ def test_rollup_columns_are_ignored_and_the_values_of_the_ticket_itself_are_read
 def test_all_columns_of_the_real_export_are_known_or_deliberately_skipped():
     used = {REAL_HEADER[i] for idx in J._columns(REAL_HEADER).values() for i in idx}
     assert used == {"Hierarchie", "Titel", "Bereich", "Releases", "Team", "Zugewiesene Person", "Sprint", "Story Points", "Übergeordnetes Element", "Priorität", "Stichwörter",
-                    "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus"}
+                    "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus", "Fortschritt (%)"}
 
 
 def test_the_day_estimate_is_never_read_and_a_file_with_only_days_says_so():
@@ -187,3 +187,28 @@ def test_export_header_with_story_points_as_the_estimate_unit_finds_all_fields()
     story = next(i for i in issues if i.key == "A-2")
     assert story.points == 3.5 and story.parent == "A-1" and next(i for i in issues if i.key == "A-1").points is None
     assert all(row["Gefunden in"] != J.NOT_FOUND for row in report.columns) and report.notes == []
+
+
+def _sp_csv(*rows):
+    """CSV mit der Kopfzeile `SP_HEADER`; jede Zeile ist ein Wörterbuch Spaltenkopf -> Wert."""
+    return ("\n".join(";".join(r[h] for h in SP_HEADER) for r in rows) + "\n").encode("utf-8")
+
+
+def test_jiras_own_progress_columns_are_read_for_the_comparison_only():
+    cells = dict.fromkeys(SP_HEADER, "")
+    cells.update({"Hierarchie": "Epic", "Vorgangsschlüssel": "A-1", "Vorgangsstatus": "In Arbeit", "Fortschritt (%)": "35,5", "Fortschritt abgeschlossen (SP)": "7", "Verbleibender Fortschritt (SP)": "13"})
+    plain = dict.fromkeys(SP_HEADER, "")
+    plain.update({"Hierarchie": "Story", "Vorgangsschlüssel": "A-2", "Vorgangsstatus": "Done", "Story Points": "3", "Übergeordnetes Element": "A-1"})
+    data = _sp_csv(dict(zip(SP_HEADER, SP_HEADER, strict=True)), cells, plain)
+    issues, report = J.read_plan(data)
+    epic, story = issues
+    assert (epic.jira_progress, epic.jira_done, epic.jira_left) == (pytest.approx(0.355), 7.0, 13.0) and (story.jira_progress, story.jira_done, story.jira_left) == (None, None, None)
+    found = {row["Feld"]: (row["Gefunden in"], row["Tickets mit Wert"]) for row in report.columns}
+    assert found["Jira: Fortschritt (%)"] == ("Fortschritt (%)", 1) and found["Jira: Fortschritt abgeschlossen (SP)"] == ("Fortschritt abgeschlossen (SP)", 1)
+    assert found["Jira: Verbleibender Fortschritt (SP)"] == ("Verbleibender Fortschritt (SP)", 1)
+    assert story.points == 3.0                                                                          # die Spalten verändern keine Rechnung
+
+
+@pytest.mark.parametrize("text, expected", [("35", 0.35), ("35,5", 0.355), ("35 %", 0.35), (" 100% ", 1.0), ("0", 0.0), ("", None), ("viel", None), (None, None)])
+def test_percent_values_are_read_as_shares(text, expected):
+    assert J.parse_percent(text) == pytest.approx(expected) if expected is not None else J.parse_percent(text) is None

@@ -22,5 +22,8 @@ jobs:
       - name: Abhängigkeiten installieren
         run: pip install -r requirements-dev.txt
 
+      - name: Lint (ruff)
+        run: ruff check .
+
       - name: Tests ausführen
         run: python -m pytest tests/ -v

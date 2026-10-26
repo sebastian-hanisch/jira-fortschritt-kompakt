@@ -1,10 +1,13 @@
 """Tabellen von Hand: Status-Matrix je Ticket unter der Wurzel, Wirkung der Regeln und die Ausgabe als CSV, Wiki-Markup und HTML für Jira und Confluence."""
 
+from dataclasses import replace
+
 import pytest
 
 import jira_constants as C
 import jira_evaluation as ev
 import jira_tables as T
+import jira_texts as texts
 from jira_core import Issue, scope_issues
 
 
@@ -142,7 +145,7 @@ def test_csv_for_excel_uses_semicolon_decimal_comma_and_a_byte_order_mark():
 
 def test_status_rules_text_lists_the_credits_and_the_examples():
     import jira_core as A
-    text = T.status_rules_markdown()
+    text = texts.status_rules_markdown()
     assert "**Fertig → 100 %.**" in text and "**Test → 90 %.**" in text and "**Merged → 80 %.**" in text and "**Review → 80 %.**" in text and "**Alles andere → 0 %**" in text
     assert text.index("Zurückgewiesen → zählt nicht") < text.index("Verneinung") < text.index("Fertig → 100") < text.index("Merged → 80") < text.index("Test → 90") < text.index("Review → 80")
     for names in A.STATUS_EXAMPLES.values():
@@ -170,7 +173,7 @@ def test_rule_comparison_keeps_root_and_status_weights_and_handles_no_weight():
 
 
 def test_the_options_text_names_every_variant_with_pros_and_cons_and_its_status():
-    text = T.UNEST_OPTIONS_MARKDOWN
+    text = texts.UNEST_OPTIONS_MARKDOWN
     for letter in "ABCDEFGHI":
         assert f"**{letter}. " in text, letter
     for letter in "abc":
@@ -214,8 +217,37 @@ def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():
 
 def test_assumptions_text_has_the_three_parts_and_matches_the_readme():
     import pathlib
-    text = T.ASSUMPTIONS_MARKDOWN
+    text = texts.ASSUMPTIONS_MARKDOWN
     for part in ("### Annahmen", "### Grenzen", "### Bekannte Probleme und Unsicherheiten", "Nur ein Stichtag", "Tiefe im Baum, nicht Typ", "Obergrenzen", "Spaltennamen des Exports sind erschlossen", "Klick in die Diagramme"):
         assert part in text, part
     readme = (pathlib.Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8").replace("\r\n", "\n")
     assert text.strip() in readme                                                                  # die README gibt denselben Text wieder
+
+
+def _with_jira():
+    return tuple(replace(t, jira_progress=0.5, jira_done=19.0, jira_left=19.0) if t.key == "E1" else t for t in ITEMS)
+
+
+def test_jira_crosscheck_puts_jiras_values_next_to_the_done_share_of_the_same_tickets():
+    items = _with_jira()
+    a = ev.analyse(items)
+    rows = {r[T.ROW_COL]: r for r in T.jira_crosscheck(items, a)}
+    e1, e2 = rows["E1: Eins"], rows["E2: Zwei"]
+    assert (e1[T.JIRA_PROGRESS_COL], e1[T.JIRA_DONE_COL], e1[T.JIRA_LEFT_COL]) == (0.5, 19.0, 19.0)
+    assert e1[T.OWN_TOTAL_COL] == 38.0 and e1[T.OWN_DONE_COL] == pytest.approx(8 / 38)                       # nur Ready4Prod (S7) zählt als fertig; die 7 von S8 (Rejected) zählen nicht
+    assert e1[T.GAP_COL] == pytest.approx(100 * (0.5 - 8 / 38))
+    assert e2[T.JIRA_PROGRESS_COL] is None and e2[T.GAP_COL] is None and e2[T.OWN_DONE_COL] == pytest.approx(4 / 15)         # ohne Jira-Wert kein Abstand
+    assert list(e1) == [T.ROW_COL, T.JIRA_PROGRESS_COL, T.JIRA_DONE_COL, T.JIRA_LEFT_COL, T.OWN_DONE_COL, T.OWN_TOTAL_COL, T.GAP_COL]
+
+
+def test_jira_crosscheck_follows_the_subproject_and_is_offered_only_with_jira_values():
+    assert T.has_jira_progress(_with_jira()) and not T.has_jira_progress(ITEMS)
+    sub = scope_issues(_with_jira(), "E1")
+    rows = T.jira_crosscheck(sub, ev.analyse(sub, ev.Settings(root="E1")))
+    assert {r[T.ROW_COL] for r in rows} == {"S1", "S2", "S3", "S4", "S5", "S6", "S7"} and all(r[T.JIRA_PROGRESS_COL] is None for r in rows)       # Jiras Wert für E1 selbst steht über dieser Stufe
+
+
+def test_jira_crosscheck_with_a_weightless_group_has_no_done_share():
+    items = (Issue(key="E", type="Epic", jira_progress=0.2), Issue(key="S", parent="E", status="Done"))
+    rows = T.jira_crosscheck(items, ev.analyse(items, ev.Settings(unest_rule=C.UNEST_IGNORE)))
+    assert rows[0][T.OWN_DONE_COL] is None and rows[0][T.GAP_COL] is None

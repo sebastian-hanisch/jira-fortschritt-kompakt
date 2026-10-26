@@ -32,8 +32,7 @@ def build_progress_bars(stats, unit: str):
     for name, values, color in (("erledigt", done, C.COLOR_DONE), ("durch Status angerechnet", partial, C.COLOR_PARTIAL), ("offen", rest, C.COLOR_OPEN)):
         fig.add_trace(go.Bar(y=labels, x=values, orientation="h", name=name, marker_color=color, hovertemplate=f"%{{y}}<br>{name}: %{{x:.2f}} {unit}<extra></extra>"))
     top = float(max(stats.weight[order].max(), 1e-9)) if len(order) else 1.0
-    for label, p, w in zip(labels, prog, stats.weight[order]):
-        fig.add_annotation(x=w, y=label, text=" " + _pct_text(p, w, unit), showarrow=False, xanchor="left", font=dict(size=12))
+    fig.update_layout(annotations=[dict(x=w, y=label, text=" " + _pct_text(p, w, unit), showarrow=False, xanchor="left", font=dict(size=12)) for label, p, w in zip(labels, prog, stats.weight[order])])
     fig.update_layout(barmode="stack", height=max(240, 34 * len(labels) + 130), margin=dict(l=10, r=10, t=10, b=10), legend=dict(orientation="h", y=-0.45), plot_bgcolor="rgba(0,0,0,0)")
     fig.update_yaxes(autorange="reversed", automargin=True)
     fig.update_xaxes(title_text=f"Gewicht ({unit})", range=[0, top * 1.6])
@@ -191,13 +190,14 @@ def build_tiles(g, unit: str):
             marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
             hovertext=hover, hoverinfo="text", showlegend=False,
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
+    notes = []
     for t in tiles:         # Beschriftungen als Annotationen: Der Text von Balken würde bei einer Auswahl (Klick) abgedunkelt, eine Annotation nicht
         if t.framed:
-            fig.add_annotation(x=t.x + 0.7, y=t.y + 0.4, xanchor="left", yanchor="top", showarrow=False, font=dict(size=12),
-                               text=f"<b>{t.key}</b> {100 * t.progress:.0f} %" if t.progress == t.progress else f"<b>{t.key}</b>")
+            notes.append(dict(x=t.x + 0.7, y=t.y + 0.4, xanchor="left", yanchor="top", showarrow=False, font=dict(size=12),
+                              text=f"<b>{t.key}</b> {100 * t.progress:.0f} %" if t.progress == t.progress else f"<b>{t.key}</b>"))
         elif tile_label(t):
-            fig.add_annotation(x=t.x + t.w / 2, y=t.y + t.h / 2, xanchor="center", yanchor="middle", showarrow=False, font=dict(size=11, color=text_color_on(t.progress)), text=tile_label(t))
-    fig.update_layout(barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            notes.append(dict(x=t.x + t.w / 2, y=t.y + t.h / 2, xanchor="center", yanchor="middle", showarrow=False, font=dict(size=11, color=text_color_on(t.progress)), text=tile_label(t)))
+    fig.update_layout(annotations=notes, barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
     fig.update_xaxes(visible=False, range=[0, TILE_W], fixedrange=True)
     fig.update_yaxes(visible=False, range=[TILE_H, 0], fixedrange=True)
     return fig
@@ -249,17 +249,18 @@ def build_tree_graph(g, unit: str):
             marker=dict(size=[size[k] for k in unknown], symbol=[symbol[k] for k in unknown], color="rgba(190,190,190,0.9)", line=dict(color="rgba(60,60,60,0.8)", width=1)),
             hovertext=[_node_hover(g, k, unit) for k in unknown], hoverinfo="text", showlegend=False, customdata=[g.keys[k] for k in unknown],
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
+    notes = []
     for k in range(n):          # Beschriftung als Annotation (siehe build_tiles); Blätter rechts vom Knoten, Knoten mit Kindern darüber, damit der Schlüssel nicht auf der Linie zu den Kindern liegt
         if not (label_all or not g.is_leaf[k]):
             continue
         radius = size[k] / 2
         if g.is_leaf[k]:
-            fig.add_annotation(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="left", yanchor="middle", xshift=radius + 3, font=dict(size=11))
+            notes.append(dict(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="left", yanchor="middle", xshift=radius + 3, font=dict(size=11)))
         else:
-            fig.add_annotation(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="center", yanchor="bottom", yshift=radius + 2, font=dict(size=11))
+            notes.append(dict(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="center", yanchor="bottom", yshift=radius + 2, font=dict(size=11)))
     depth = int(g.x.max()) if n else 0
     fig.update_xaxes(visible=False, range=[-0.4, depth + 1.8])
     fig.update_yaxes(visible=False, autorange="reversed")
     leaves = int(g.is_leaf.sum())
-    fig.update_layout(height=int(min(2400, max(300, 17 * leaves + 60))), margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+    fig.update_layout(annotations=notes, height=int(min(2400, max(300, 17 * leaves + 60))), margin=dict(l=10, r=10, t=10, b=10), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
     return lock_axes(fig)

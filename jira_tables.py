@@ -10,13 +10,27 @@ import numpy as np
 
 import jira_constants as C
 import jira_core as A
-from jira_evaluation import Analysis, analyse, credit_text, de, pct
+from jira_evaluation import Analysis, credit_text, de, headline, pct
 
 SUM_LABEL = "Summe"
 
 
 ROW_COL = "Ticket"
 REJECTED_COL, TOTAL_NET_COL, PROGRESS_COL = "Rejected", "Total (ohne Rejected)", "Fortschritt (gewichtet)"
+
+
+def _row_tickets(issues, a: Analysis):
+    """Die Zeilen der Tabellen je Ticket unter der Wurzel: `ticket_of(i)` ist das Ticket der Zusammenfassungsstufe, zu dem das Atom `i` gehört (None, wenn es keine solche Stufe gibt), `label(t)` seine Beschriftung."""
+    level = a.level
+    chains = A.hierarchy_chains(issues)
+
+    def ticket_of(i):
+        chain = chains[i]
+        return issues[chain[level - 1]] if len(chain) >= level else None
+
+    def label(t):
+        return f"(keine Stufe {level})" if t is None else (f"{t.key}: {t.summary}" if t.summary else t.key)
+    return ticket_of, label
 
 
 def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
@@ -30,16 +44,7 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     heads = {st: st + (f" ({credit_text(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
     completed_col = f"Completed ({'+'.join(done_statuses)})/(Total−Rejected)" if done_statuses else "Completed (kein Status ab 90 %)"
-    level = a.level
-    chains = A.hierarchy_chains(issues)
-
-    def ticket_of(i):
-        chain = chains[i]
-        return issues[chain[level - 1]] if len(chain) >= level else None
-
-    def label(t):
-        return f"(keine Stufe {level})" if t is None else (f"{t.key}: {t.summary}" if t.summary else t.key)
-
+    ticket_of, label = _row_tickets(issues, a)
     cells: dict[str, dict] = {}
 
     def entry(i):
@@ -67,6 +72,35 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
                   "credited": sum(c["credited"] for c in cells.values())}
         rows.append(build(SUM_LABEL, merged))
     return rows, [heads[st] for st in statuses], completed_col
+
+
+JIRA_PROGRESS_COL, JIRA_DONE_COL, JIRA_LEFT_COL = "Jira: Fortschritt (%)", "Jira: abgeschlossen (SP)", "Jira: verbleibend (SP)"
+OWN_DONE_COL, OWN_TOTAL_COL, GAP_COL = "Hier: Nur Done, nach Gewicht", "Hier: Total (ohne Rejected, SP)", "Abstand Jira − hier (Punkte)"
+
+
+def has_jira_progress(issues) -> bool:
+    """Steht in den Daten Jiras eigener Fortschritt (Spalte „Fortschritt (%)“) bei mindestens einem Ticket?"""
+    return any(t.jira_progress is not None for t in issues)
+
+
+def jira_crosscheck(issues, a: Analysis) -> list[dict]:
+    """Gegenprobe zu Jiras eigener Fortschrittsspalte: je Ticket direkt unter der Wurzel (dieselben Zeilen wie die Status-Matrix) Jiras Werte für dieses Ticket und der Wert „nur Done, nach
+    Gewicht“ aus den zählenden Tickets darunter, dazu der Abstand in Prozentpunkten. Jiras Werte gelten für das Ticket selbst mit allem darunter; wie Jira rechnet, steht nicht in den Daten."""
+    ticket_of, label = _row_tickets(issues, a)
+    groups: dict[str, dict] = {}
+    for pos, i in enumerate(a.atoms):
+        t = ticket_of(i)
+        g = groups.setdefault(label(t), {"ticket": t, "total": 0.0, "done": 0.0})
+        g["total"] += float(a.w[pos])
+        g["done"] += float(a.w[pos]) if a.done[pos] else 0.0
+    rows = []
+    for name in sorted(groups, key=A.natural_key):
+        t, total = groups[name]["ticket"], groups[name]["total"]
+        own = groups[name]["done"] / total if total > 0 else None
+        jira = None if t is None else t.jira_progress
+        rows.append({ROW_COL: name, JIRA_PROGRESS_COL: jira, JIRA_DONE_COL: None if t is None else t.jira_done, JIRA_LEFT_COL: None if t is None else t.jira_left,
+                     OWN_DONE_COL: own, OWN_TOTAL_COL: total, GAP_COL: None if jira is None or own is None else 100 * (jira - own)})
+    return rows
 
 
 # ---------------------------------------------------------------- Ausgabe: CSV, Wiki-Markup, HTML
@@ -130,49 +164,13 @@ def rows_to_html(rows: list[dict], formats: dict | None = None) -> str:
     return f'<table style="border-collapse:collapse;"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
 
 
-def status_rules_markdown() -> str:
-    """Welcher Statusname zählt standardmäßig wie viel? Erst die Regeln in der Reihenfolge, in der sie geprüft werden (der erste Treffer gilt), dann die Auflistung mit Beispielnamen.
-    Die Prozentwerte stammen aus `C.STATUS_CLASS_CREDIT`, die Beispiele aus `A.STATUS_EXAMPLES`."""
-    pct_of = {name: f"{round(100 * credit)} %" for name, credit in C.STATUS_CLASS_CREDIT.items()}
-    examples = {name: ", ".join(names) for name, names in A.STATUS_EXAMPLES.items()}
-    return f"""
-**Regeln.** Verglichen wird der Name des Status ohne Groß- und Kleinschreibung, Akzente, Umlaut-Punkte und Satzzeichen. Die Regeln werden in dieser Reihenfolge geprüft, der erste Treffer gilt
-(„Test Review“ zählt also als Test, nicht als Review):
-
-1. **Zurückgewiesen → zählt nicht.** Der Name enthält Rejected, Declined, Zurückgewiesen, Abgelehnt, Won't do, Will not do, Wontfix, Cancel…, Abgebrochen, Verworfen, Storniert, Abandon…, Duplicate, Duplikat,
-   Obsolete, Invalid, Ungültig, Nicht umgesetzt oder Won't implement. Das Ticket und alles unter ihm fällt aus Gewicht und Anzahl.
-2. **Verneinung → 0 %.** Not done, Nicht fertig, Unfertig, Nicht erledigt, Unresolved, Unreleased, Not closed, Nicht abgeschlossen, Incomplete, Unvollständig, Unfinished, Not merged, Untested, Ungetestet,
-   Unreviewed, Ungeprüft, Nicht überprüft, Not reviewed, Not tested, Not resolved, Not finished, Unmerged, Nicht geschlossen, Unabgeschlossen u. ä.
-3. **Fertig → {pct_of['done']}.** Der Name enthält Done, Closed, Resolved, Fertig, Erledigt, Abgeschlossen, Geschlossen, Released, Deployed, Delivered, Ausgeliefert, Complete, Finished, Production, Produktion oder
-   Produktiv, endet auf „Prod“ (Ready4Prod) oder enthält das Wort „Live“.
-4. **Merged → {pct_of['merged']}.** Merged, Gemerged, Zusammengeführt.
-5. **Test → {pct_of['test']}.** Der Name enthält Test (In Test, Testing, Ready4Test), Abnahme, Acceptance, Verif… oder Validat…, oder ist das Wort QA oder UAT.
-6. **Review → {pct_of['review']}.** Review, Überprüf…, Geprüft, Prüfung, Prüfen, Begutachtung.
-7. **Alles andere → 0 %** (In Arbeit, In Progress, On Hold, Backlog, To Do, Specification …).
-
-**Auflistung** (Beispielnamen, nicht vollständig):
-
-| Gewicht | Beispiele |
-|---|---|
-| {pct_of['done']} | {examples['done']} |
-| {pct_of['test']} | {examples['test']} |
-| {pct_of['merged']} | {examples['merged']} |
-| {pct_of['review']} | {examples['review']} |
-| 0 % | {examples['other']} |
-| zählt nicht | {examples['rejected']} |
-
-Jedes Gewicht lässt sich nach dem Laden in der Tabelle „Gewichte der Status“ ändern, falls ein Status anders heißt, als sein Name vermuten lässt. Die Namen, die in euren Daten vorkommen, stehen dort mit ihrem
-Standardgewicht.
-"""
-
-
 def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
     """Wirkung der wählbaren Regeln für Tickets ohne Story Points auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der Tickets ohne Story Points.
     Alles andere (Teilprojekt, Status-Gewichte) wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.UNEST_RULES:
-        b = analyse(issues, replace(a.settings, unest_rule=rule), a.plan)
-        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(b.progress) else float(b.progress), "Gewicht gesamt": float(b.weight), "Tickets ohne Story Points": b.n_unestimated})
+        progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan)
+        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Tickets ohne Story Points": n_unestimated})
     return rows
 
 
@@ -180,74 +178,9 @@ def subtask_rule_comparison(issues, a: Analysis) -> list[dict]:
     """Wirkung der Regeln für Sub-Tasks auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der zählenden Tickets. Alles andere wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.SUB_RULES:
-        b = analyse(issues, replace(a.settings, sub_rule=rule), a.plan)
-        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(b.progress) else float(b.progress), "Gewicht gesamt": float(b.weight), "Zählende Tickets": b.n_atoms})
+        progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan)
+        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Zählende Tickets": n_atoms})
     return rows
-
-
-UNEST_OPTIONS_MARKDOWN = """
-Ein Ticket ohne Story Points braucht ein Gewicht, sonst fehlt es im Fortschritt. Dafür gibt es mehrere Möglichkeiten. Zwei Fragen sind getrennt zu entscheiden (beide haben ein Auswahlmenü in der Seitenleiste): **aus welcher Vergleichsgruppe** der Ersatzwert kommt
-(Teil 1) und **wie mit Sub-Tasks** umzugehen ist, deren Story Points fehlen (Teil 2). Was „Stand“ als *wählbar* ausweist, steht in der Seitenleiste unter „Tickets ohne Story Points“ bzw. „Sub-Tasks einer Story“ zur Wahl (mit dem Buchstaben der Variante); alles andere ist ein **Vorschlag** und noch nicht
-eingebaut. Vor- und Nachteile sind Überlegungen zur Methode, keine Messungen an euren Daten.
-
-### Teil 1: Woher kommt das Gewicht eines Tickets ohne Story Points?
-
-| Variante | Vergleichsgruppe | Vorteile | Nachteile | Stand |
-|---|---|---|---|---|
-| **A. Median der Stufe im Teilbaum** | geschätzte Blätter derselben Tiefe im gewählten Teilbaum (Tiefe ab der Wurzel) | Das Teilprojekt ist ein eigenständiger Datensatz; einfach zu erklären; Stories und Sub-Tasks werden nicht gemischt | Gewichte und Fortschritt ändern sich mit dem gewählten Teilbaum; „Stufe“ ist die Tiefe, nicht der Typ (ein Bug ohne Epic liegt auf einer anderen Stufe als Stories unter Epics); bei wenigen geschätzten Tickets wackelt der Median | wählbar, Voreinstellung |
-| **B. Median der Stufe im ganzen Plan** | geschätzte Blätter derselben Tiefe im ganzen Plan | Dasselbe Ticket wiegt in jeder Ansicht gleich; ein Teilprojekt ist ein Ausschnitt der Gesamtansicht; größere Datenbasis | Das Teilprojekt ist nicht mehr eigenständig, Tickets außerhalb bestimmen die Gewichte; mischt Teams mit unterschiedlicher Story-Point-Skala | wählbar |
-| **C. Median je Ticket-Typ** | geschätzte Blätter desselben Typs (Story, Task, Bug, Sub-Task) im gewählten Teilbaum | Vergleicht Gleiches (Bugs sind oft kleiner als Stories), unabhängig von der Tiefe | Seltene Typen haben kaum geschätzte Tickets; Typnamen und Konventionen unterscheiden sich je Jira-Instanz | wählbar |
-| **D. Median der Geschwister** | geschätzte Tickets mit demselben übergeordneten Ticket | Lokal: passt zur Größe des Epics bzw. der Story und zur Skala des Teams | Oft gibt es zu wenige oder keine geschätzten Geschwister (Sub-Tasks einer Story); Gewichte schwanken von Epic zu Epic | wählbar |
-| **E. Median je Team** | geschätzte Blätter desselben Teams (Spalte Team; ohne Team bilden die Tickets ohne Team eine Gruppe) im gewählten Teilbaum | Story Points gelten nur innerhalb eines Teams: Das ist die vergleichbarste Gruppe | Das Team-Feld ist oft leer; dünne Datenbasis je Team | wählbar |
-| **F. Rückfallkette** | Geschwister → gleicher Typ → gleiche Stufe (je im Teilbaum) → alle geschätzten Tickets des ganzen Plans → 1 | Nutzt die genaueste vorhandene Basis und fällt nur auf 1 zurück, wenn nirgends etwas geschätzt ist | Das Gewicht eines Tickets hängt davon ab, was in seiner Nähe geschätzt ist; schwerer zu erklären und nachzurechnen | wählbar |
-| **G. Mittelwert statt Median** | wie A oder B | Nutzt alle Werte | Ausreißer (ein Ticket mit 21 Story Points) verschieben ihn stark; der Median ist robuster | Vorschlag, nicht empfohlen |
-| **H. Als 1 Story Point** | keine | Einfach, transparent, unabhängig von den Daten | Verzerrt, wenn typische Tickets größer sind: ungeschätzte Tickets wirken zu leicht, der Fortschritt fällt zu hoch aus, wenn sie offen sind | wählbar |
-| **I. Nicht zählen** | keine | Keine erfundenen Gewichte | Offene, ungeschätzte Tickets verschwinden aus dem Fortschritt, die Zahl wird zu optimistisch; bei vielen ungeschätzten Tickets kaum aussagekräftig | wählbar |
-
-### Teil 2: Sub-Tasks ohne Story Points
-
-Seit nur Blätter zählen, zählt eine Story mit Sub-Tasks durch ihre Sub-Tasks. Haben diese keine Story Points, gilt für sie die Regel aus Teil 1; die Story Points der Story selbst fallen weg.
-
-| Variante | Vorteile | Nachteile | Stand |
-|---|---|---|---|
-| **a. Sub-Tasks wie ungeschätzte Tickets** | Einheitliche Regel für alle Blätter | Die Story Points der Story fallen weg; die Summe der Sub-Tasks weicht von der Story ab; eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen | wählbar, Voreinstellung |
-| **b. Story Points der Story gleichmäßig auf die Sub-Tasks verteilen** (nur wenn keine Sub-Task eigene Story Points hat) | Das Gewicht der Story bleibt erhalten, „Epic vs. Total“ in der Status-Matrix stimmt, keine erfundenen Zahlen | Annahme gleich großer Sub-Tasks; setzt eine geschätzte Story voraus; Mischformen (einige Sub-Tasks geschätzt, andere nicht) brauchen eine Zusatzregel | wählbar |
-| **c. Story zählt selbst, Sub-Tasks bleiben außen vor** (frühere Fassung) | Die Story Points der Planung bleiben das Gewicht | Der Fortschritt der Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt | wählbar |
-
-### Einschätzung
-
-Das ist eine Einschätzung, keine Messung. Kommt es auf **vergleichbare Zahlen zwischen Teilprojekten** an (z. B. ein Bericht je Epic), sprechen B oder F dafür, die Vergleichsgruppe nicht vom gewählten Teilbaum abhängen zu lassen. Soll ein **Teilprojekt für sich stehen**, ist A richtig.
-Für **Sub-Tasks ohne Story Points** ist b am nächsten an der Planung. Wie stark die Wahl die Zahl verschiebt, zeigt die Tabelle am Ende für alle wählbaren Regeln an den geladenen Daten (sobald eine Datei geladen ist); für den Vorschlag G gibt es keine Zahlen.
-"""
-
-
-ASSUMPTIONS_MARKDOWN = """
-### Annahmen
-
-- **Die Gutschrift nach Statusname stimmt.** Fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %: Das ist eine Lesart des Namens und eine Verabredung, keine Messung. Angefangene Arbeit („In Arbeit“) zählt 0 %, der Fortschritt springt also erst mit dem Statuswechsel; für laufende Arbeit ist die Zahl eher vorsichtig.
-- **Story Points sind vergleichbar und additiv.** Ein Ticket mit 4 Story Points zählt doppelt so viel wie eines mit 2, über alle Teams und Epics hinweg. Story Points sind aber teamintern kalibriert; ein Gesamtwert über mehrere Teams mischt Maßstäbe.
-- **Die Blätter bilden die Arbeit vollständig ab.** Was nicht als Blatt im Export steht (nicht angelegte oder aus dem Plan herausgefilterte Tickets), fehlt im Fortschritt. Die Story Points der Zwischentickets gelten als nicht maßgeblich, auch wenn ein Epic oder eine Story eine eigene Schätzung hat, die von der Summe der Blätter abweicht; die Tabelle prüft das nicht.
-- **Ersatzwerte für Tickets ohne Story Points sind Annahmen.** Jede Variante (A bis F, H, I) nimmt etwas anderes an; die Tabelle im Ausklapper „Berechnungsmöglichkeiten“ zeigt, wie weit die Zahl an den geladenen Daten schwankt.
-- **Der Export ist der Plan.** Was die Filter und Spalten der Timeline-Ansicht nicht enthalten, kennt das Werkzeug nicht. Eltern außerhalb der Datei werden verworfen (die App meldet es), das Ticket steht dann als eigene Wurzel da.
-
-### Grenzen
-
-- **Nur ein Stichtag.** Der Plan-Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
-- **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
-- **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
-- **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung zählt 0 %, ohne Warnung.
-- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Graphen höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 5000 Tickets und 50 MB je Datei.
-- **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
-
-### Bekannte Probleme und Unsicherheiten
-
-- **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
-- **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
-- **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
-- **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachel- und Graphansicht an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
-- **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
-- **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
-"""
 
 
 def rows_to_csv(rows: list[dict]) -> bytes:

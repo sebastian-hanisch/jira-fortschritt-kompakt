@@ -241,3 +241,21 @@ def test_the_assumptions_box_is_in_the_app_with_the_limits():
     box = next(e for e in at.expander if e.label == "⚠️ Annahmen, Grenzen und bekannte Probleme")
     text = " ".join(m.value for m in box.markdown)
     assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.GRAPH_MAX_NODES} Knoten" in text
+
+
+JIRA_PROGRESS_CSV = (
+    "Hierarchie;Titel;Story Points;Übergeordnetes Element;Vorgangsschlüssel;Vorgangsstatus;Fortschritt (%);Fortschritt abgeschlossen (SP);Verbleibender Fortschritt (SP)\n"
+    "Epic;Eins;;;E-1;In Arbeit;40;4;6\n"
+    "Story;A;4;E-1;S-1;Done;;;\n"
+    "Story;B;6;E-1;S-2;To Do;;;\n").encode("utf-8")
+
+
+def test_the_comparison_with_jiras_own_progress_appears_only_when_the_export_has_it():
+    with_jira = _open(JIRA_PROGRESS_CSV)
+    _ok(with_jira)
+    assert any("Gegenprobe: Jiras eigener Fortschritt" in m.value for m in with_jira.markdown)
+    table = next(t.value for t in with_jira.dataframe if "Jira: Fortschritt (%)" in t.value.columns)
+    assert table["Jira: Fortschritt (%)"].tolist() == [40.0] and table["Hier: Nur Done, nach Gewicht"].tolist() == [40.0] and table["Abstand Jira − hier (Punkte)"].tolist() == [0.0]
+    without = _open(plan_csv(make_mini()))
+    _ok(without)
+    assert not any("Gegenprobe: Jiras eigener Fortschritt" in m.value for m in without.markdown) and not any("Jira: Fortschritt (%)" in t.value.columns for t in without.dataframe)
