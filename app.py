@@ -17,7 +17,7 @@ import jira_plan as J
 import jira_tables as T
 import jira_texts as texts
 from jira_charts import MAX_BARS, build_progress_bars, build_tiles, build_tree_graph, selected_key
-from jira_evaluation import Settings, analyse, check_consistency, de, delta_points, or_dash, pct, status_list, unestimated_note
+from jira_evaluation import Settings, analyse, check_consistency, de, delta_points, or_dash, pct, sprint_stats, status_list, unestimated_note
 from jira_privacy import scrub_streamlit_logs
 
 st.set_page_config(page_title="Jira-Fortschritt", layout="wide")
@@ -295,6 +295,20 @@ def render_matrix(issues, a, root):
     show_table(matrix_rows, "parent", matrix_formats, "status-matrix-je-parent")
 
 
+def render_sprints(issues, a):
+    """Fortschritt je Sprint (Balken und Tabelle); nur wenn mindestens ein Ticket einen Sprint hat."""
+    if not T.has_sprints(issues):
+        return
+    st.markdown("## 🏃 Fortschritt je Sprint")
+    st.caption(
+        "Jedes zählende Ticket steht in seinem **letzten** Sprint (Jira führt übernommene Tickets mit allen ihren Sprints, der letzte ist der aktuelle); ein Ticket ohne Sprint, etwa eine Sub-Task, übernimmt den Sprint des nächsten "
+        "übergeordneten Tickets, das einen hat. „Mitgenommen“ sind Tickets, die schon in einem früheren Sprint standen; sie zählen nur im letzten. Der Export enthält keinen Statusverlauf: Die Zahlen zeigen den Stand heute je Sprint, "
+        "nicht, was am Ende des Sprints erreicht war. Gewicht, Gutschrift und Teilprojekt wie in der Auswertung oben.")
+    st.plotly_chart(build_progress_bars(sprint_stats(issues, a), C.UNIT), width="stretch", key="chart_sprints")
+    formats = {T.SPRINT_WEIGHT_COL: "%.2f", T.PROGRESS_COL: "percent", T.SPRINT_DONE_COL: "percent", T.CARRIED_WEIGHT_COL: "%.2f"}
+    show_table(T.sprint_rows(issues, a), "sprints", formats, "fortschritt-je-sprint")
+
+
 def render_crosscheck(issues, a, root):
     """Gegenprobe zu Jiras eigener Fortschrittsspalte; nur wenn der Export sie enthält."""
     if not T.has_jira_progress(issues):
@@ -344,6 +358,7 @@ def main():
         render_headline(a, issues, issues_all, root, root_label, unest_rule)
         render_charts(a, root)
         render_matrix(issues, a, root)
+        render_sprints(issues, a)
         render_crosscheck(issues, a, root)
     with options_box, guard("Berechnungsmöglichkeiten"):
         render_rule_effects(issues, a)

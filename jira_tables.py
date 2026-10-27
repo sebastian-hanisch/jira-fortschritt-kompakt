@@ -74,6 +74,40 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     return rows, [heads[st] for st in statuses], completed_col
 
 
+SPRINT_COL, TICKETS_COL, SPRINT_WEIGHT_COL, SPRINT_DONE_COL = "Sprint", "Tickets", "Gewicht (SP)", "Nur Done, nach Gewicht"
+CARRIED_COUNT_COL, CARRIED_WEIGHT_COL = "Mitgenommene Tickets", "Mitgenommenes Gewicht (SP)"
+
+
+def has_sprints(issues) -> bool:
+    """Hat mindestens ein Ticket einen Sprint?"""
+    return any(t.sprints for t in issues)
+
+
+def sprint_rows(issues, a: Analysis) -> list[dict]:
+    """Je Sprint die zählenden Tickets, deren letzter Sprint er ist (siehe `A.sprint_labels`): Zahl, Gewicht, gewichteter Fortschritt, „nur Done“ nach Gewicht und die mitgenommenen Tickets, die schon in
+    einem früheren Sprint standen (mehr als ein Sprint), mit ihrem Gewicht. Eine Summenzeile am Ende. Alles wie in der Auswertung `a` (Teilprojekt, Regeln, Status-Gewichte)."""
+    sprints = A.ticket_sprints(issues, a.ctx)
+    groups: dict[str, dict] = {}
+    for pos, (i, label) in enumerate(zip(a.atoms, A.sprint_labels(issues, a.atoms, a.ctx), strict=True)):
+        g = groups.setdefault(label, {"n": 0, "w": 0.0, "credited": 0.0, "done": 0.0, "carried": 0, "carried_w": 0.0})
+        w = float(a.w[pos])
+        g["n"] += 1
+        g["w"] += w
+        g["credited"] += w * float(a.c[pos])
+        g["done"] += w if a.done[pos] else 0.0
+        if len(sprints[i]) > 1:
+            g["carried"] += 1
+            g["carried_w"] += w
+
+    def build(name, g):
+        return {SPRINT_COL: name, TICKETS_COL: g["n"], SPRINT_WEIGHT_COL: g["w"], PROGRESS_COL: g["credited"] / g["w"] if g["w"] > 0 else None,
+                SPRINT_DONE_COL: g["done"] / g["w"] if g["w"] > 0 else None, CARRIED_COUNT_COL: g["carried"], CARRIED_WEIGHT_COL: g["carried_w"]}
+    rows = [build(name, groups[name]) for name in sorted(groups, key=A.natural_key)]
+    if rows:
+        rows.append(build(SUM_LABEL, {key: sum(g[key] for g in groups.values()) for key in ("n", "w", "credited", "done", "carried", "carried_w")}))
+    return rows
+
+
 JIRA_PROGRESS_COL, JIRA_DONE_COL, JIRA_LEFT_COL = "Jira: Fortschritt (%)", "Jira: abgeschlossen (SP)", "Jira: verbleibend (SP)"
 OWN_DONE_COL, OWN_TOTAL_COL, GAP_COL = "Hier: Nur Done, nach Gewicht", "Hier: Total (ohne Rejected, SP)", "Abstand Jira − hier (Punkte)"
 

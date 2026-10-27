@@ -428,7 +428,33 @@ def level_labels(issues, atoms, level: int, ctx: dict | None = None) -> list[str
 
 def assign_groups(issues, atoms, level: int = 1, ctx: dict | None = None) -> Assignment:
     """Ordnet jedes Atom der Gruppe seiner Hierarchiestufe `level` zu (siehe `level_labels`)."""
-    per_atom = [[label] for label in level_labels(issues, atoms, level, ctx)]
+    return assign_labels([[label] for label in level_labels(issues, atoms, level, ctx)])
+
+
+def ticket_sprints(issues, ctx: dict | None = None) -> list[tuple[str, ...]]:
+    """Je Ticket seine Sprints in Jira-Reihenfolge (der letzte ist der aktuelle). Ein Ticket ohne Sprint, etwa eine Sub-Task, übernimmt die Sprints des nächsten übergeordneten Tickets mit Sprint;
+    ein Zyklus in den Eltern-Verweisen endet ohne Sprint. `ctx`: siehe `cached`."""
+    def build():
+        by_key = {t.key: t for t in issues}
+        out = []
+        for t in issues:
+            current, seen = t, set()
+            while not current.sprints and current.parent in by_key and current.key not in seen:
+                seen.add(current.key)
+                current = by_key[current.parent]
+            out.append(current.sprints)
+        return out
+    return cached(ctx, "sprints", build)
+
+
+def sprint_labels(issues, atoms, ctx: dict | None = None) -> list[str]:
+    """Sprint je Atom: der letzte seiner Sprints (siehe `ticket_sprints`), ohne Sprint `C.NO_SPRINT`."""
+    sprints = ticket_sprints(issues, ctx)
+    return [sprints[i][-1] if sprints[i] else C.NO_SPRINT for i in atoms]
+
+
+def assign_labels(per_atom: list[list[str]]) -> Assignment:
+    """Ordnet jedes Atom den Gruppen seiner Beschriftungen zu (bei mehreren zu gleichen Teilen); die Gruppen stehen in natürlicher Reihenfolge."""
     labels = tuple(sorted({g for gs in per_atom for g in gs}, key=natural_key))
     index = {g: n for n, g in enumerate(labels)}
     a_idx, g_idx, share = [], [], []

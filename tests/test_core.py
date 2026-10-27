@@ -275,3 +275,29 @@ def test_distribution_needs_an_estimated_story_and_no_estimated_sub_task():
     assert weights(Issue(key="S", points=5.0), sub("U1", "S", 2.0), sub("U2", "S")) == {"U1": 2.0, "U2": 2.0}                 # gemischt: die Regel (Median der Stufe 2)
     assert weights(Issue(key="S"), sub("U1", "S"), sub("U2", "S")) == {"U1": 1.0, "U2": 1.0}                                    # die Story ist ungeschätzt: die Regel
     assert weights(Issue(key="E", type="Epic", points=10.0), Issue(key="S1", parent="E"), Issue(key="S2", parent="E")) == {"S1": 1.0, "S2": 1.0}      # ein Epic verteilt nichts
+
+
+# ---------------------------------------------------------------- Sprints
+
+def test_a_ticket_without_sprint_takes_the_sprints_of_its_nearest_ancestor_with_one(mini):
+    sprints = A.ticket_sprints(mini)
+    keys = [t.key for t in mini]
+    assert sprints[keys.index("S1")] == ("Sprint 1",) and sprints[keys.index("S2")] == ("Sprint 1", "Sprint 2")
+    assert sprints[keys.index("T1")] == ("Sprint 1", "Sprint 2") and sprints[keys.index("S3")] == () and sprints[keys.index("E1")] == ()          # Sub-Tasks erben von ihrer Story, Epics ohne Sprint bleiben leer
+
+
+def test_sprints_are_inherited_across_several_levels_and_survive_a_cycle():
+    chain = (Issue(key="A", sprints=("Sprint 7",)), Issue(key="B", parent="A"), Issue(key="C", parent="B"))
+    assert A.ticket_sprints(chain) == [("Sprint 7",)] * 3
+    loop = (Issue(key="A", parent="B"), Issue(key="B", parent="A"))
+    assert A.ticket_sprints(loop) == [(), ()]
+
+
+def test_the_sprint_of_a_counting_ticket_is_its_last_one_or_the_group_without_sprint(mini):
+    atoms = A.select_atoms(mini)
+    assert A.sprint_labels(mini, atoms) == ["Sprint 1", C.NO_SPRINT, "Sprint 2", "Sprint 2", "Sprint 2", "Sprint 2"]       # S1, S3, S4, B1, T1, T2
+
+
+def test_assigning_labels_splits_a_ticket_with_several_labels_into_equal_shares():
+    first = A.assign_labels([["Sprint 10"], ["Sprint 2", "Sprint 10"], ["(ohne Sprint)"]])
+    assert first.labels == ("Sprint 2", "Sprint 10", "(ohne Sprint)") and first.share.tolist() == [1.0, 0.5, 0.5, 1.0]

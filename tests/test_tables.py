@@ -251,3 +251,35 @@ def test_jira_crosscheck_with_a_weightless_group_has_no_done_share():
     items = (Issue(key="E", type="Epic", jira_progress=0.2), Issue(key="S", parent="E", status="Done"))
     rows = T.jira_crosscheck(items, ev.analyse(items, ev.Settings(unest_rule=C.UNEST_IGNORE)))
     assert rows[0][T.OWN_DONE_COL] is None and rows[0][T.GAP_COL] is None
+
+
+def test_sprint_rows_put_every_counting_ticket_into_its_last_sprint_by_hand():
+    from conftest import make_mini
+    mini = make_mini()
+    a = ev.analyse(mini)
+    rows = {r[T.SPRINT_COL]: r for r in T.sprint_rows(mini, a)}
+    assert list(rows) == ["Sprint 1", "Sprint 2", C.NO_SPRINT, T.SUM_LABEL]
+    one, two, none, total = rows["Sprint 1"], rows["Sprint 2"], rows[C.NO_SPRINT], rows[T.SUM_LABEL]
+    assert (one[T.TICKETS_COL], one[T.SPRINT_WEIGHT_COL], one[T.PROGRESS_COL], one[T.SPRINT_DONE_COL], one[T.CARRIED_COUNT_COL]) == (1, 3.0, 1.0, 1.0, 0)
+    # Sprint 2: S4 (2.5, In Review 0.8), B1 (1, Done), T1 (1, Done) und T2 (1, To Do); T1 und T2 erben die zwei Sprints von S2 und sind damit mitgenommen
+    assert (two[T.TICKETS_COL], two[T.SPRINT_WEIGHT_COL]) == (4, 5.5) and two[T.PROGRESS_COL] == pytest.approx(4 / 5.5) and two[T.SPRINT_DONE_COL] == pytest.approx(2 / 5.5)
+    assert (two[T.CARRIED_COUNT_COL], two[T.CARRIED_WEIGHT_COL]) == (2, 2.0)
+    assert (none[T.TICKETS_COL], none[T.SPRINT_WEIGHT_COL], none[T.PROGRESS_COL], none[T.SPRINT_DONE_COL]) == (1, 2.0, 0.0, 0.0)
+    assert (total[T.TICKETS_COL], total[T.SPRINT_WEIGHT_COL], total[T.CARRIED_COUNT_COL]) == (6, 10.5, 2)
+    assert total[T.PROGRESS_COL] == pytest.approx(a.progress) and total[T.SPRINT_DONE_COL] == pytest.approx(a.progress_done)           # die Summenzeile ist die Gesamtzahl der Auswertung
+
+
+def test_sprint_rows_without_weight_have_no_progress_and_without_tickets_no_rows():
+    items = (Issue(key="A", status="Done", sprints=("Sprint 1",)),)
+    a = ev.analyse(items, ev.Settings(unest_rule=C.UNEST_IGNORE))
+    assert [r[T.PROGRESS_COL] for r in T.sprint_rows(items, a)] == [None, None]
+    assert T.sprint_rows((), ev.analyse(())) == [] and not T.has_sprints(ITEMS) and T.has_sprints(items)
+
+
+def test_sprint_statistics_for_the_chart_match_the_table():
+    from conftest import make_mini
+    mini = make_mini()
+    a = ev.analyse(mini)
+    stats = ev.sprint_stats(mini, a)
+    assert stats.labels == ("Sprint 1", "Sprint 2", C.NO_SPRINT) and stats.weight.tolist() == [3.0, 5.5, 2.0] and stats.count.tolist() == [1.0, 4.0, 1.0]
+    assert stats.progress.tolist() == pytest.approx([1.0, 4 / 5.5, 0.0]) and stats.unestimated.tolist() == [0.0, 3.0, 0.0]          # S4, T1 und T2 haben keine eigenen Story Points

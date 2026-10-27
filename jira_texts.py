@@ -167,6 +167,7 @@ ASSUMPTIONS_MARKDOWN = """
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
 - **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung zählt 0 %, ohne Warnung.
 - **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Graphen höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 20000 Tickets und 50 MB je Datei.
+- **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
 
 ### Bekannte Probleme und Unsicherheiten

@@ -203,7 +203,7 @@ def test_both_charts_report_clicks_as_a_selection():
     tree = ast.parse(open(APP_PATH, encoding="utf-8").read())
     charts = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "plotly_chart"]
     clickable = [n for n in charts if {k.arg for k in n.keywords} >= {"on_select", "selection_mode"}]
-    assert len(charts) == 3 and len(clickable) == 2                                      # Kachelansicht und Graph; die Balken nicht
+    assert len(charts) == 4 and len(clickable) == 2                                      # Kachelansicht und Graph; die Balken (je Ticket und je Sprint) nicht
     assert not any(isinstance(n, ast.Name) and n.id == "child_pick" for n in ast.walk(tree)) and "Darunter öffnen" not in open(APP_PATH, encoding="utf-8").read()
 
 
@@ -259,3 +259,23 @@ def test_the_comparison_with_jiras_own_progress_appears_only_when_the_export_has
     without = _open(plan_csv(make_mini()))
     _ok(without)
     assert not any("Gegenprobe: Jiras eigener Fortschritt" in m.value for m in without.markdown) and not any("Jira: Fortschritt (%)" in t.value.columns for t in without.dataframe)
+
+
+def test_the_sprint_section_shows_a_bar_chart_and_a_table_when_tickets_have_sprints():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    assert any("Fortschritt je Sprint" in m.value for m in at.markdown)
+    table = next(t.value for t in at.dataframe if "Mitgenommene Tickets" in t.value.columns)
+    assert table["Sprint"].tolist() == ["Sprint 1", "Sprint 2", "(ohne Sprint)", "Summe"] and table["Tickets"].tolist() == [1, 4, 1, 6]
+    sub = _open(plan_csv(make_mini()))
+    sub.sidebar.selectbox(key="root").set_value("S2").run(timeout=TIMEOUT)
+    _ok(sub)
+    table = next(t.value for t in sub.dataframe if "Mitgenommene Tickets" in t.value.columns)
+    assert table["Sprint"].tolist() == ["Sprint 2", "Summe"] and table["Tickets"].tolist() == [2, 2]            # nur T1 und T2 unter S2: beide erben von S2, das als Wurzel keine Eltern mehr hat, aber selbst Sprints trägt
+
+
+def test_without_any_sprint_the_section_is_left_out():
+    data = "Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Done;3\nA-2;To Do;2\n".encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    assert not any("Fortschritt je Sprint" in m.value for m in at.markdown)

@@ -80,7 +80,7 @@ bitte melden.
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Hierarchiegraph und eine Tabelle: die
-**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Enthält der Export Jiras eigene Fortschrittsspalten, kommt die **Gegenprobe** dazu: je Ticket Jiras Wert neben „Nur Done, nach Gewicht“ und der Abstand in Prozentpunkten.
+**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Haben Tickets einen Sprint, kommt der **Fortschritt je Sprint** dazu (Balken und Tabelle: Tickets, Gewicht, Fortschritt, „nur Done“, mitgenommene Tickets); jedes zählende Ticket steht in seinem letzten Sprint, eine Sub-Task ohne Sprint erbt den ihrer Story. Enthält der Export Jiras eigene Fortschrittsspalten, kommt die **Gegenprobe** dazu: je Ticket Jiras Wert neben „Nur Done, nach Gewicht“ und der Abstand in Prozentpunkten.
 
 ## Datenschutz
 
@@ -124,6 +124,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
 - **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung zählt 0 %, ohne Warnung.
 - **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Graphen höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 20000 Tickets und 50 MB je Datei.
+- **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
 
 ### Bekannte Probleme und Unsicherheiten
@@ -138,7 +139,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Sprint, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
 
 ## Aufbau

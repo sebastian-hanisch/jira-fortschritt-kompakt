@@ -136,6 +136,12 @@ def headline(issues, settings: Settings, plan=None, ctx: dict | None = None) -> 
     return n.overall[0], float(n.w.sum()), int(n.unest.sum()), len(n.atoms)
 
 
+def sprint_stats(issues, a: Analysis) -> A.GroupStats:
+    """Gewicht und Fortschritt je Sprint: jedes zählende Ticket in seinem letzten Sprint (siehe `A.sprint_labels`), mit den Gewichten und Gutschriften der Auswertung `a`."""
+    first = A.assign_labels([[label] for label in A.sprint_labels(issues, a.atoms, a.ctx)])
+    return A.aggregate(first, a.w, a.c, a.done, np.array([issues[i].points is None for i in a.atoms], dtype=bool))
+
+
 def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:
     """Wie viele Tickets haben keine Story Points, und was macht die gewählte Regel daraus?"""
     if n_atoms == 0:
