@@ -214,7 +214,7 @@ def _node_hover(g, k: int, unit: str) -> str:
     if g.ignored is not None and g.ignored[k]:
         lines.append("ausgeschlossen: zählt nicht (zurückgewiesen)")
     if g.hidden[k]:
-        lines.append(f"{g.hidden[k]} Tickets darunter nicht gezeichnet")
+        lines.append(f"{g.hidden[k]} Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst")
     return "<br>".join(lines)
 
 
@@ -232,7 +232,8 @@ def build_tree_graph(g, unit: str):
     fig = go.Figure(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="rgba(130,130,130,0.55)", width=1.2), hoverinfo="skip", showlegend=False))
     top = float(g.weight.max()) if n else 0.0
     size = np.array([9.0 if top <= 0 or g.weight[k] <= 0 else 9.0 + 25.0 * np.sqrt(g.weight[k] / top) for k in range(n)])
-    symbol = ["circle" if g.is_leaf[k] else "square" for k in range(n)]
+    rest = g.is_rest if g.is_rest is not None else np.zeros(n, dtype=bool)
+    symbol = ["diamond" if rest[k] else "circle" if g.is_leaf[k] else "square" for k in range(n)]
     label_all = n <= C.GRAPH_LABEL_MAX
     known = [k for k in range(n) if not np.isnan(g.progress[k])]
     unknown = [k for k in range(n) if np.isnan(g.progress[k])]

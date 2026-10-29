@@ -240,7 +240,7 @@ def test_the_assumptions_box_is_in_the_app_with_the_limits():
     at = _open(plan_csv(make_mini()))
     box = next(e for e in at.expander if e.label == "⚠️ Annahmen, Grenzen und bekannte Probleme")
     text = " ".join(m.value for m in box.markdown)
-    assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.GRAPH_MAX_NODES} Knoten" in text
+    assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.GRAPH_MAX_NODES} Einträge" in text
 
 
 JIRA_PROGRESS_CSV = (
@@ -318,3 +318,23 @@ def test_jiras_own_progress_columns_are_ignored_and_no_comparison_is_shown():
     found = next(t.value for t in at.dataframe if "Gefunden in" in t.value.columns)
     assert not any("Jira" in str(name) for name in found["Feld"].tolist())            # der Erkennungsbericht kennt die Spalten nicht
     assert at.metric[0].value == "40.0 %"                                              # Story A (4, Done) von 10 Story Points: allein Status und Story Points zählen
+
+
+def _html_tables(at):
+    return [e for e in at.get("html")]
+
+
+def test_the_copyable_html_table_is_only_made_on_click_and_can_be_hidden_again():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    assert not _html_tables(at) and at.button(key="make_parent")                          # ohne Klick wird keine Tabelle erzeugt und mitgeschickt
+    at.button(key="make_parent").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert len(_html_tables(at)) == 1 and at.session_state["html_parent"] and at.button(key="hide_parent")
+    at.sidebar.selectbox(key="unest_rule").set_value(C.UNEST_ONE).run(timeout=TIMEOUT)      # die erzeugte Tabelle bleibt bei weiteren Änderungen stehen
+    assert len(_html_tables(at)) == 1
+    at.button(key="hide_parent").click().run(timeout=TIMEOUT)
+    assert not _html_tables(at) and at.button(key="make_parent")
+    at.button(key="make_parent").click().run(timeout=TIMEOUT)
+    at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
+    assert "html_parent" not in at.session_state                                            # mit den Daten verschwinden auch die erzeugten Tabellen

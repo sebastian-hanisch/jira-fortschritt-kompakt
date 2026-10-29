@@ -65,9 +65,16 @@ def _on_weight_edit(version, shown, base):
 def _clear_loaded():
     """Löscht die geladenen Daten der Sitzung und stellt das Upload-Feld zurück."""
     st.session_state.pop("loaded", None)
+    for name in [k for k in st.session_state if str(k).startswith("html_")]:          # erzeugte Tabellen zum Kopieren gehören zu den gelöschten Daten
+        st.session_state.pop(name)
     st.session_state.pop("overrides", None)          # geänderte Gewichte gehören zu den gelöschten Daten und dürfen nicht in die nächste Datei wandern
     st.session_state["weights_version"] = st.session_state.get("weights_version", 0) + 1
     st.session_state["upload_version"] = st.session_state.get("upload_version", 0) + 1
+
+
+def _set_html(flag, shown):
+    """Knöpfe „Tabelle zum Kopieren erzeugen“ und „ausblenden“: merkt sich, ob diese Tabelle gezeigt werden soll."""
+    st.session_state[flag] = shown
 
 
 def _go_to(key):
@@ -106,9 +113,15 @@ def show_table(rows, key, formats=None, file_name="tabelle"):
         config["Wirkung"] = st.column_config.TextColumn(width="large")
     st.dataframe(shown, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
     st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
-    with st.expander("📋 In Jira oder Confluence einfügen"):
-        st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
-        st.html(T.rows_to_html(rows, formats))
+    flag = f"html_{key}"
+    with st.expander("📋 In Jira oder Confluence einfügen", expanded=bool(st.session_state.get(flag))):
+        if st.session_state.get(flag):
+            st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
+            st.html(T.rows_to_html(rows, formats))
+            st.button("Tabelle ausblenden", key=f"hide_{key}", on_click=_set_html, args=(flag, False))
+        else:
+            st.caption(f"Die Tabelle zum Kopieren wird erst auf Klick erzeugt: Bei großen Plänen ist sie mehrere Megabyte groß ({len(rows)} Zeilen hier) und würde sonst bei jeder Änderung mitgeschickt.")
+            st.button("Tabelle zum Kopieren erzeugen", key=f"make_{key}", on_click=_set_html, args=(flag, True))
 
 
 def _below(root) -> str:
@@ -276,7 +289,7 @@ def render_charts(a, root):
         tiles_key = f"chart_tiles_{root}"
         st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key, on_select=partial(_drill, tiles_key), selection_mode="points")
         st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. **Ein Klick auf eine Kachel mit Kindern öffnet sie als Teilprojekt** "
-                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht); mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen.")
+                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht); mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen. Sind es zu viele Kacheln, fasst eine Kachel „Rest“ die leichtesten zusammen.")
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 
@@ -285,8 +298,8 @@ def render_charts(a, root):
     graph_key = f"chart_graph_{root}"
     st.plotly_chart(build_tree_graph(g, unit), width="stretch", key=graph_key, on_select=partial(_drill, graph_key), selection_mode="points")
     st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
-               "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt** (ein Blatt reagiert nicht)."
-               + (f" Der Teilprojektbaum hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
+               "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, Raute = „Rest“ (die leichtesten Tickets einer Ebene, nicht einzeln gezeichnet), grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt** (ein Blatt reagiert nicht)."
+               + (f" Der Teilprojektbaum hätte {g.n_total} Knoten; gezeichnet werden die schwersten (höchstens {C.GRAPH_MAX_NODES} Einträge), die übrigen stehen in den Sammelknoten „Rest“. Ein Teilprojekt als Wurzel zeigt mehr." if g.is_rest.any() else ""))
 
 
 def render_matrix(issues, a, root):

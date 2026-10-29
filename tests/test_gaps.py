@@ -198,7 +198,7 @@ def test_node_hover_names_what_is_missing_and_what_is_left_out(mini):
         is_atom=np.array([False, True]), is_leaf=np.array([True, True]), hidden=np.array([0, 3]), ignored=np.array([True, False]))
     a, b = CH._node_hover(g, 0, "SP"), CH._node_hover(g, 1, "SP")
     assert a == "A: Titel<br>Story · Done<br>kein Gewicht<br>Fortschritt 100 %<br>zählt nicht selbst (Zählebene)<br>ausgeschlossen: zählt nicht (zurückgewiesen)"
-    assert b == "B<br>Gewicht 2.00 SP<br>kein Fortschritt messbar<br>3 Tickets darunter nicht gezeichnet"
+    assert b == "B<br>Gewicht 2.00 SP<br>kein Fortschritt messbar<br>3 Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst"
 
 
 def test_node_hover_does_not_call_a_weighted_or_partial_atom_not_counting():

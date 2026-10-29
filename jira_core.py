@@ -4,6 +4,7 @@ Modell: Ein *Atom* ist ein Blatt des Ticket-Baums, also ein Ticket ohne Kinder (
 Sub-Tasks zählt durch ihre Sub-Tasks). Es hat ein Gewicht w (die Story Points; fehlen sie, nach der gewählten Regel: ein Median geschätzter Atome, 1 oder nicht gezählt) und eine Gutschrift c in [0, 1] (Anteil der Arbeit, der laut Statusname als getan gilt). Der Fortschritt einer Gruppe G ist
 P(G) = sum_G w*c / sum_G w. Zurückgewiesene Tickets (und alles unter ihnen) sind keine Atome."""
 
+import heapq
 import re
 import unicodedata
 from dataclasses import dataclass, replace
@@ -542,7 +543,8 @@ def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, floa
 @dataclass(frozen=True)
 class TreeGraph:
     """Knoten des Teilprojektbaums, ein Eintrag je Knoten in Tiefensuche-Reihenfolge (Eltern vor Kindern). `x` ist die Tiefe, `y` die Zeile; Elternknoten stehen mittig
-    vor ihren Kindern. `progress` ist NaN, wenn der Knoten nichts Messbares trägt."""
+    vor ihren Kindern. `progress` ist NaN, wenn der Knoten nichts Messbares trägt. Ein Sammelknoten „Rest“ (`is_rest`) steht als letztes Kind eines Knotens für dessen leichtere Kinder, die nicht einzeln
+    gezeichnet werden."""
 
     keys: tuple[str, ...]
     titles: tuple[str, ...]
@@ -555,10 +557,11 @@ class TreeGraph:
     progress: np.ndarray
     is_atom: np.ndarray
     is_leaf: np.ndarray       # ohne gezeichnete Kinder
-    hidden: np.ndarray        # Zahl der Tickets darunter, die nicht gezeichnet werden (zusammengefasste Ebene)
+    hidden: np.ndarray        # Zahl der Tickets darunter, die im Sammelknoten „Rest“ dieses Knotens zusammengefasst sind
     n_total: int              # Knoten vor dem Zusammenfassen
     shown_depth: int          # tiefste gezeichnete Ebene
     ignored: np.ndarray | None = None      # zurückgewiesene Knoten: zählen nicht, nichts messbar
+    is_rest: np.ndarray | None = None      # Sammelknoten „Rest“
 
 
 def _layout_rows(keep: list[int], parent: np.ndarray) -> tuple[dict[int, float], dict[int, list[int]]]:
@@ -580,11 +583,47 @@ def _layout_rows(keep: list[int], parent: np.ndarray) -> tuple[dict[int, float],
     return y, kept_kids
 
 
+def heaviest_nodes(parent, weight, limit: int) -> tuple[list[int], dict[int, list[int]]]:
+    """Welche Knoten eines Baums gezeichnet werden, wenn es höchstens `limit` Einträge sein dürfen: von der Wurzel (Eintrag 0) aus immer der schwerste noch nicht gewählte Kindknoten, bis das Budget
+    erschöpft ist. Jeder gewählte Knoten, von dessen Kindern nicht alle gewählt sind, braucht einen Sammelknoten „Rest“, der ebenfalls zum Budget zählt; ein Knoten, der nicht mehr hineinpasst,
+    bleibt draußen, leichtere Knoten können noch folgen. Rückgabe: die gewählten Knoten in Tiefensuche-Reihenfolge und je gewähltem Knoten die ausgelassenen Kinder (nur nicht leere Einträge)."""
+    n = len(parent)
+    children: list[list[int]] = [[] for _ in range(n)]
+    for p in range(n):
+        if parent[p] >= 0:
+            children[parent[p]].append(p)
+    kept = {0}
+    open_kids = {0: len(children[0])}
+    total = 1 + (1 if children[0] else 0)
+    heap = [(-float(weight[c]), c) for c in children[0]]
+    heapq.heapify(heap)
+    while heap:
+        _, c = heapq.heappop(heap)
+        p = int(parent[c])
+        new_total = total + 1 + (1 if children[c] else 0) - (1 if open_kids[p] == 1 else 0)
+        if new_total > max(limit, 1):
+            continue
+        kept.add(c)
+        open_kids[p] -= 1
+        open_kids[c] = len(children[c])
+        total = new_total
+        for child in children[c]:
+            heapq.heappush(heap, (-float(weight[child]), child))
+    order, stack = [], [0]
+    while stack:
+        v = stack.pop()
+        order.append(v)
+        stack.extend(reversed([c for c in children[v] if c in kept]))
+    omitted = {v: [c for c in children[v] if c not in kept] for v in order}
+    return order, {v: kids for v, kids in omitted.items() if kids}
+
+
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, max_nodes: int = C.GRAPH_MAX_NODES,
                excluded: frozenset[int] = frozenset(), ctx: dict | None = None) -> TreeGraph:
     """Gewicht und Fortschritt je Knoten des Hierarchiebaums. Ein Knoten trägt die Summe seiner Atome (er selbst, falls er eins ist, und alle darunter), der Fortschritt ist
     die gewichtete Gutschrift dieser Summe. Ein Blatt ohne Gewicht zeigt die Gutschrift seines Status (z. B. Sub-Tasks); alles andere ohne Gewicht bleibt leer. Ohne `root` steht
-    ein Knoten „Projekt“ über allen Wurzeln. Über `max_nodes` hinaus wird die tiefste Ebene so lange zusammengefasst, bis der Graph passt."""
+    ein Knoten „Projekt“ über allen Wurzeln. Über `max_nodes` hinaus werden nur die schwersten Knoten gezeichnet (siehe `heaviest_nodes`); die ausgelassenen Kinder eines Knotens stehen zusammen
+    in einem Sammelknoten „Rest“ mit ihrer Summe aus Gewicht und Gutschrift."""
     order = tree_order(issues, root, ctx)
     shift = 0 if root != C.ROOT_ALL else 1
     n = len(order) + shift
@@ -618,25 +657,66 @@ def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str,
         wsum[parent[p]] += wsum[p]
         csum[parent[p]] += csum[p]
         size[parent[p]] += size[p]
-    # zusammenfassen: tiefste Ebene, bei der höchstens max_nodes Knoten bleiben (mindestens die Wurzel)
-    fits = np.nonzero(np.cumsum(np.bincount(depth)) <= max_nodes)[0]
-    shown_depth = int(fits[-1]) if len(fits) else 0
-    keep = [p for p in range(n) if depth[p] <= shown_depth]
-    slot = {p: s for s, p in enumerate(keep)}
-    y, kept_kids = _layout_rows(keep, parent)
-    progress, weight, hidden = [], [], []
-    for p in keep:
-        weight.append(float(wsum[p]))
-        if node_issue[p] in excluded:
-            progress.append(float("nan"))
-        elif wsum[p] > 0:
-            progress.append(float(csum[p] / wsum[p]))
-        elif p not in kept_kids and size[p] == 1 and node_issue[p] >= 0 and not issues[node_issue[p]].is_epic:
-            progress.append(float(credit_of.get(issues[node_issue[p]].status, np.nan)))
+    kept, omitted = heaviest_nodes(parent, wsum, max_nodes)
+    # Einträge in Tiefensuche-Reihenfolge: ein gewählter Knoten, danach seine gewählten Kinder, zuletzt sein Sammelknoten
+    entries: list[tuple[str, int]] = []
+    stack: list[tuple[str, int]] = [("n", kept[0])]
+    kids_of: dict[int, list[int]] = {}
+    for v in kept:
+        if parent[v] >= 0:
+            kids_of.setdefault(int(parent[v]), []).append(v)
+    while stack:
+        kind, v = stack.pop()
+        entries.append((kind, v))
+        if kind == "n":
+            if v in omitted:
+                stack.append(("r", v))
+            stack.extend(("n", child) for child in reversed(kids_of.get(v, [])))
+    slot = {entry: s for s, entry in enumerate(entries)}
+    m = len(entries)
+    parent_slot = np.full(m, -1, dtype=int)
+    for s, (kind, v) in enumerate(entries):
+        if kind == "r":
+            parent_slot[s] = slot[("n", v)]
+        elif parent[v] >= 0:
+            parent_slot[s] = slot[("n", int(parent[v]))]
+    y, _ = _layout_rows(list(range(m)), parent_slot)
+    has_drawn_kids = set(int(x) for x in parent_slot if x >= 0)
+    out_keys, out_titles, out_types, out_statuses, out_x, out_w, out_progress, out_atom, out_hidden, out_ignored, out_rest = [], [], [], [], [], [], [], [], [], [], []
+    for kind, v in entries:
+        if kind == "r":
+            rest_size = sum(int(size[ch]) for ch in omitted[v])
+            weight_sum, credit_sum = sum(float(wsum[ch]) for ch in omitted[v]), sum(float(csum[ch]) for ch in omitted[v])
+            out_keys.append("Rest")
+            out_titles.append(f"{rest_size} Tickets zusammengefasst")
+            out_types.append("")
+            out_statuses.append("")
+            out_x.append(int(depth[v]) + 1)
+            out_w.append(weight_sum)
+            out_progress.append(credit_sum / weight_sum if weight_sum > 0 else float("nan"))
+            out_atom.append(False)
+            out_hidden.append(0)
+            out_ignored.append(False)
+            out_rest.append(True)
+            continue
+        out_keys.append(keys[v])
+        out_titles.append(titles[v])
+        out_types.append(types[v])
+        out_statuses.append(statuses[v])
+        out_x.append(int(depth[v]))
+        out_w.append(float(wsum[v]))
+        if node_issue[v] in excluded:
+            out_progress.append(float("nan"))
+        elif wsum[v] > 0:
+            out_progress.append(float(csum[v] / wsum[v]))
+        elif size[v] == 1 and node_issue[v] >= 0 and not issues[node_issue[v]].is_epic:
+            out_progress.append(float(credit_of.get(issues[node_issue[v]].status, np.nan)))
         else:
-            progress.append(float("nan"))
-        hidden.append(int(size[p] - 1) if depth[p] == shown_depth else 0)
+            out_progress.append(float("nan"))
+        out_atom.append(bool(is_atom[v]))
+        out_hidden.append(sum(int(size[ch]) for ch in omitted.get(v, [])))
+        out_ignored.append(node_issue[v] in excluded)
+        out_rest.append(False)
     return TreeGraph(
-        tuple(keys[p] for p in keep), tuple(titles[p] for p in keep), tuple(types[p] for p in keep), tuple(statuses[p] for p in keep), np.array([depth[p] for p in keep]), np.array([y[p] for p in keep]),
-        np.array([slot[parent[p]] if parent[p] >= 0 else -1 for p in keep], dtype=int), np.array(weight), np.array(progress), np.array([is_atom[p] for p in keep]),
-        np.array([p not in kept_kids for p in keep]), np.array(hidden, dtype=int), n, shown_depth, np.array([node_issue[p] in excluded for p in keep]))
+        tuple(out_keys), tuple(out_titles), tuple(out_types), tuple(out_statuses), np.array(out_x, dtype=int), np.array([y[s] for s in range(m)]), parent_slot, np.array(out_w), np.array(out_progress),
+        np.array(out_atom, dtype=bool), np.array([s not in has_drawn_kids for s in range(m)]), np.array(out_hidden, dtype=int), n, max(out_x), np.array(out_ignored, dtype=bool), np.array(out_rest, dtype=bool))

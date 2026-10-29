@@ -167,11 +167,44 @@ def test_graph_of_a_subproject_starts_at_its_root(mini):
     assert g.keys == ("E2", "S3", "S4") and g.parent.tolist() == [-1, 0, 0] and g.weight.tolist() == [4.0, 2.0, 2.0] and g.progress[0] == pytest.approx(0.4)
 
 
-def test_graph_summarises_the_deepest_levels_beyond_the_node_limit(mini):
+def test_graph_beyond_the_limit_draws_the_heaviest_nodes_and_one_rest_node_per_parent(mini):
     g = _graph(mini, max_nodes=5)
-    assert g.keys == ("Projekt", "E1", "E2", "B1") and g.shown_depth == 1 and g.n_total == 10
-    assert g.hidden.tolist() == [0, 4, 2, 0] and g.is_leaf.tolist() == [False, True, True, True]
-    assert g.weight.tolist() == pytest.approx([10.5, 5.0, 4.5, 1.0])                     # die Summen enthalten auch die nicht gezeichneten Tickets
+    # Projekt, E1 (5.0), S1 (3.0); was bei E1 fehlt (S2 mit T1 und T2), und was beim Projekt fehlt (E2 mit S3 und S4, B1), steht je in einem Sammelknoten
+    assert g.keys == ("Projekt", "E1", "S1", "Rest", "Rest") and g.is_rest.tolist() == [False, False, False, True, True] and g.n_total == 10 and g.shown_depth == 2
+    assert g.titles[3:] == ("3 Tickets zusammengefasst", "4 Tickets zusammengefasst") and g.parent.tolist() == [-1, 0, 1, 1, 0]
+    assert g.weight.tolist() == pytest.approx([10.5, 5.0, 3.0, 2.0, 5.5])                  # die Summe der gezeichneten Blätter ist das Gesamtgewicht
+    assert g.progress.tolist() == pytest.approx([7 / 10.5, 0.8, 1.0, 0.5, 3 / 5.5])
+    assert g.hidden.tolist() == [4, 3, 0, 0, 0] and g.is_leaf.tolist() == [False, False, True, True, True]
+    assert g.y.tolist() == pytest.approx([1.25, 0.5, 0.0, 1.0, 2.0]) and g.x.tolist() == [0, 1, 2, 2, 1]
+
+
+def test_the_budget_counts_rest_nodes_and_light_nodes_may_still_fit_after_a_heavy_one_did_not():
+    parent = np.array([-1, 0, 0, 0, 1, 1])                 # 0 hat die Kinder 1, 2, 3; 1 hat die Kinder 4 und 5
+    weight = np.array([10.0, 6.0, 3.0, 1.0, 4.0, 2.0])
+    order, omitted = A.heaviest_nodes(parent, weight, limit=10)
+    assert order == [0, 1, 4, 5, 2, 3] and omitted == {}
+    order, omitted = A.heaviest_nodes(parent, weight, limit=5)         # 0 mit Rest, 1 (2 Plätze), 4; dann passt 5 noch hinein, weil es den Rest von 1 überflüssig macht; 2 und 3 stehen im Rest von 0
+    assert order == [0, 1, 4, 5] and omitted == {0: [2, 3]}
+    order, omitted = A.heaviest_nodes(parent, weight, limit=4)         # nur 0 mit Rest und 1 mit Rest: weder 4, 5 noch 2 oder 3 haben noch Platz
+    assert order == [0, 1] and omitted == {0: [2, 3], 1: [4, 5]}
+    order, omitted = A.heaviest_nodes(parent, weight, limit=1)
+    assert order == [0] and omitted == {0: [1, 2, 3]}
+    assert A.heaviest_nodes(np.array([-1]), np.array([5.0]), limit=3) == ([0], {})
+
+
+def test_a_flat_plan_beyond_the_limit_keeps_all_of_its_weight_between_the_drawn_nodes_and_the_rest_node():
+    issues = tuple(Issue(key=f"P-{n}", status="Done" if n % 2 else "Backlog", points=float(1 + n % 7)) for n in range(600))
+    atoms = A.select_atoms(issues)
+    w = A.atom_weights(issues, atoms)
+    c = np.array([1.0 if issues[i].status == "Done" else 0.0 for i in atoms])
+    g = A.tree_graph(issues, atoms, w, c, {"Done": 1.0, "Backlog": 0.0})
+    assert len(g.keys) <= C.GRAPH_MAX_NODES and g.keys.count("Rest") == 1 and g.is_rest.sum() == 1
+    drawn_leaves = g.weight[(g.parent == 0) & ~g.is_rest]
+    assert float(drawn_leaves.sum() + g.weight[g.is_rest][0]) == pytest.approx(float(w.sum())) and g.weight[0] == pytest.approx(float(w.sum()))
+    omitted_weights = sorted((issues[i].points for i in atoms), reverse=True)[len(drawn_leaves):]
+    assert drawn_leaves.min() >= max(omitted_weights)                                      # gezeichnet sind die schwersten, im Rest die leichteren
+    assert g.hidden[0] == 600 - (len(g.keys) - 2)                                         # alle nicht gezeichneten Tickets stehen im Rest
+
 
 
 def test_graph_marks_excluded_nodes_as_not_measurable(mini):
