@@ -159,10 +159,14 @@ def test_names_of_people_are_never_read_and_the_titles_stay():
 
 # ---------------------------------------------------------------- Anleitung zum Export
 
-def test_export_guide_is_shown_before_the_upload_and_names_the_steps():
+def test_the_upload_field_stands_before_the_collapsed_export_guide_which_names_the_steps():
     at = _open()
     guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
-    assert guide.proto.expanded                                                  # ohne Datei steht die Anleitung offen
+    assert not guide.proto.expanded                                              # die Anleitung ist eingeklappt: Das Upload-Feld ist ohne Scrollen zu sehen
+    kinds = [type(child).__name__ for child in at.main.children.values()]
+    labels = [getattr(child, "label", "") for child in at.main.children.values()]
+    assert kinds.index("Block") < labels.index(guide.label) and kinds.index("Warning") < kinds.index("Block")      # Hinweis, dann Upload-Feld, dann die Anleitung
+    assert at.get("file_uploader")
     text = " ".join(m.value for m in guide.markdown)
     for part in ("Plan settings", "Estimation and scheduling", "Story Points", "Scrum-Teams", "Timeline-Ansicht", "Add fields", "Export data (.csv)", "Schätzung (T)",
                  "Plans administrator", "Premium", "geprüft ist das nicht",

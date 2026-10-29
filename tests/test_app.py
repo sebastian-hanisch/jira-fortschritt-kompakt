@@ -338,3 +338,13 @@ def test_the_copyable_html_table_is_only_made_on_click_and_can_be_hidden_again()
     at.button(key="make_parent").click().run(timeout=TIMEOUT)
     at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
     assert "html_parent" not in at.session_state                                            # mit den Daten verschwinden auch die erzeugten Tabellen
+
+
+def test_the_headline_numbers_explain_themselves_in_a_tooltip():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    helps = [m.help for m in at.metric]
+    assert all(helps)
+    assert "Gutschrift" in helps[0] and "fertig 100 %" in helps[0] and "Test 90 %" in helps[0] and "Merged oder Review 80 %" in helps[0]
+    assert "ohne Teilgutschriften" in helps[1] and "Prozentpunkte" in helps[1]
+    assert "1 minus Fortschritt" in helps[2] and "Story Points" in helps[2]

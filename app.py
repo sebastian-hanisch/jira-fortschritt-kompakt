@@ -131,21 +131,23 @@ def _below(root) -> str:
 
 # --- Kopf und Datei -----------------------------------------------------------------------------------------------------------------------------
 
-def render_intro(loaded):
-    """Titel, Hinweise und Anleitungen. Rückgabe: der Ausklapper der Berechnungsmöglichkeiten (die Wirkung auf die Daten kommt nach der Auswertung hinein)."""
+def render_intro():
+    """Titel, Datenschutz-Hinweis, Platz für das Upload-Feld und die eingeklappten Anleitungen. Rückgabe: der Ausklapper der Berechnungsmöglichkeiten (die Wirkung auf die Daten kommt nach der
+    Auswertung hinein) und der Bereich für das Upload-Feld: Es steht gleich unter dem Hinweis, vor den Anleitungen."""
     st.title("📊 Jira-Fortschritt")
     st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit den Story Points der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
                "zurückgewiesene Tickets zählen nicht.")
     st.caption(f"🔓 Open Source (MIT-Lizenz): Code und Anleitung im [Repository]({C.REPO_URL}). Mit eigenen, vertraulichen Daten besser lokal ausführen: Dann verlassen sie Ihren Rechner nicht.")
     st.warning(texts.UPLOAD_NOTICE)
-    with st.expander("📤 So kommt die Datei zustande: Export aus Jira Plans, mit Story Points", expanded=loaded is None):
+    upload_box = st.container()
+    with st.expander("📤 Wie exportiere ich die Datei? Export aus Jira Plans, mit Story Points"):
         st.markdown(texts.EXPORT_GUIDE)
     with st.expander("📖 Welche Status zählen wie viel? Standard nach Namen"):
         st.markdown(texts.status_rules_markdown())
     options_box = st.expander("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten")
     with options_box:
         st.markdown(texts.UNEST_OPTIONS_MARKDOWN)
-    return options_box
+    return options_box, upload_box
 
 
 def load_file():
@@ -154,7 +156,7 @@ def load_file():
                               help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
     if upload is None:
         st.info("Bitte den CSV-Export aus Jira Plans wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Vorgangsstatus“; für die Gewichte „Story Points“, "
-                "für die Hierarchie „Hierarchie“ und „Übergeordnetes Element“.")
+                "für die Hierarchie „Hierarchie“ und „Übergeordnetes Element“. Wie der Export entsteht, steht unten unter „Wie exportiere ich die Datei?“.")
         st.stop()
     try:
         issues_all, report = _read(upload.getvalue())
@@ -265,10 +267,17 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
         bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
         st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
     m1, m2, m3 = st.columns(3)
-    m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct))
+    credit = {name: round(100 * value) for name, value in C.STATUS_CLASS_CREDIT.items()}
+    m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct), help=(
+        "Summe aus Story Points mal Gutschrift des Status, geteilt durch die Summe der Story Points aller zählenden Tickets. Gutschrift nach dem Statusnamen: "
+        f"fertig {credit['done']} %, Test {credit['test']} %, Merged oder Review {credit['merged']} %, alles andere 0 % (änderbar in der Tabelle „Gewichte der Status“)."))
     # Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.
-    m2.metric("Nur Done, nach Gewicht", or_dash(a.progress_done, pct), delta=delta_points(a.progress_done, a.progress), delta_color="off")
-    m3.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2))
+    m2.metric("Nur Done, nach Gewicht", or_dash(a.progress_done, pct), delta=delta_points(a.progress_done, a.progress), delta_color="off", help=(
+        "Anteil des Gewichts, dessen Ticket in einem Status steht, der als fertig gilt, ohne Teilgutschriften für Test, Merged oder Review. Die Zahl darunter ist der Abstand zum gewichteten Fortschritt "
+        "links (Prozentpunkte)."))
+    m3.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2), help=(
+        f"Was nach der gewichteten Rechnung noch zu tun ist: Gesamtgewicht mal (1 minus Fortschritt), in {C.UNIT}. Das Gesamtgewicht ist die Summe der Story Points aller zählenden Tickets, "
+        "bei Tickets ohne Story Points nach der gewählten Regel."))
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
     unknown = unrecognized_note(unrecognized_statuses(issues, a), a.weight)
@@ -350,9 +359,10 @@ def render_explanations():
 def main():
     st.session_state.setdefault("upload_version", 0)
     loaded = st.session_state.get("loaded")
-    options_box = render_intro(loaded)
+    options_box, upload_box = render_intro()
     if loaded is None:
-        load_file()
+        with upload_box:
+            load_file()
         return
     file_name, issues_all, report = loaded
     render_loaded(file_name, issues_all, report)
