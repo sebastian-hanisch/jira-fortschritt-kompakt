@@ -37,6 +37,7 @@ class Analysis:
     assign: A.Assignment        # Zuordnung der Atome zur Ebene
     plan: tuple                 # der ganze Plan, auf den sich die Mediane „im ganzen Plan“ beziehen (ohne Angabe die Tickets der Auswertung selbst)
     ctx: dict = field(default_factory=dict, compare=False, repr=False)      # Zwischenergebnisse zu diesen Tickets (siehe `A.cached`); die Tabellen und Regelvergleiche zu dieser Auswertung nutzen sie mit
+    plan_ctx: dict | None = field(default=None, compare=False, repr=False)      # Zwischenergebnisse, die nur vom ganzen Plan abhängen (Baumreihenfolge, Tiefen)
 
     @property
     def level(self) -> int:
@@ -103,7 +104,7 @@ class _Counted:
     overall: tuple[float, float]      # gewichtet, nur Done nach Gewicht
 
 
-def _count(issues, settings: Settings, plan, ctx: dict | None = None) -> _Counted:
+def _count(issues, settings: Settings, plan, ctx: dict | None = None, plan_ctx: dict | None = None) -> _Counted:
     """Die zählenden Tickets nach `settings`. Mit `ctx` (siehe `A.cached`) werden Teile, die von der Regel für ungeschätzte Tickets nicht abhängen, bei gleichen `issues` und `plan` nur einmal berechnet."""
     if settings.sub_rule not in C.SUB_RULES:
         raise KeyError(settings.sub_rule)
@@ -116,28 +117,30 @@ def _count(issues, settings: Settings, plan, ctx: dict | None = None) -> _Counte
     atoms = A.cached(ctx, ("atoms", subtasks_out), lambda: A.select_atoms(issues, skip=rejected | subtasks))
     rejected_atoms = A.cached(ctx, ("rejected_atoms", subtasks_out), lambda: tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected))
     plan = A.cached(ctx, "plan", lambda: tuple(issues) if plan is None else tuple(plan))
-    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx, subtasks_out=subtasks_out)
+    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx, subtasks_out=subtasks_out, plan_ctx=plan_ctx)
     c, done, unest = A.cached(ctx, ("atom_arrays", subtasks_out, settings.overrides), lambda: (
         np.array([credit_of[issues[i].status] for i in atoms], dtype=float), np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool),
         np.array([issues[i].points is None for i in atoms], dtype=bool)))
     return _Counted(credit_of, rejected, atoms, rejected_atoms, plan, w, c, done, unest, A.overall(w, c, done))
 
 
-def analyse(issues, settings: Settings | None = None, plan=None) -> Analysis:
-    """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen."""
+def analyse(issues, settings: Settings | None = None, plan=None, ctx: dict | None = None, plan_ctx: dict | None = None) -> Analysis:
+    """Kennzahlen für die Tickets `issues` (bei einem Teilprojekt der Teilbaum, siehe `scope_issues`); `plan` sind alle Tickets des Plans für die Regeln, die den ganzen Plan brauchen.
+    `ctx` und `plan_ctx` (siehe `A.cached`) darf der Aufrufer vorgeben, um Zwischenergebnisse mit anderen Berechnungen zu teilen: `ctx` gilt nur für genau diese `issues`, `plan_ctx` nur für den ganzen
+    Plan (er darf derselbe Zwischenspeicher sein, wenn `issues` der ganze Plan ist)."""
     settings = Settings() if settings is None else settings
-    ctx: dict = {}
-    n = _count(issues, settings, plan, ctx)
+    ctx = {} if ctx is None else ctx
+    n = _count(issues, settings, plan, ctx, plan_ctx)
     first = A.assign_groups(issues, n.atoms, level_of(settings), ctx)
     stats = A.aggregate(first, n.w, n.c, n.done, n.unest)
     tree = A.tree_graph(issues, n.atoms, n.w, n.c, n.credit_of, settings.root, excluded=n.rejected, ctx=ctx)
-    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan, ctx)
+    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan, ctx, plan_ctx)
 
 
-def headline(issues, settings: Settings, plan=None, ctx: dict | None = None) -> tuple[float, float, int, int]:
+def headline(issues, settings: Settings, plan=None, ctx: dict | None = None, plan_ctx: dict | None = None) -> tuple[float, float, int, int]:
     """Gesamtfortschritt, Gesamtgewicht, Zahl der Tickets ohne Story Points und Zahl der zählenden Tickets: dieselben Werte wie `analyse`, aber ohne Gruppen und Graph (für den Vergleich der Regeln).
     `ctx`: ein leeres Wörterbuch, das der Aufrufer für eine Reihe von Aufrufen mit denselben Tickets und demselben Plan teilt (siehe `A.cached`)."""
-    n = _count(issues, settings, plan, ctx)
+    n = _count(issues, settings, plan, ctx, plan_ctx)
     return n.overall[0], float(n.w.sum()), int(n.unest.sum()), len(n.atoms)
 
 

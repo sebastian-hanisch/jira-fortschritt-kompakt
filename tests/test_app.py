@@ -155,7 +155,11 @@ def test_the_options_box_describes_the_variants_and_shows_the_effect_on_the_data
     assert labels.index("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten") == labels.index("📖 Welche Status zählen wie viel? Standard nach Namen") + 1       # direkt nach den Regeln der Status
     assert not at.tabs or "🧮" not in " ".join(t.label for t in at.tabs)
     text = " ".join(m.value for m in at.markdown)
-    assert "Teil 1: Woher kommt das Gewicht" in text and "Teil 2: Sub-Tasks ohne Story Points" in text and "Wirkung der wählbaren Regeln" in text
+    assert "Teil 1: Woher kommt das Gewicht" in text and "Teil 2: Sub-Tasks ohne Story Points" in text and "Wirkung der wählbaren Regeln" not in text          # die Tabelle entsteht erst auf Klick
+    assert at.button(key="make_effects") and not [t for t in at.dataframe if "Regel" in t.value.columns]
+    at.button(key="make_effects").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert "Wirkung der wählbaren Regeln" in " ".join(m.value for m in at.markdown) and at.button(key="hide_effects")
     table = next(t.value for t in at.dataframe if "Regel" in t.value.columns)
     assert list(table["Regel"]) == list(C.UNEST_RULES) and list(table["Gewicht gesamt"]) == [10.5, 10.5, 10.5, 10.0, 12.0, 12.0, 9.0, 6.0]
 
@@ -216,6 +220,7 @@ def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
         at.sidebar.selectbox(key="sub_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
         assert at.metric[0].value == value and at.metric[2].label == f"Offenes Gewicht (SP, gesamt {weight})"
+    at.button(key="make_effects").click().run(timeout=TIMEOUT)                                 # die Tabelle zur Wirkung der Regeln entsteht erst auf Klick
     table = next(t.value for t in at.dataframe if "Zählende Tickets" in t.value.columns)
     assert list(table["Regel"]) == list(C.SUB_RULES)
 
@@ -348,3 +353,30 @@ def test_the_headline_numbers_explain_themselves_in_a_tooltip():
     assert "Gutschrift" in helps[0] and "fertig 100 %" in helps[0] and "Test 90 %" in helps[0] and "Merged oder Review 80 %" in helps[0]
     assert "ohne Teilgutschriften" in helps[1] and "Prozentpunkte" in helps[1]
     assert "1 minus Fortschritt" in helps[2] and "Story Points" in helps[2]
+
+
+def test_the_effect_of_the_rules_is_only_calculated_on_click_and_can_be_hidden_again():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    assert not [t for t in at.dataframe if "Regel" in t.value.columns]                     # ohne Klick keine Berechnung der elf Varianten
+    at.button(key="make_effects").click().run(timeout=TIMEOUT)
+    _ok(at)
+    assert [t for t in at.dataframe if "Regel" in t.value.columns] and at.session_state["effects_shown"]
+    at.sidebar.selectbox(key="unest_rule").set_value(C.UNEST_ONE).run(timeout=TIMEOUT)      # die Tabelle bleibt bei weiteren Änderungen und folgt den Einstellungen
+    table = next(t.value for t in at.dataframe if "Zählende Tickets" not in t.value.columns and "Regel" in t.value.columns)
+    assert list(table["Regel"]) == list(C.UNEST_RULES)
+    at.button(key="hide_effects").click().run(timeout=TIMEOUT)
+    assert not [t for t in at.dataframe if "Regel" in t.value.columns] and at.button(key="make_effects")
+    at.button(key="make_effects").click().run(timeout=TIMEOUT)
+    at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
+    assert "effects_shown" not in at.session_state                                         # mit den Daten verschwindet auch der Merker
+
+
+def test_the_csv_download_is_made_on_click_and_does_not_rerun_the_app():
+    import ast
+    tree = ast.parse(open(APP_PATH, encoding="utf-8").read())
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "attr", "") == "download_button"]
+    assert len(calls) == 1
+    call = calls[0]
+    assert isinstance(call.args[1], ast.Lambda)                                              # die Daten sind eine Funktion, die erst beim Klick läuft
+    assert {k.arg: getattr(k.value, "value", None) for k in call.keywords}["on_click"] == "ignore"

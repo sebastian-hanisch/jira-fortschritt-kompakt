@@ -150,7 +150,10 @@ def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
     Alles andere (Teilprojekt, Status-Gewichte) wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.UNEST_RULES:
-        progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan, a.ctx)
+        if rule == a.settings.unest_rule:          # die gewählte Regel ist die Auswertung selbst
+            progress, weight, n_unestimated = a.progress, a.weight, a.n_unestimated
+        else:
+            progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan, a.ctx, a.plan_ctx)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Tickets ohne Story Points": n_unestimated})
     return rows
 
@@ -159,7 +162,10 @@ def subtask_rule_comparison(issues, a: Analysis) -> list[dict]:
     """Wirkung der Regeln für Sub-Tasks auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der zählenden Tickets. Alles andere wie in der aktuellen Auswertung."""
     rows = []
     for rule in C.SUB_RULES:
-        progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan, a.ctx)
+        if rule == a.settings.sub_rule:
+            progress, weight, n_atoms = a.progress, a.weight, a.n_atoms
+        else:
+            progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan, a.ctx, a.plan_ctx)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Zählende Tickets": n_atoms})
     return rows
 

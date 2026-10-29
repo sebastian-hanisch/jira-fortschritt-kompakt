@@ -344,3 +344,19 @@ def test_cycle_members_are_the_tickets_on_a_loop_of_parent_references_and_nothin
 
 def make_mini_for_cycles():
     return (Issue(key="E"), Issue(key="S", parent="E"), Issue(key="T", parent="S"))
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_median_table_equals_the_statistics_median_per_group(seed):
+    """Die Mediane je Gruppe (NumPy, sortiert) sind dieselben wie `statistics.median` je Gruppe, auch bei gerader Anzahl, Gleichständen und Gruppen mit einem Wert."""
+    import random
+    import statistics
+    rng = random.Random(seed)
+    issues = tuple(Issue(key=f"X-{n}", parent=rng.choice(["", "A", "B", "C", "D"]), points=float(rng.choice((0.5, 1, 1, 2, 3, 5, 8, 13)))) for n in range(rng.randint(1, 60)))
+    members = [i for i in range(len(issues)) if rng.random() < 0.8]
+    got = A._median_table(issues, members, lambda i: issues[i].parent)
+    groups: dict = {}
+    for i in members:
+        groups.setdefault(issues[i].parent, []).append(issues[i].points)
+    assert got == {k: float(statistics.median(v)) for k, v in groups.items()}
+    assert A._median_table(issues, [], lambda i: 0) == {}

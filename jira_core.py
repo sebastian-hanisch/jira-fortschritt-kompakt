@@ -326,11 +326,22 @@ def _type_of(issue: Issue) -> str:
 
 
 def _median_table(source, members, key_of) -> dict:
-    """Median der Story Points je Gruppe: `members` sind Indizes in `source`, `key_of(i)` ordnet ein Ticket seiner Gruppe zu."""
-    groups: dict = {}
-    for i in members:
-        groups.setdefault(key_of(i), []).append(source[i].points)
-    return {k: float(median(v)) for k, v in groups.items()}
+    """Median der Story Points je Gruppe: `members` sind Indizes in `source`, `key_of(i)` ordnet ein Ticket seiner Gruppe zu. Die Werte werden nach Gruppe und Wert sortiert; der Median einer Gruppe
+    ist der mittlere Wert, bei gerader Anzahl der Mittelwert der beiden mittleren (wie `statistics.median`, mit demselben Ergebnis)."""
+    members = list(members)
+    if not members:
+        return {}
+    code_of: dict = {}
+    codes = np.fromiter((code_of.setdefault(key_of(i), len(code_of)) for i in members), dtype=np.int64, count=len(members))
+    points = np.fromiter((source[i].points for i in members), dtype=float, count=len(members))
+    order = np.lexsort((points, codes))
+    sorted_codes, sorted_points = codes[order], points[order]
+    starts = np.flatnonzero(np.r_[True, sorted_codes[1:] != sorted_codes[:-1]])
+    sizes = np.diff(np.r_[starts, len(sorted_codes)])
+    low, high = starts + (sizes - 1) // 2, starts + sizes // 2
+    medians = (sorted_points[low] + sorted_points[high]) / 2
+    keys = list(code_of)
+    return {keys[int(sorted_codes[s])]: float(m) for s, m in zip(starts, medians, strict=True)}
 
 
 def _plan_pool(plan_issues, ctx=None, subtasks_out: bool = False) -> list[int]:
@@ -343,15 +354,16 @@ def _plan_pool(plan_issues, ctx=None, subtasks_out: bool = False) -> list[int]:
     return cached(ctx, ("plan_pool", subtasks_out), build)
 
 
-def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None, subtasks_out: bool = False):
+def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None, subtasks_out: bool = False, plan_ctx=None):
     """Funktion Ticketindex -> Gewicht für ein Ticket ohne Story Points nach `rule`. Gebaut werden nur die Mediantabellen, die die Regel braucht."""
     if rule == C.UNEST_ONE:
         return lambda i: 1.0
     if rule == C.UNEST_IGNORE:
         return lambda i: 0.0
     if rule == C.UNEST_PLAN:
-        plan_depth = cached(ctx, "plan_depth", lambda: dict(zip((t.key for t in plan_issues), tree_depths(plan_issues), strict=True)))
-        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues, ctx, subtasks_out), lambda j: plan_depth[plan_issues[j].key])
+        pctx = plan_ctx if plan_ctx is not None else ctx
+        plan_depth = cached(pctx, "plan_depth", lambda: dict(zip((t.key for t in plan_issues), tree_depths(plan_issues, plan_ctx), strict=True)))
+        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues, pctx, subtasks_out), lambda j: plan_depth[plan_issues[j].key])
         return lambda i: by_plan_level.get(plan_depth.get(issues[i].key), 1.0)
     depth = tree_depths(issues, ctx)
     by_level = _median_table(issues, pool, lambda i: depth[i])
@@ -366,7 +378,7 @@ def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None, subtasks
     if rule == C.UNEST_TEAM:
         by_team = _median_table(issues, pool, lambda i: issues[i].team)
         return lambda i: by_team.get(issues[i].team, 1.0)
-    plan_pool = _plan_pool(plan_issues, ctx, subtasks_out)
+    plan_pool = _plan_pool(plan_issues, plan_ctx if plan_ctx is not None else ctx, subtasks_out)
     plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
 
     def chain(i: int) -> float:         # Rückfallkette: Geschwister, Typ, Stufe, Median des ganzen Plans, sonst 1
@@ -391,7 +403,8 @@ def _shared_points(issues, atoms) -> dict[int, float]:
     return share
 
 
-def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False, ctx: dict | None = None, subtasks_out: bool = False) -> np.ndarray:
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False, ctx: dict | None = None, subtasks_out: bool = False,
+                 plan_ctx: dict | None = None) -> np.ndarray:
     """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (die Buchstaben stehen in `jira_constants`). Die Regeln mit Median nehmen den Median der geschätzten Atome
     aus `basis` (Voreinstellung: `atoms`, z. B. die gezählten Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden), und zwar aus derselben Gruppe wie das Ticket: A gleiche Stufe
     (Tiefe im Ticket-Baum), C gleicher Typ, D gleiches übergeordnetes Ticket, E gleiches Team; B gleiche Stufe im ganzen Plan (`plan`, Voreinstellung `issues`: die Stufe zählt dann in
@@ -399,11 +412,11 @@ def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=No
     Gruppe kein geschätztes Atom, gilt 1. H setzt 1, I setzt 0 (das Ticket zählt dann nicht im Gewicht). Mit `distribute` teilen die Atome unter einer geschätzten, nicht
     zusammenfassenden Eltern-Story die Story Points der Story gleichmäßig unter sich auf, wenn keines von ihnen eigene Story Points hat; sonst gilt die Regel. `ctx` (siehe `cached`) lässt
     viele Aufrufe mit denselben `issues` und `plan`, aber verschiedenen Regeln die Stufen und den Pool des Plans nur einmal berechnen. Mit `subtasks_out` (Sub-Task-Regel c) zählen Sub-Tasks auch im Pool
-    des ganzen Plans nicht."""
+    des ganzen Plans nicht. `plan_ctx`: ein eigener Zwischenspeicher für Dinge, die nur vom ganzen Plan abhängen (Baumreihenfolge, Tiefen, Pool); ohne ihn gelten sie in `ctx`."""
     if rule not in C.UNEST_RULES:
         raise KeyError(rule)
     pool = [i for i in (atoms if basis is None else basis) if issues[i].points is not None]
-    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan, ctx, subtasks_out)
+    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan, ctx, subtasks_out, plan_ctx)
     share = _shared_points(issues, atoms) if distribute else {}
     return np.array([issues[i].points if issues[i].points is not None else share.get(i, fill(i)) for i in atoms], dtype=float)
 

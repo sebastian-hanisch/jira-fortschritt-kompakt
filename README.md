@@ -150,7 +150,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_plan.py` | Einlesen des Plan-Exports |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
-| `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV und HTML (die HTML-Tabelle entsteht erst auf Klick) |
+| `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV und HTML (CSV, HTML-Tabelle und die Wirkung der Regeln entstehen erst auf Klick) |
 | `jira_charts.py` | Plotly-Diagramme |
 | `jira_privacy.py` | Filter, der Ausnahmemeldungen aus dem Protokoll nimmt |
 | `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten; `test_oracle_progress.py` rechnet den Fortschritt unabhängig aus der Definition nach (Orakel) und vergleicht ihn für Zufallsprojekte, alle Regeln und mehrere Wurzeln; `test_oracle_tables.py` tut dasselbe für Status-Matrix und Sprint-Tabelle |

@@ -67,13 +67,14 @@ def _clear_loaded():
     st.session_state.pop("loaded", None)
     for name in [k for k in st.session_state if str(k).startswith("html_")]:          # erzeugte Tabellen zum Kopieren gehören zu den gelöschten Daten
         st.session_state.pop(name)
+    st.session_state.pop("effects_shown", None)
     st.session_state.pop("overrides", None)          # geänderte Gewichte gehören zu den gelöschten Daten und dürfen nicht in die nächste Datei wandern
     st.session_state["weights_version"] = st.session_state.get("weights_version", 0) + 1
     st.session_state["upload_version"] = st.session_state.get("upload_version", 0) + 1
 
 
-def _set_html(flag, shown):
-    """Knöpfe „Tabelle zum Kopieren erzeugen“ und „ausblenden“: merkt sich, ob diese Tabelle gezeigt werden soll."""
+def _set_flag(flag, shown):
+    """Knöpfe „erzeugen/berechnen“ und „ausblenden“: merkt sich, ob eine aufwendige Ausgabe (Tabelle zum Kopieren, Wirkung der Regeln) gezeigt werden soll."""
     st.session_state[flag] = shown
 
 
@@ -112,16 +113,16 @@ def show_table(rows, key, formats=None, file_name="tabelle"):
     if "Wirkung" in rows[0]:
         config["Wirkung"] = st.column_config.TextColumn(width="large")
     st.dataframe(shown, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
-    st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
+    st.download_button("⬇️ Als CSV", lambda: T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}", on_click="ignore")          # erst beim Klick erzeugt, ohne neuen Durchlauf
     flag = f"html_{key}"
     with st.expander("📋 In Jira oder Confluence einfügen", expanded=bool(st.session_state.get(flag))):
         if st.session_state.get(flag):
             st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
             st.html(T.rows_to_html(rows, formats))
-            st.button("Tabelle ausblenden", key=f"hide_{key}", on_click=_set_html, args=(flag, False))
+            st.button("Tabelle ausblenden", key=f"hide_{key}", on_click=_set_flag, args=(flag, False))
         else:
             st.caption(f"Die Tabelle zum Kopieren wird erst auf Klick erzeugt: Bei großen Plänen ist sie mehrere Megabyte groß ({len(rows)} Zeilen hier) und würde sonst bei jeder Änderung mitgeschickt.")
-            st.button("Tabelle zum Kopieren erzeugen", key=f"make_{key}", on_click=_set_html, args=(flag, True))
+            st.button("Tabelle zum Kopieren erzeugen", key=f"make_{key}", on_click=_set_flag, args=(flag, True))
 
 
 def _below(root) -> str:
@@ -144,7 +145,7 @@ def render_intro():
         st.markdown(texts.EXPORT_GUIDE)
     with st.expander("📖 Welche Status zählen wie viel? Standard nach Namen"):
         st.markdown(texts.status_rules_markdown())
-    options_box = st.expander("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten")
+    options_box = st.expander("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten", expanded=bool(st.session_state.get("effects_shown")))
     with options_box:
         st.markdown(texts.UNEST_OPTIONS_MARKDOWN)
     return options_box, upload_box
@@ -339,7 +340,12 @@ def render_sprints(issues, a):
 
 
 def render_rule_effects(issues, a):
-    """Wirkung der wählbaren Regeln auf die geladenen Daten (im Ausklapper „Berechnungsmöglichkeiten“)."""
+    """Wirkung der wählbaren Regeln auf die geladenen Daten (im Ausklapper „Berechnungsmöglichkeiten“). Sie rechnet den Fortschritt für jede Regel neu und entsteht deshalb erst auf Klick."""
+    if not st.session_state.get("effects_shown"):
+        st.caption("Wie stark die Zahl von der gewählten Regel abhängt, zeigt eine Tabelle mit dem Fortschritt für jede Regel. Sie wird erst auf Klick berechnet, weil sie bei großen Plänen merklich Zeit kostet.")
+        st.button("Wirkung der Regeln berechnen", key="make_effects", on_click=_set_flag, args=("effects_shown", True))
+        return
+    st.button("Wirkung der Regeln ausblenden", key="hide_effects", on_click=_set_flag, args=("effects_shown", False))
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
     st.caption("Alles andere wie in der aktuellen Auswertung (Teilprojekt, Status-Gewichte); die Auswahl in der Seitenleiste ändert nur, welche Zeile in „Ergebnis“ gilt.")
     show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.2f"}, "wirkung-der-regeln")
@@ -371,7 +377,7 @@ def main():
     root, issues, unest_rule, sub_rule = render_sidebar(issues_all, root_label, all_ctx)
     with guard("Auswertung"):
         overrides = render_status_weights(issues)
-        a = analyse(issues, Settings(root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides), issues_all)
+        a = analyse(issues, Settings(root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides), issues_all, ctx=all_ctx if root == C.ROOT_ALL else None, plan_ctx=all_ctx)
         render_headline(a, issues, issues_all, root, root_label, unest_rule)
         render_charts(a, root)
         render_matrix(issues, a, root)
