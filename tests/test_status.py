@@ -116,3 +116,13 @@ def test_the_example_names_of_the_description_fall_into_their_class():
     for kind, names in A.STATUS_EXAMPLES.items():
         for name in names:
             assert A.status_class(name) == kind, (kind, name)
+
+
+def test_every_example_name_has_a_recognized_meaning_and_names_nobody_knows_do_not():
+    for names in A.STATUS_EXAMPLES.values():
+        for name in names:
+            assert A.status_recognized(name), name
+    for name in ("Ready for Dev", "On Hold", "In Entwicklung", "Waiting for customer", "Not done", "In Arbeit"):
+        assert A.status_recognized(name), name
+    for name in ("Freigegeben", "Entfällt", "Zur Klärung", "Phase 2", ""):
+        assert not A.status_recognized(name), name

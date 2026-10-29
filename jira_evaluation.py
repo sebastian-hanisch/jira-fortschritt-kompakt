@@ -142,6 +142,31 @@ def sprint_stats(issues, a: Analysis) -> A.GroupStats:
     return A.aggregate(first, a.w, a.c, a.done, np.array([issues[i].points is None for i in a.atoms], dtype=bool))
 
 
+def unrecognized_statuses(issues, a: Analysis) -> list[tuple[str, int, float]]:
+    """Status der zählenden Tickets, deren Name keine erkannte Bedeutung hat (siehe `A.status_recognized`) und deren Gewicht in der Tabelle nicht geändert wurde: (Status, Zahl der Tickets, Gewicht),
+    das schwerste zuerst. Diese Tickets zählen 0 %, nur weil keine Regel den Namen kennt."""
+    changed = {status for status, _ in a.settings.overrides}
+    found: dict[str, tuple[int, float]] = {}
+    for pos, i in enumerate(a.atoms):
+        status = issues[i].status
+        if status in changed or A.status_recognized(status):
+            continue
+        n, w = found.get(status, (0, 0.0))
+        found[status] = (n + 1, w + float(a.w[pos]))
+    return sorted(((status, n, w) for status, (n, w) in found.items()), key=lambda row: (-row[2], row[0]))
+
+
+def unrecognized_note(rows: list[tuple[str, int, float]], total_weight: float, limit: int = 6) -> str:
+    """Hinweistext zu `unrecognized_statuses` (leer, wenn es nichts zu melden gibt)."""
+    if not rows:
+        return ""
+    n, w = sum(r[1] for r in rows), sum(r[2] for r in rows)
+    names = ", ".join(f"„{status}“ ({count})" for status, count, _ in rows[:limit]) + (f" und {len(rows) - limit} weitere" if len(rows) > limit else "")
+    share = f" ({de(100 * w / total_weight)} % des Gewichts)" if total_weight > 0 else ""
+    return (f"{n} zählende Tickets{share} stehen in Status, deren Name keine Regel kennt und die deshalb 0 % zählen: {names}. Ist das richtig (noch nicht begonnen), passt alles; sonst das Gewicht in der Tabelle "
+            "„Gewichte der Status“ ändern.")
+
+
 def unestimated_note(n_unestimated: int, n_atoms: int, rule: str = C.DEFAULT_UNEST) -> tuple[str, str]:
     """Wie viele Tickets haben keine Story Points, und was macht die gewählte Regel daraus?"""
     if n_atoms == 0:

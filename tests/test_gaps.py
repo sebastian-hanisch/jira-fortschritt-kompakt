@@ -1,4 +1,4 @@
-"""Lücken, die der Mutationstest gefunden hat: Stellen, an denen ein kleiner Fehler im Code keinen Test rot machte. Jeder Test beschreibt, was die Stelle leistet.
+"""Randfälle und Stellen, an denen ein kleiner Fehler im Code bisher keinen Test rot machte (Grenzen, Gleichstände, Zeilenlage, Toleranzen). Jeder Test beschreibt, was die Stelle leistet.
 
 Nicht abgedeckt sind bewusst die reinen Darstellungsmaße der Diagramme (Höhen, Schriftgrößen, Abstände von Beschriftungen, Schwelle der Schriftfarbe): Ein anderer Wert dort ändert
 nichts, was sich prüfen ließe, außer dem Aussehen."""

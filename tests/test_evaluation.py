@@ -209,3 +209,25 @@ def test_an_intermediate_store_of_other_tickets_is_refused():
     ev.headline(random_project(0), ev.Settings(), None, ctx)
     with pytest.raises(ValueError):
         ev.headline(random_project(0, n_epics=2), ev.Settings(), None, ctx)
+
+
+def test_statuses_without_a_known_meaning_are_reported_with_tickets_and_weight():
+    items = (Issue(key="E", type="Epic"), Issue(key="A", parent="E", status="Freigegeben", points=3.0), Issue(key="B", parent="E", status="Freigegeben", points=2.0),
+             Issue(key="C", parent="E", status="Phase 2", points=1.0), Issue(key="D", parent="E", status="In Arbeit", points=4.0), Issue(key="F", parent="E", status="Done", points=5.0))
+    a = ev.analyse(items)
+    assert ev.unrecognized_statuses(items, a) == [("Freigegeben", 2, 5.0), ("Phase 2", 1, 1.0)]
+    text = ev.unrecognized_note(ev.unrecognized_statuses(items, a), a.weight)
+    assert "3 zählende Tickets (40.0 % des Gewichts)" in text and "„Freigegeben“ (2)" in text and "„Phase 2“ (1)" in text and "Gewichte der Status" in text
+    assert ev.unrecognized_note([], a.weight) == ""
+
+
+def test_a_status_whose_weight_was_changed_in_the_table_is_no_longer_reported():
+    items = (Issue(key="A", status="Freigegeben", points=3.0), Issue(key="B", status="Phase 2", points=1.0))
+    a = ev.analyse(items, ev.Settings(overrides=(("Freigegeben", 1.0),)))
+    assert [row[0] for row in ev.unrecognized_statuses(items, a)] == ["Phase 2"]
+
+
+def test_the_note_names_at_most_six_statuses_and_counts_the_rest():
+    rows = [(f"S{n}", 1, float(10 - n)) for n in range(8)]
+    text = ev.unrecognized_note(rows, 100.0)
+    assert "„S5“ (1)" in text and "„S6“" not in text and "und 2 weitere" in text

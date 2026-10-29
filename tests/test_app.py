@@ -279,3 +279,26 @@ def test_without_any_sprint_the_section_is_left_out():
     at = _open(data)
     _ok(at)
     assert not any("Fortschritt je Sprint" in m.value for m in at.markdown)
+
+
+def test_unknown_status_names_are_reported_under_the_numbers_and_known_ones_are_not():
+    data = "Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Freigegeben;3\nA-2;Done;2\nA-3;In Arbeit;5\n".encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    notes = [w.value for w in at.warning if "keine Regel kennt" in w.value]
+    assert len(notes) == 1 and "„Freigegeben“ (1)" in notes[0] and "30.0 % des Gewichts" in notes[0]
+    clean = _open(plan_csv(make_mini()))
+    _ok(clean)
+    assert not [w for w in clean.warning if "keine Regel kennt" in w.value]
+
+
+def test_jiras_columns_are_checked_against_each_other_in_the_comparison():
+    ok = _open(JIRA_PROGRESS_CSV)
+    _ok(ok)
+    assert any("Jiras drei Fortschrittsspalten passen zusammen" in s.value for s in ok.success)                    # 4 von 4 + 6 = 40 %
+    bad = _open(JIRA_PROGRESS_CSV.replace(b"E-1;In Arbeit;40;4;6", b"E-1;In Arbeit;55;4;6"))
+    _ok(bad)
+    assert any("1 von 1 Tickets mit allen drei Werten" in w.value for w in bad.warning)
+    no_values = _open(JIRA_PROGRESS_CSV.replace(b";4;6\n", b";;\n"))
+    _ok(no_values)
+    assert any("Kein Ticket hat alle drei Werte" in c.value for c in no_values.caption)

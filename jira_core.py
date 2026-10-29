@@ -169,6 +169,18 @@ def edited_overrides(old, base, shown, edited_rows: dict) -> tuple[tuple[str, fl
 _NEW_KEYS = ("todo", "open", "backlog", "offen", "neu", "new", "selected", "ready", "specification", "spezifikation", "estimate", "schatzung")
 
 
+# Namen, die nach „läuft noch“ oder „wartet“ klingen: zählen 0 % und sind damit erkannt (nicht zu verwechseln mit einem Namen, den keine Regel kennt)
+_ACTIVE_KEYS = ("progress", "arbeit", "bearbeitung", "doing", "wip", "develop", "entwicklung", "implement", "umsetzung", "hold", "block", "wartet", "waiting", "pause", "analys", "refine",
+                "planung", "planning", "draft", "entwurf", "pending")
+
+
+def status_recognized(name: str) -> bool:
+    """Hat der Name eines Status eine erkannte Bedeutung? Ja, wenn er in eine Klasse fällt (fertig, Test, Merged, Review, zurückgewiesen), eine Verneinung ist („Not done“) oder wie ein bekannter Name für
+    „noch nicht fertig“ klingt (Backlog, To Do, Specification, In Arbeit, In Progress, On Hold …). Alles andere zählt zwar 0 %, aber nur, weil keine Regel den Namen kennt."""
+    key = name_key(name)
+    return (status_class(name) != "other" or any(w in key for w in _NEGATED_KEYS) or any(w in key for w in _NEW_KEYS) or any(w in key for w in _ACTIVE_KEYS))
+
+
 def new_rank(name: str) -> int:
     """0 für Namen, die nach „noch nicht begonnen“ klingen (Backlog, To Do, Specification …), sonst 1: ordnet Status gleicher Gutschrift in die Reihenfolge des Workflows.
     Namen, die nach fertig, Test, Merged oder Review klingen („Ready4Test“), sind nie „noch nicht begonnen“."""

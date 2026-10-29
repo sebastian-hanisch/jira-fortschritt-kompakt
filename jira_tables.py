@@ -112,6 +112,24 @@ JIRA_PROGRESS_COL, JIRA_DONE_COL, JIRA_LEFT_COL = "Jira: Fortschritt (%)", "Jira
 OWN_DONE_COL, OWN_TOTAL_COL, GAP_COL = "Hier: Nur Done, nach Gewicht", "Hier: Total (ohne Rejected, SP)", "Abstand Jira − hier (Punkte)"
 
 
+JIRA_TOLERANCE = 0.01      # erlaubter Abstand zwischen Jiras Fortschritt (%) und dem aus abgeschlossen und verbleibend berechneten: ein Prozentpunkt (Rundung auf ganze Prozent)
+DERIVED_COL = "Aus abgeschlossen und verbleibend"
+
+
+def jira_consistency(issues) -> tuple[int, list[dict]]:
+    """Passen Jiras drei Fortschrittsspalten zusammen? Für jedes Ticket mit allen drei Werten wird „Fortschritt (%)“ mit abgeschlossen ÷ (abgeschlossen + verbleibend) verglichen. Rückgabe: Zahl der
+    geprüften Tickets und die Tickets, deren Abstand über `JIRA_TOLERANCE` liegt (Zeilen mit Schlüssel, Jiras Werten, dem berechneten Wert und dem Abstand in Prozentpunkten)."""
+    checked, bad = 0, []
+    for t in issues:
+        if t.jira_progress is None or t.jira_done is None or t.jira_left is None or t.jira_done + t.jira_left <= 0:
+            continue
+        checked += 1
+        derived = t.jira_done / (t.jira_done + t.jira_left)
+        if abs(t.jira_progress - derived) > JIRA_TOLERANCE + 1e-9:
+            bad.append({ROW_COL: t.key, JIRA_PROGRESS_COL: t.jira_progress, JIRA_DONE_COL: t.jira_done, JIRA_LEFT_COL: t.jira_left, DERIVED_COL: derived, GAP_COL: 100 * (t.jira_progress - derived)})
+    return checked, bad
+
+
 def has_jira_progress(issues) -> bool:
     """Steht in den Daten Jiras eigener Fortschritt (Spalte „Fortschritt (%)“) bei mindestens einem Ticket?"""
     return any(t.jira_progress is not None for t in issues)

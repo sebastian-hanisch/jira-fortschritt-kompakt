@@ -17,7 +17,20 @@ import jira_plan as J
 import jira_tables as T
 import jira_texts as texts
 from jira_charts import MAX_BARS, build_progress_bars, build_tiles, build_tree_graph, selected_key
-from jira_evaluation import Settings, analyse, check_consistency, de, delta_points, or_dash, pct, sprint_stats, status_list, unestimated_note
+from jira_evaluation import (
+    Settings,
+    analyse,
+    check_consistency,
+    de,
+    delta_points,
+    or_dash,
+    pct,
+    sprint_stats,
+    status_list,
+    unestimated_note,
+    unrecognized_note,
+    unrecognized_statuses,
+)
 from jira_privacy import scrub_streamlit_logs
 
 st.set_page_config(page_title="Jira-Fortschritt", layout="wide")
@@ -254,6 +267,9 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     m4.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2))
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
+    unknown = unrecognized_note(unrecognized_statuses(issues, a), a.weight)
+    if unknown:
+        st.warning(unknown)
 
 
 def render_charts(a, root):
@@ -320,6 +336,17 @@ def render_crosscheck(issues, a, root):
         "falsch ist: Typische Gründe sind Status, die hier nach ihrem Namen nicht als fertig gelten (oder umgekehrt), Story Points von Zwischentickets, zurückgewiesene Tickets und eine andere Einheit des Plans. Die Zahlen von Jira gehen in keine Rechnung ein.")
     formats = {T.JIRA_PROGRESS_COL: "percent", T.JIRA_DONE_COL: "%.2f", T.JIRA_LEFT_COL: "%.2f", T.OWN_DONE_COL: "percent", T.OWN_TOTAL_COL: "%.2f", T.GAP_COL: "%.1f"}
     show_table(T.jira_crosscheck(issues, a), "jira", formats, "gegenprobe-jira")
+    checked, bad = T.jira_consistency(issues)
+    if not checked:
+        st.caption("Ob Jiras „Fortschritt (%)“ aus „abgeschlossen“ und „verbleibend“ folgt, lässt sich nicht prüfen: Kein Ticket hat alle drei Werte.")
+    elif not bad:
+        st.success(f"Jiras drei Fortschrittsspalten passen zusammen: Bei allen {checked} Tickets mit allen drei Werten ist „Fortschritt (%)“ gleich abgeschlossen ÷ (abgeschlossen + verbleibend). Erlaubt ist ein Abstand "
+                   "bis 1 Prozentpunkt wegen der Rundung. Das sagt, wie Jira aus seinen Zahlen rechnet, nicht, welche Tickets und Status Jira dabei zählt.")
+    else:
+        st.warning(f"Bei {len(bad)} von {checked} Tickets mit allen drei Werten ist Jiras „Fortschritt (%)“ nicht gleich abgeschlossen ÷ (abgeschlossen + verbleibend) (erlaubt: 1 Prozentpunkt Abstand). "
+                   "Dann rechnet Jira anders, als die Spaltennamen vermuten lassen, oder die Spalten stammen aus verschiedenen Ständen; ein Vergleich mit unseren Zahlen ist mit Vorsicht zu lesen.")
+        with st.expander(f"Tickets mit abweichendem Wert ({len(bad)})"):
+            st.dataframe(bad[:50], hide_index=True, width="stretch")
 
 
 def render_rule_effects(issues, a):

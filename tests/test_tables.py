@@ -283,3 +283,15 @@ def test_sprint_statistics_for_the_chart_match_the_table():
     stats = ev.sprint_stats(mini, a)
     assert stats.labels == ("Sprint 1", "Sprint 2", C.NO_SPRINT) and stats.weight.tolist() == [3.0, 5.5, 2.0] and stats.count.tolist() == [1.0, 4.0, 1.0]
     assert stats.progress.tolist() == pytest.approx([1.0, 4 / 5.5, 0.0]) and stats.unestimated.tolist() == [0.0, 3.0, 0.0]          # S4, T1 und T2 haben keine eigenen Story Points
+
+
+def test_jiras_three_progress_columns_are_checked_against_each_other():
+    ok = Issue(key="A", jira_progress=0.4, jira_done=4.0, jira_left=6.0)
+    rounded = Issue(key="B", jira_progress=0.33, jira_done=1.0, jira_left=2.0)              # 33,3 % gerundet auf 33: im erlaubten Abstand
+    off = Issue(key="C", jira_progress=0.5, jira_done=4.0, jira_left=6.0)
+    unknown = (Issue(key="D", jira_progress=0.5), Issue(key="E", jira_progress=0.0, jira_done=0.0, jira_left=0.0), Issue(key="F"))        # fehlende Werte und leere Summe: nicht geprüft
+    checked, bad = T.jira_consistency((ok, rounded, off, *unknown))
+    assert checked == 3 and [row[T.ROW_COL] for row in bad] == ["C"]
+    assert bad[0][T.DERIVED_COL] == pytest.approx(0.4) and bad[0][T.GAP_COL] == pytest.approx(10.0)
+    assert T.jira_consistency(()) == (0, []) and T.jira_consistency((Issue(key="G", jira_progress=0.41, jira_done=4.0, jira_left=6.0),)) == (1, [])        # genau 1 Punkt Abstand ist erlaubt
+    assert T.jira_consistency((Issue(key="H", jira_progress=0.42, jira_done=4.0, jira_left=6.0),))[1][0][T.ROW_COL] == "H"
