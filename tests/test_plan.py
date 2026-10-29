@@ -43,25 +43,21 @@ def test_the_real_header_is_read_and_the_status_column_is_found():
     rows = {r["Feld"]: r["Gefunden in"] for r in report.columns}
     assert rows["Status"] == "Vorgangsstatus" and rows["Ticket-Schlüssel"] == "Vorgangsschlüssel" and rows["Titel"] == "Titel" and rows["Ticket-Typ"] == "Hierarchie"
     assert rows["Übergeordnetes Ticket"] == "Übergeordnetes Element" and rows["Story Points"] == "Story Points" and rows["Sprint"] == "Sprint" and rows["Team"] == "Team"
-    assert rows["Bereich"] == "Bereich" and rows["Priorität"] == "Priorität" and rows["Label"] == "Stichwörter" and rows["Komponente"] == "Komponenten"
-    assert rows["Release"] == "Releases" and rows["Bearbeiter"] == "Zugewiesene Person"
     counts = {r["Feld"]: r["Tickets mit Wert"] for r in report.columns}
     assert counts["Story Points"] == 2 and counts["Übergeordnetes Ticket"] == 2 and counts["Sprint"] == 1 and counts["Ticket-Schlüssel"] == 3
 
 
 def test_rollup_columns_are_ignored_and_the_values_of_the_ticket_itself_are_read():
     epic, story_a, story_b = J.read_plan(_csv(EPIC, STORY_A, STORY_B))[0]
-    assert epic.points is None and epic.versions == () and epic.sprints == () and epic.team == ""        # die „(hochrechnen)“-Werte der Zeile zählen nicht
-    assert epic.area == "Bereich Nord" and epic.type == "Epic" and epic.is_epic
+    assert epic.points is None and epic.sprints == () and epic.team == ""        # die „(hochrechnen)“-Werte der Zeile zählen nicht
+    assert epic.type == "Epic" and epic.is_epic
     assert story_a.points == 5.0 and story_b.points == 3.5                                                  # Dezimalkomma
-    assert story_a.sprints == ("Sprint 2", "Sprint 3") and story_a.labels == ("ux", "quick-win") and story_a.components == ("Frontend",)
-    assert (story_a.team, story_a.area, story_a.priority, story_a.assignee) == ("Team Alpha", "Bereich Nord", "Hoch", "Person A") and story_a.parent == "P-1"
+    assert story_a.sprints == ("Sprint 2", "Sprint 3") and story_a.team == "Team Alpha" and story_a.parent == "P-1"
 
 
 def test_all_columns_of_the_real_export_are_known_or_deliberately_skipped():
     used = {REAL_HEADER[i] for idx in J._columns(REAL_HEADER).values() for i in idx}
-    assert used == {"Hierarchie", "Titel", "Bereich", "Releases", "Team", "Zugewiesene Person", "Sprint", "Story Points", "Übergeordnetes Element", "Priorität", "Stichwörter",
-                    "Komponenten", "Vorgangsschlüssel", "Vorgangsstatus", "Fortschritt (%)"}
+    assert used == {"Hierarchie", "Titel", "Team", "Sprint", "Story Points", "Übergeordnetes Element", "Vorgangsschlüssel", "Vorgangsstatus", "Fortschritt (%)"}
 
 
 def test_the_day_estimate_is_never_read_and_a_file_with_only_days_says_so():
@@ -155,29 +151,32 @@ def test_roundtrip_of_the_mini_project_and_of_random_projects():
 
 
 def test_rollup_cells_of_the_epic_are_sums_of_its_children_by_hand():
-    issues = (Issue(key="E", type="Epic", summary="E"), Issue(key="A", parent="E", points=2.0, team="T1", sprints=("S1",), versions=("R1",)),
-              Issue(key="B", parent="E", points=1.5, team="T2", sprints=("S1", "S2"), versions=("R1",)), Issue(key="C", parent="E"))
+    issues = (Issue(key="E", type="Epic", summary="E"), Issue(key="A", parent="E", points=2.0, team="T1", sprints=("S1",)),
+              Issue(key="B", parent="E", points=1.5, team="T2", sprints=("S1", "S2")), Issue(key="C", parent="E"))
     rows = plan_csv(issues).decode("utf-8-sig").split("\n")
     header = rows[0].split(";")
     epic = dict(zip(header, rows[1].split(";")))
-    assert epic["Story Points (hochrechnen)"] == "3,5" and epic["Releases (hochrechnen)"] == "R1" and epic["Team (hochrechnen)"] == "T1, T2" and epic["Sprint (hochrechnen)"] == "S1, S2"
+    assert epic["Story Points (hochrechnen)"] == "3,5" and epic["Team (hochrechnen)"] == "T1, T2" and epic["Sprint (hochrechnen)"] == "S1, S2"
     story = dict(zip(header, rows[2].split(";")))
     assert story["Story Points (hochrechnen)"] == "" and story["Story Points"] == "2"
 
 
 # ---------------------------------------------------------------- Datenschutz beim Laden
 
-def test_pseudonymize_assignees_numbers_by_sorted_name_and_keeps_empty_names():
-    issues = (Issue(key="A", assignee="Zoe"), Issue(key="B", assignee="Anna"), Issue(key="C"), Issue(key="D", assignee="Zoe"))
-    assert [i.assignee for i in J.pseudonymize_assignees(issues)] == ["Person 2", "Person 1", "", "Person 2"]          # unabhängig von der Reihenfolge der Tickets
-    assert [i.assignee for i in J.pseudonymize_assignees(tuple(reversed(issues)))] == ["Person 2", "", "Person 1", "Person 2"]
+def test_people_releases_areas_priorities_labels_and_components_are_not_read_at_all():
+    """Die Spalten stehen in der Datei (mit Namen und Werten), landen aber in keinem Ticket und nicht im Erkennungsbericht."""
+    issues, report = J.read_plan(_csv(EPIC, STORY_A, STORY_B))
+    assert not any(hasattr(i, name) for i in issues for name in ("assignee", "versions", "area", "priority", "labels", "components"))
+    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team", "Jira: Fortschritt (%)",
+                                                       "Jira: Fortschritt abgeschlossen (SP)", "Jira: Verbleibender Fortschritt (SP)"]
+    assert "Person A" not in repr(issues) and "ux" not in repr(issues)
 
 
 SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")]
 
 
 def test_export_header_with_story_points_as_the_estimate_unit_finds_all_fields():
-    """Kopfzeile eines Exports, dessen Schätzung in Story Points läuft (Fortschritt abgeschlossen (SP)): alle 14 Felder werden gefunden, die Hochrechnungs-Spalten nicht gelesen."""
+    """Kopfzeile eines Exports, dessen Schätzung in Story Points läuft (Fortschritt abgeschlossen (SP)): alle Felder werden gefunden, die Hochrechnungs-Spalten nicht gelesen."""
     cells = dict.fromkeys(SP_HEADER, "")
     cells.update({"Hierarchie": "Story", "Vorgangsschlüssel": "A-2", "Vorgangsstatus": "Done", "Story Points": "3,5", "Story Points (hochrechnen)": "99", "Übergeordnetes Element": "A-1"})
     parent = dict.fromkeys(SP_HEADER, "")

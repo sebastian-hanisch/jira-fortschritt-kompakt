@@ -1,7 +1,7 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Story Points, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und Komponenten. Dazu Jiras eigene Fortschrittsspalten („Fortschritt (%)“, „Fortschritt
+Story Points, Sprint und Team. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Dazu Jiras eigene Fortschrittsspalten („Fortschritt (%)“, „Fortschritt
 abgeschlossen (SP)“, „Verbleibender Fortschritt (SP)“), die nur der Gegenprobe dienen und in keine Rechnung eingehen. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
@@ -29,8 +29,7 @@ class ImportReport:
 
 FIELD_LABELS = (
     ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
-    ("sprint", "Sprint"), ("components", "Komponente"), ("labels", "Label"), ("assignee", "Bearbeiter"), ("versions", "Release"), ("team", "Team"), ("area", "Bereich"),
-    ("priority", "Priorität"), ("jira_progress", "Jira: Fortschritt (%)"), ("jira_done", "Jira: Fortschritt abgeschlossen (SP)"), ("jira_left", "Jira: Verbleibender Fortschritt (SP)"))
+    ("sprint", "Sprint"), ("team", "Team"), ("jira_progress", "Jira: Fortschritt (%)"), ("jira_done", "Jira: Fortschritt abgeschlossen (SP)"), ("jira_left", "Jira: Verbleibender Fortschritt (SP)"))
 NOT_FOUND = "nicht gefunden"
 
 _ALIASES = {
@@ -41,13 +40,7 @@ _ALIASES = {
     "points": ("story points", "story point", "storypoints", "story point estimate", "storypunkte", "story-punkte", "story-points", "custom field (story points)"),
     "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang"),
     "sprint": ("sprint",),
-    "components": ("komponenten", "component/s", "components"),
-    "labels": ("stichwörter", "stichwoerter", "labels", "etiketten"),
-    "assignee": ("zugewiesene person", "assignee", "bearbeiter"),
-    "versions": ("releases", "fix versions", "fix version/s", "lösungsversion/en"),
     "team": ("team",),
-    "area": ("bereich", "area"),
-    "priority": ("priorität", "priority", "prioritaet"),
     "jira_progress": ("fortschritt (%)",),
     "jira_done": ("fortschritt abgeschlossen (sp)",),
     "jira_left": ("verbleibender fortschritt (sp)",),
@@ -95,7 +88,7 @@ def _decode(data: bytes) -> str:
 
 
 def _columns(header: list[str]) -> dict[str, list[int]]:
-    """Spaltenindizes je Feld; mehrfach vorkommende Spalten (Sprint, Stichwörter, Komponenten) liefern alle Indizes."""
+    """Spaltenindizes je Feld; mehrfach vorkommende Spalten (Sprint) liefern alle Indizes."""
     normed = [_norm(h) for h in header]
     found: dict[str, list[int]] = {}
     for fieldname, names in _ALIASES.items():
@@ -110,9 +103,7 @@ def field_counts(issues) -> dict[str, int]:
     return {
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
-        "sprint": sum(bool(i.sprints) for i in issues), "components": sum(bool(i.components) for i in issues), "labels": sum(bool(i.labels) for i in issues),
-        "assignee": sum(bool(i.assignee) for i in issues), "versions": sum(bool(i.versions) for i in issues), "team": sum(bool(i.team) for i in issues),
-        "area": sum(bool(i.area) for i in issues), "priority": sum(bool(i.priority) for i in issues), "jira_progress": sum(i.jira_progress is not None for i in issues),
+        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "jira_progress": sum(i.jira_progress is not None for i in issues),
         "jira_done": sum(i.jira_done is not None for i in issues), "jira_left": sum(i.jira_left is not None for i in issues)}
 
 
@@ -154,7 +145,7 @@ def _cell(row: list[str], cols: dict[str, list[int]], name: str) -> str:
 
 
 def _cells(row: list[str], cols: dict[str, list[int]], name: str) -> list[str]:
-    """Alle nicht leeren Werte der Spalten `name` (Sprint, Stichwörter und Komponenten kommen mehrfach vor)."""
+    """Alle nicht leeren Werte der Spalten `name` (der Sprint kommt mehrfach vor)."""
     return [row[i].strip() for i in cols.get(name, []) if i < len(row) and row[i].strip()]
 
 
@@ -169,8 +160,7 @@ def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, 
     points = parse_number(raw_points)
     issue = Issue(
         key=_cell(row, cols, "key"), summary=_cell(row, cols, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=_cell(row, cols, "status"), points=points,
-        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), labels=_listed(row, cols, "labels"), components=_listed(row, cols, "components"),
-        assignee=_cell(row, cols, "assignee"), versions=_listed(row, cols, "versions"), team=_cell(row, cols, "team"), area=_cell(row, cols, "area"), priority=_cell(row, cols, "priority"),
+        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"),
         jira_progress=parse_percent(_cell(row, cols, "jira_progress")), jira_done=parse_number(_cell(row, cols, "jira_done")), jira_left=parse_number(_cell(row, cols, "jira_left")))
     return issue, bool(raw_points) and points is None
 
@@ -224,11 +214,3 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     report.columns = coverage_rows(issues, {name: ", ".join(dict.fromkeys(header[i].strip() for i in idx)) for name, idx in cols.items()})
     report.notes = _report_notes(cols, header, lost_parents, bad_points)
     return tuple(issues), report
-
-
-def pseudonymize_assignees(issues) -> tuple[Issue, ...]:
-    """Ersetzt die Namen der Bearbeiter durch „Person 1“, „Person 2“ ... (nach Namen sortiert, also unabhängig von der Ticketreihenfolge). Ein leerer Name bleibt leer.
-    Das betrifft nur die Anzeige und die Tabellen der App; die hochgeladene Datei hat den Server da schon erreicht."""
-    names = sorted({i.assignee for i in issues if i.assignee})
-    number = {name: f"Person {k}" for k, name in enumerate(names, start=1)}
-    return tuple(replace(i, assignee=number.get(i.assignee, "")) for i in issues)

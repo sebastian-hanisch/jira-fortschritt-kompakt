@@ -142,18 +142,19 @@ def test_upload_lifecycle_loads_once_resets_the_uploader_and_can_be_deleted():
     _ok(at)
     assert any("Geladen: projekt.csv mit 9 Tickets" in s.value for s in at.success)
     assert not at.get("file_uploader") and at.button(key="clear_loaded")           # nach dem Laden gibt es kein Upload-Feld mit der Datei mehr
-    assert at.checkbox(key="pseudo").disabled and at.metric[0].value == "66.7 %"
+    assert not at.checkbox and at.metric[0].value == "66.7 %"                        # keine Option zu Namen: Personen werden gar nicht gelesen
     at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
     _ok(at)
     assert at.get("file_uploader") and not at.metric and any("Bitte den CSV-Export" in i.value for i in at.info)
-    assert not at.checkbox(key="pseudo").disabled and "loaded" not in at.session_state
+    assert "loaded" not in at.session_state
 
 
-def test_assignee_names_are_replaced_by_numbers_by_default():
+def test_names_of_people_are_never_read_and_the_titles_stay():
     at = _open(TITLES)
     _ok(at)
     loaded = at.session_state["loaded"][1]
-    assert [t.assignee for t in loaded] == ["", "Person 1", "Person 2"] and [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"]          # die Titel bleiben erhalten
+    assert [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"]          # die Titel bleiben erhalten
+    assert "Erika Mustermann" not in repr(loaded) and "Max Beispiel" not in repr(loaded)                              # die Namen aus „Zugewiesene Person“ stehen nirgends in den Daten der Sitzung
 
 
 # ---------------------------------------------------------------- Anleitung zum Export
@@ -182,13 +183,11 @@ def test_status_rules_are_shown_before_the_upload():
     assert "Regeln" in text and "Auflistung" in text and "Ready4Prod" in text and "zählt nicht" in text
 
 
-def test_names_can_be_kept_when_the_option_is_switched_off_before_loading_and_titles_always_stay():
-    at = _open()
-    assert not [c for c in at.checkbox if c.key == "drop_titles"]                                      # eine Option zum Verwerfen der Titel gibt es nicht
-    at.checkbox(key="pseudo").set_value(False)
-    at.file_uploader(key="upload_0").set_value(("plan.csv", TITLES, "text/csv")).run(timeout=TIMEOUT)
+
+
+def test_ticket_titles_always_stay_visible_and_there_is_no_option_to_drop_them():
+    at = _open(TITLES)
     _ok(at)
-    loaded = at.session_state["loaded"][1]
-    assert [t.summary for t in loaded] == ["Kundenprojekt Alpha", "Geheimer Kundenname", "Noch ein Titel"] and [t.assignee for t in loaded] == ["", "Erika Mustermann", "Max Beispiel"]
+    assert not at.checkbox                                                                                   # keine Option zu Titeln oder Namen
     at.sidebar.selectbox(key="root").set_value("E-1").run(timeout=TIMEOUT)
     assert "E-2: Geheimer Kundenname" in " ".join(t.value.to_string() for t in at.dataframe)                    # die Titel der Tickets stehen in der Tabelle

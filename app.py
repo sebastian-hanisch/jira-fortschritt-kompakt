@@ -121,8 +121,7 @@ def _below(root) -> str:
 # --- Kopf und Datei -----------------------------------------------------------------------------------------------------------------------------
 
 def render_intro(loaded):
-    """Titel, Hinweise, Anleitungen und die Option zu den Bearbeiter-Namen. Rückgabe: der Ausklapper der Berechnungsmöglichkeiten (die Wirkung auf die Daten kommt nach der Auswertung
-    hinein) und die Option, die Namen zu ersetzen."""
+    """Titel, Hinweise und Anleitungen. Rückgabe: der Ausklapper der Berechnungsmöglichkeiten (die Wirkung auf die Daten kommt nach der Auswertung hinein)."""
     st.title("📊 Jira-Fortschritt")
     st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit den Story Points der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
                "zurückgewiesene Tickets zählen nicht.")
@@ -135,13 +134,10 @@ def render_intro(loaded):
     options_box = st.expander("🧮 Tickets ohne Story Points: Berechnungsmöglichkeiten")
     with options_box:
         st.markdown(texts.UNEST_OPTIONS_MARKDOWN)
-    pseudo = st.checkbox(
-        "Namen der Bearbeiter durch Nummern ersetzen", value=True, key="pseudo", disabled=loaded is not None,
-        help="Gilt beim Laden und ersetzt die Namen in den Daten der Sitzung. Diese Fassung zeigt Bearbeiter nirgends an; die Option begrenzt, was im Arbeitsspeicher bleibt. Die Datei hat den Server beim Hochladen schon erreicht.")
-    return options_box, pseudo
+    return options_box
 
 
-def load_file(pseudo):
+def load_file():
     """Upload-Feld, Einlesen und Ablegen in der Sitzung. Endet immer mit `st.stop()` (keine Datei, Fehler) oder `st.rerun()` (Datei geladen)."""
     upload = st.file_uploader("Export aus Jira Plans (CSV)", type=["csv"], key=f"upload_{st.session_state['upload_version']}",
                               help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
@@ -157,8 +153,6 @@ def load_file(pseudo):
     except Exception as exc:  # noqa: BLE001 - bewusst breit: nur der Typ, nie die Meldung
         st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte Format und Spalten prüfen: Erwartet wird der CSV-Export aus Jira Plans.")
         st.stop()
-    if pseudo:
-        issues_all = J.pseudonymize_assignees(issues_all)
     st.session_state["loaded"] = (upload.name, issues_all, report)
     st.session_state["upload_version"] += 1       # neues Upload-Feld: die Datei steht danach nicht mehr im Formular
     st.rerun()
@@ -370,9 +364,9 @@ def render_explanations():
 def main():
     st.session_state.setdefault("upload_version", 0)
     loaded = st.session_state.get("loaded")
-    options_box, pseudo = render_intro(loaded)
+    options_box = render_intro(loaded)
     if loaded is None:
-        load_file(pseudo)
+        load_file()
         return
     file_name, issues_all, report = loaded
     render_loaded(file_name, issues_all, report)

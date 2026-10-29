@@ -26,11 +26,11 @@ def make_mini() -> tuple[Issue, ...]:
     return (
         Issue(key="E1", summary="Epic A", type="Epic", status="In Progress"),
         Issue(key="E2", summary="Epic B", type="Epic", status="To Do"),
-        Issue(key="S1", type="Story", status="Done", points=3.0, parent="E1", sprints=("Sprint 1",), components=("Backend", "Frontend")),
-        Issue(key="S2", type="Story", status="In Progress", points=5.0, parent="E1", sprints=("Sprint 1", "Sprint 2"), components=("Backend",)),
+        Issue(key="S1", type="Story", status="Done", points=3.0, parent="E1", sprints=("Sprint 1",)),
+        Issue(key="S2", type="Story", status="In Progress", points=5.0, parent="E1", sprints=("Sprint 1", "Sprint 2")),
         Issue(key="S3", type="Story", status="To Do", points=2.0, parent="E2"),
-        Issue(key="S4", type="Story", status="In Review", points=None, parent="E2", sprints=("Sprint 2",), components=("Frontend",)),
-        Issue(key="B1", type="Bug", status="Done", points=1.0, sprints=("Sprint 2",), components=("Backend",)),
+        Issue(key="S4", type="Story", status="In Review", points=None, parent="E2", sprints=("Sprint 2",)),
+        Issue(key="B1", type="Bug", status="Done", points=1.0, sprints=("Sprint 2",)),
         Issue(key="T1", type="Sub-task", is_subtask=True, status="Done", parent="S2"),
         Issue(key="T2", type="Sub-task", is_subtask=True, status="To Do", parent="S2"),
     )
@@ -59,9 +59,9 @@ def plan_csv(issues) -> bytes:
     for i in issues:
         kids = children.get(i.key, []) if i.is_epic else []
         total = sum(k.points for k in kids if k.points is not None)
-        writer.writerow([
-            i.type, i.summary, i.area, joined(v for k in kids for v in k.versions), joined(i.versions), joined(k.team for k in kids), i.team, i.assignee, "",
-            joined(s for k in kids for s in k.sprints), joined(i.sprints), number(total) if kids else "", number(i.points), i.parent, i.priority, joined(i.labels), joined(i.components),
+        writer.writerow([       # Bereich, Releases, Person, Priorität, Stichwörter und Komponenten stehen mit festen Werten in der Datei: Das Werkzeug liest sie nicht
+            i.type, i.summary, "Bereich Nord", "Release 1.0", "Release 1.0", joined(k.team for k in kids), i.team, "Erika Muster", "",
+            joined(s for k in kids for s in k.sprints), joined(i.sprints), number(total) if kids else "", number(i.points), i.parent, "Hoch", "ux, quick-win", "Frontend, Backend",
             i.key, i.status])
     return buffer.getvalue().encode("utf-8-sig")
 
@@ -76,14 +76,14 @@ def random_project(seed: int, n_epics: int = 5) -> tuple[Issue, ...]:
     for e in range(n_epics):
         n += 1
         epic = f"P-{n}"
-        issues.append(Issue(key=epic, summary=f"Epic {e}", type="Epic", status="In Arbeit", points=None, area=rng.choice(("Nord", "Süd"))))
+        issues.append(Issue(key=epic, summary=f"Epic {e}", type="Epic", status="In Arbeit", points=None))
         for _ in range(rng.randint(2, 8)):
             n += 1
             key = f"P-{n}"
             issues.append(Issue(
                 key=key, summary=f"Story {key}", type=rng.choice(("Story", "Story", "Bug", "Task")), status=rng.choice(STATUSES), parent=epic,
                 points=None if rng.random() < 0.2 else float(rng.choice((0.5, 1, 2, 3, 5, 8))), sprints=tuple(f"Sprint {s}" for s in sorted(rng.sample(range(1, 12), rng.randint(0, 2)))),
-                components=tuple(rng.sample(("Frontend", "Backend", "Daten"), rng.randint(0, 2))), team=rng.choice(("Alpha", "Beta", "")), priority=rng.choice(("Hoch", "Mittel", ""))))
+                team=rng.choice(("Alpha", "Beta", ""))))
             if rng.random() < 0.3:
                 n += 1
                 issues.append(Issue(key=f"P-{n}", type="Sub-task", is_subtask=True, status=rng.choice(STATUSES), parent=key))

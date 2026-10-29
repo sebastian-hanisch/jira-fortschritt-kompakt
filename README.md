@@ -24,7 +24,7 @@ CSV-Export aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder K
 | Typ / Hierarchie | Hierarchie |
 | Eltern | Übergeordnetes Element (als Schlüssel, Schlüssel mit Titel oder eindeutiger Titel) |
 | Gewicht | Story Points (die Schätzung in Tagen, „Schätzung (T)“, wird nicht gelesen) |
-| weitere | Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter, Komponenten |
+| weitere | Titel, Sprint, Team (alle anderen Spalten, auch Personen, werden nicht gelesen) |
 | Gegenprobe | Fortschritt (%), Fortschritt abgeschlossen (SP), Verbleibender Fortschritt (SP): Jiras eigene Werte, nur zum Vergleich |
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
@@ -39,8 +39,7 @@ Instanz geprüft ist das nicht.
    hinzufügen. Laut Atlassian sind Story Points nur wählbar, wenn alle Teams im Plan Scrum-Teams sind (bei einem Kanban-Team fehlt die Option), Story Points und Zeitschätzungen (Tage, Stunden) sind nicht
    austauschbar, und beim Wechsel gehen nicht gespeicherte Schätzungen verloren. Steht der Plan auf Tagen, heißt die Spalte „Schätzung (T)“, und die liest dieses Werkzeug nicht. Die Tickets selbst müssen Story Points tragen.
 2. **Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** sichtbar ist: Filter auf den auszuwertenden Teil des Plans setzen (inklusive der Ebenen darüber, wenn sie als Wurzel
-   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint, Releases, Team, Bereich,
-   Zugewiesene Person, Priorität, Stichwörter und Komponenten.
+   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint und Team.
 3. **Exportieren:** in der Timeline-Ansicht **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 4. **Prüfen:** Unter „Was wurde erkannt?“ zeigt die App, bei wie vielen Tickets Story Points stehen; fehlt die Spalte, warnt sie.
 
@@ -87,7 +86,7 @@ Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketza
 * **Hochgeladene Dateien liegen für die Sitzung im Arbeitsspeicher des Servers, auf dem die App läuft** (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA). Das Werkzeug speichert und cached sie nicht
   (kein `st.cache_data`, kein Schreiben auf die Platte), gibt sie nicht weiter und hat keine Anbindung an die Jira-Schnittstelle und kein Eingabefeld für Zugangsdaten. Die Plattform kann die Datei bis zum
   Sitzungsende im Speicher halten; den Server betreibt, wer die App bereitstellt.
-* Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Beim Laden lassen sich die Namen der Bearbeiter durch Nummern ersetzen (voreingestellt); die Titel der Tickets bleiben erhalten; „Daten jetzt löschen“
+* Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder. Namen von Personen werden gar nicht erst gelesen; die Titel der Tickets bleiben erhalten; „Daten jetzt löschen“
   verwirft die geladenen Tickets der Sitzung und stellt das Upload-Feld zurück. Das betrifft nur die Daten der Sitzung: Die Datei hat den Server beim Hochladen schon erreicht.
 * Fehlermeldungen nennen nur den Fehlertyp, und ein Filter ersetzt die Meldung unbehandelter Ausnahmen im Protokoll durch den Typ (sie könnte Ticketdaten enthalten). Das ist nur gegen die eigene Testsuite
   geprüft, nicht gegen die Server einer Plattform.
@@ -139,7 +138,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 
 ## Bewusst nicht enthalten
 
-Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
+Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status; die Spalten dazu werden nicht gelesen) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
 Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
 
 ## Aufbau
@@ -148,7 +147,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 |---|---|
 | `app.py` | Oberfläche (Streamlit): `main()` setzt die Seite aus `render_*`-Schritten zusammen |
 | `jira_texts.py` | Die langen Erklärtexte der App |
-| `jira_plan.py` | Einlesen des Plan-Exports, Bearbeiter ersetzen |
+| `jira_plan.py` | Einlesen des Plan-Exports |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen (Status-Matrix, Gegenprobe zu Jira, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |

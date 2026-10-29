@@ -7,8 +7,8 @@ UPLOAD_NOTICE = f"""
 **Bitte vor dem Hochladen lesen.** Die Datei geht zur Berechnung an den Server, auf dem diese App läuft (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA), und liegt dort nur für Ihre
 Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
 ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
-und Story Points (optional Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter, Komponenten). Alle anderen Spalten, besonders Beschreibungen und Kommentare, gehören vor dem
-Hochladen gelöscht. Beim Laden lassen sich die Namen der Bearbeiter ersetzen. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
+und Story Points (optional Titel, Sprint und Team). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
+den Server aber mit der Datei. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
 """
 
 
@@ -21,8 +21,7 @@ Story Points tragen; Tickets ohne Story Points behandelt die Auswahl „Tickets 
 
 **2. Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** des Plans sichtbar ist. Deshalb zuerst die Filter so setzen, dass genau der Teil des Plans erscheint, der
 ausgewertet werden soll (die Hierarchie darüber, z. B. Initiativen, gehört dazu, wenn sie als Wurzel wählbar sein soll), und über **Add fields** die Spalten einblenden: mindestens Vorgangsschlüssel und
-Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint, Releases, Team, Bereich, Zugewiesene Person, Priorität, Stichwörter und
-Komponenten. Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
+Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint und Team. Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
 
 **3. Exportieren.** In der Timeline-Ansicht: **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 Die erzeugte CSV-Datei hier hochladen; vorher Spalten wie Beschreibung und Kommentare, falls vorhanden, löschen.
@@ -37,12 +36,11 @@ Die deutsche Oberfläche und neuere Versionen können anders heißen; an einer e
 
 DATA_SOURCE_MARKDOWN = """
 **Plan-Export.** Wie man ihn erzeugt, steht oben unter „So kommt die Datei zustande“. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
-Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Releases*, *Team*, *Bereich*,
-*Zugewiesene Person*, *Priorität*, *Stichwörter* und *Komponenten*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
-übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.
+Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint* und *Team*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
+übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten, darunter Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten: Sie werden nicht einmal eingelesen. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.
 
 **Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum
-Ende der Sitzung noch im Speicher halten. Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder; die Namen der Bearbeiter lassen sich beim Laden durch Nummern ersetzen, und „Daten jetzt löschen“ verwirft die geladenen Tickets. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
+Ende der Sitzung noch im Speicher halten. Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder (Namen von Personen werden gar nicht erst gelesen), und „Daten jetzt löschen“ verwirft die geladenen Tickets. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
 Anbindung an die Jira-Schnittstelle: Zugangsdaten sollen nie durch dieses Werkzeug laufen. Höchstens 50 MB und 20000 Tickets je Datei. Läuft die App auf dem eigenen Rechner oder im eigenen Netz, verlässt
 die Datei es nicht.
 """
@@ -70,8 +68,6 @@ Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern
 """
 
 HOW_IT_WORKS_AFTER_FORMULA = """
-Ein Ticket mit mehreren Werten (Stichwörter, Komponenten, Releases) teilt sich gleichmäßig auf seine Gruppen auf, damit die Summe über alle Gruppen die Gesamtsumme bleibt.
-
 **Teilprojekt.** Die Wurzel macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz: Auch der Median für ungeschätzte Tickets (falls gewählt), die Status der Gewichtstabelle, die Sprints und die
 Hierarchiestufen beziehen sich nur auf diesen Teilbaum.
 
