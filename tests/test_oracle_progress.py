@@ -125,10 +125,9 @@ def reference(plan, root, unest, sub):
     atoms, weights = solved.atoms, solved.weights
     total = sum(weights.values())
     if total <= 0:
-        return {"weight": total, "n": len(atoms), "progress": math.nan, "done": math.nan, "count": (sum(a.status in DONE for a in atoms) / len(atoms)) if atoms else math.nan,
-                "unestimated": sum(a.points is None for a in atoms)}
+        return {"weight": total, "n": len(atoms), "progress": math.nan, "done": math.nan, "unestimated": sum(a.points is None for a in atoms)}
     return {"weight": total, "n": len(atoms), "progress": sum(weights[a.key] * CREDIT[a.status] for a in atoms) / total, "done": sum(weights[a.key] for a in atoms if a.status in DONE) / total,
-            "count": sum(a.status in DONE for a in atoms) / len(atoms), "unestimated": sum(a.points is None for a in atoms)}
+            "unestimated": sum(a.points is None for a in atoms)}
 
 
 def _roots(plan):
@@ -155,4 +154,4 @@ def test_analyse_matches_the_reference_for_every_rule_combination_and_root(seed)
                 context = (seed, root, letter, sub_letter)
                 assert got.n_atoms == want["n"] and got.n_unestimated == want["unestimated"], context
                 assert _same(got.weight, want["weight"]) and _same(got.progress, want["progress"]), context
-                assert _same(got.progress_done, want["done"]) and _same(got.progress_count, want["count"]), context
+                assert _same(got.progress_done, want["done"]), context

@@ -1,7 +1,7 @@
 """Tabellarische Auswertungen: reine Funktionen, die aus einer `Analysis` Zeilen (Listen von Wörterbüchern) bauen.
 
-Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel (Semikolon, Dezimalkomma), `rows_to_wiki` und
-`rows_to_html` bereiten dieselben Zeilen zum Einfügen in Jira und Confluence auf."""
+Die Zeilen tragen Zahlen als Zahlen (kein Text); Formatierung übernimmt die Anzeige. `rows_to_csv` schreibt die Datei für Excel (Semikolon, Dezimalkomma), `rows_to_html` bereitet
+dieselben Zeilen zum Einfügen in Jira und Confluence auf."""
 
 import html
 from dataclasses import replace
@@ -108,7 +108,7 @@ def sprint_rows(issues, a: Analysis) -> list[dict]:
     return rows
 
 
-# ---------------------------------------------------------------- Ausgabe: CSV, Wiki-Markup, HTML
+# ---------------------------------------------------------------- Ausgabe: CSV und HTML
 
 def format_cell(value, fmt=None) -> str:
     """Zelle als Text für Jira und Confluence (Dezimalpunkt): Streamlit-Formate „percent“, „%.0f“, „%.1f“, „%.2f“; Ganzzahlen ohne Nachkommastelle; fehlende Werte leer."""
@@ -124,30 +124,6 @@ def format_cell(value, fmt=None) -> str:
             return str(int(value)) if float(value).is_integer() else de(float(value), 2)
         return de(float(value), digits)
     return str(value)
-
-
-_WIKI_SPECIAL = "\\|{}[]*_"
-
-
-def _wiki_escape(text: str) -> str:
-    return "".join("\\" + ch if ch in _WIKI_SPECIAL else ch for ch in text)
-
-
-def rows_to_wiki(rows: list[dict], formats: dict | None = None) -> str:
-    """Tabelle als Wiki-Markup für Jira- und Confluence-Textfelder (`||Kopf||` und `|Zelle|`); leere Zellen als Leerzeichen, die Summenzeile fett, Sonderzeichen mit Rückstrich geschützt.
-    Schlüssel wie ABC-12 verlinkt Jira beim Anzeigen selbst."""
-    if not rows:
-        return ""
-    formats = formats or {}
-    lines = ["||" + "||".join(_wiki_escape(h) for h in rows[0]) + "||"]
-    for row in rows:
-        bold = str(next(iter(row.values()))) == SUM_LABEL
-        cells = []
-        for name, value in row.items():
-            text = _wiki_escape(format_cell(value, formats.get(name)))
-            cells.append((f"*{text}*" if bold and text else text) or " ")
-        lines.append("|" + "|".join(cells) + "|")
-    return "\n".join(lines)
 
 
 def rows_to_html(rows: list[dict], formats: dict | None = None) -> str:

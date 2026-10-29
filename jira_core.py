@@ -508,7 +508,6 @@ class GroupStats:
     credited: np.ndarray    # sum w*c
     done_weight: np.ndarray  # sum w über erledigte Atome
     count: np.ndarray       # Atome (anteilig)
-    done_count: np.ndarray
     unestimated: np.ndarray  # Atome ohne Story Points (anteilig)
 
     @property
@@ -528,15 +527,14 @@ def aggregate(assign: Assignment, w: np.ndarray, c: np.ndarray, done: np.ndarray
 
     def total(values):
         return np.bincount(assign.group, weights=values[a] * s, minlength=n)
-    return GroupStats(assign.labels, total(w), total(w * c), total(w * done), total(np.ones(len(w))), total(done.astype(float)), total(unest.astype(float)))
+    return GroupStats(assign.labels, total(w), total(w * c), total(w * done), total(np.ones(len(w))), total(unest.astype(float)))
 
 
-def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, float, float]:
-    """Gesamtfortschritt über alle Atome: (gewichtet nach Status, nur erledigt nach Gewicht, nur erledigt nach Ticketanzahl); NaN ohne Gewicht bzw. Atome."""
+def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, float]:
+    """Gesamtfortschritt über alle Atome: (gewichtet nach Status, nur erledigt nach Gewicht); NaN ohne Gewicht."""
     total = np.array([w.sum()])
     p_w, p_d = (float(ratio(np.array([x]), total)[0]) for x in (np.dot(w, c), np.dot(w, done)))
-    p_n = float(done.sum() / len(done)) if len(done) else float("nan")
-    return p_w, p_d, p_n
+    return p_w, p_d
 
 
 # ---------------------------------------------------------------- Teilprojektbaum

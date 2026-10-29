@@ -124,11 +124,6 @@ ROWS = [{"Gruppe": "A|B", "Gewicht": 1.5, "Fortschritt": 0.5}, {"Gruppe": "Summe
 FORMATS = {"Gewicht": "%.1f", "Fortschritt": "percent"}
 
 
-def test_wiki_markup_escapes_special_characters_and_bolds_the_sum_row():
-    assert T.rows_to_wiki(ROWS, FORMATS).split("\n") == ["||Gruppe||Gewicht||Fortschritt||", "|A\\|B|1.5|50.0 %|", "|*Summe*|*2.0*| |"]
-    assert T.rows_to_wiki([]) == "" and "\\*" in T.rows_to_wiki([{"x": "a*b"}])
-
-
 def test_html_table_has_a_header_aligned_numbers_and_escaped_text():
     html = T.rows_to_html(ROWS + [{"Gruppe": "<b>", "Gewicht": 1.0, "Fortschritt": 0.1}], FORMATS)
     assert html.startswith("<table") and html.count("<th ") == 3 and "&lt;b&gt;" in html and "<strong>Summe</strong>" in html
@@ -211,7 +206,7 @@ def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():
     rows, status_cols, completed = T.status_matrix(items, ev.analyse(items))
     formats = {name: "%.2f" for name in (*status_cols, T.REJECTED_COL, T.TOTAL_NET_COL)}
     assert rows[0][T.TOTAL_NET_COL] == 38.25
-    assert "|38.25|" in T.rows_to_wiki(rows, formats) and "38.25" in T.rows_to_html(rows, formats) and "38.3" not in T.rows_to_wiki(rows, formats)
+    assert "38.25" in T.rows_to_html(rows, formats) and "38.3" not in T.rows_to_html(rows, formats)
 
 
 def test_assumptions_text_has_the_three_parts_and_matches_the_readme():

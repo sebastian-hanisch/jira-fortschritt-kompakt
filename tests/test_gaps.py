@@ -72,7 +72,7 @@ def test_ratio_is_nan_without_a_positive_denominator_and_the_quotient_otherwise(
 
 def _fake_analysis(progress=0.5, weight=10.0, group_weight=10.0, n_atoms=4, group_count=4.0, credited=5.0):
     stats = types.SimpleNamespace(weight=np.array([group_weight]), count=np.array([group_count]), credited=np.array([credited]))
-    return types.SimpleNamespace(progress=progress, progress_done=progress, progress_count=progress, stats=stats, weight=weight, n_atoms=n_atoms)
+    return types.SimpleNamespace(progress=progress, progress_done=progress, stats=stats, weight=weight, n_atoms=n_atoms)
 
 
 def test_consistency_accepts_a_project_that_is_one_hundred_percent_done():

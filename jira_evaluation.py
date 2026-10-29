@@ -26,7 +26,6 @@ class Analysis:
     weight: float
     progress: float            # gewichtet nach Status
     progress_done: float       # nur erledigt, nach Gewicht
-    progress_count: float      # nur erledigt, nach Ticketanzahl
     n_unestimated: int
     stats: A.GroupStats
     tree: A.TreeGraph
@@ -101,7 +100,7 @@ class _Counted:
     c: np.ndarray
     done: np.ndarray
     unest: np.ndarray
-    overall: tuple[float, float, float]      # gewichtet, nur Done nach Gewicht, nur Done nach Anzahl
+    overall: tuple[float, float]      # gewichtet, nur Done nach Gewicht
 
 
 def _count(issues, settings: Settings, plan, ctx: dict | None = None) -> _Counted:
@@ -190,7 +189,7 @@ def check_consistency(a: Analysis, tol: float = 1e-9) -> list[str]:
     """Unabhängiger Prüfer, der auch in der App läuft: Jede Verletzung ist eine Meldung. Erwartet werden Fortschritt in [0, 1] und Gruppen, deren Gewichte und Zähler sich zum
     Gesamtwert summieren (Mehrfachwerte werden anteilig verteilt)."""
     problems = []
-    for name, value in (("gewichtet", a.progress), ("nur Done (Gewicht)", a.progress_done), ("nur Done (Anzahl)", a.progress_count)):
+    for name, value in (("gewichtet", a.progress), ("nur Done (Gewicht)", a.progress_done)):
         if not np.isnan(value) and not -tol <= value <= 1 + tol:
             problems.append(f"Gesamtfortschritt {name} liegt außerhalb von 0 bis 100 %: {value:.4f}")
     if abs(float(a.stats.weight.sum()) - a.weight) > tol * max(1.0, a.weight):

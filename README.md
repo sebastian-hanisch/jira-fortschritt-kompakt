@@ -77,7 +77,7 @@ bitte melden.
 
 ## Ausgabe
 
-Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Teilprojektbaum und eine Tabelle: die
+Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Teilprojektbaum und eine Tabelle: die
 **Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Haben Tickets einen Sprint, kommt der **Fortschritt je Sprint** dazu (Balken und Tabelle: Tickets, Gewicht, Fortschritt, „nur Done“, mitgenommene Tickets); jedes zählende Ticket steht in seinem letzten Sprint, eine Sub-Task ohne Sprint erbt den ihrer Story. Status, deren Name keine Regel kennt, meldet die App unter den Kennzahlen.
 
 ## Datenschutz
@@ -139,7 +139,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 ## Bewusst nicht enthalten
 
 Gegenüber der ausführlicheren Fassung fehlen: weitere Zusammenfassungen (nach Epic, Release, Komponente, Label, Bearbeiter, Team, Bereich, Priorität, Typ oder Status; die Spalten dazu werden nicht gelesen) und die Tabellen Je Gruppe, Status × Gruppe und Datenqualität, Beispieldaten, JSON- und Standard-CSV-Export, Wahl des Gewichtsschemas und der Gewichtungsart (Story Points oder Ticketanzahl), Zeitraum (Sprint von … bis …), die Mischung des Story-Fortschritts aus den Sub-Tasks, Kreuztabelle,
-Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren.
+Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung zum Kopieren, die Kennzahl „nur Done nach Ticketzahl“ und die Ausgabe als Wiki-Markup (die Tabellen lassen sich als CSV und als HTML-Tabelle übernehmen).
 
 ## Aufbau
 
@@ -150,7 +150,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_plan.py` | Einlesen des Plan-Exports |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
-| `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |
+| `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV und HTML |
 | `jira_charts.py` | Plotly-Diagramme |
 | `jira_privacy.py` | Filter, der Ausnahmemeldungen aus dem Protokoll nimmt |
 | `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten; `test_oracle_progress.py` rechnet den Fortschritt unabhängig aus der Definition nach (Orakel) und vergleicht ihn für Zufallsprojekte, alle Regeln und mehrere Wurzeln; `test_oracle_tables.py` tut dasselbe für Status-Matrix und Sprint-Tabelle |

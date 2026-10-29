@@ -190,11 +190,11 @@ def test_graph_survives_a_cycle():
 # ---------------------------------------------------------------- Gesamtfortschritt
 
 def test_overall_by_hand_and_without_weight():
-    assert A.overall(np.array([3.0, 1.0]), np.array([1.0, 0.0]), np.array([True, False])) == pytest.approx((0.75, 0.75, 0.5))
-    p_w, p_d, p_n = A.overall(np.array([]), np.array([]), np.array([], dtype=bool))
-    assert np.isnan(p_w) and np.isnan(p_d) and np.isnan(p_n)
-    p_w, p_d, p_n = A.overall(np.array([0.0, 0.0]), np.array([1.0, 1.0]), np.array([True, False]))
-    assert np.isnan(p_w) and np.isnan(p_d) and p_n == 0.5
+    assert A.overall(np.array([3.0, 1.0]), np.array([1.0, 0.0]), np.array([True, False])) == pytest.approx((0.75, 0.75))
+    p_w, p_d = A.overall(np.array([]), np.array([]), np.array([], dtype=bool))
+    assert np.isnan(p_w) and np.isnan(p_d)
+    p_w, p_d = A.overall(np.array([0.0, 0.0]), np.array([1.0, 1.0]), np.array([True, False]))
+    assert np.isnan(p_w) and np.isnan(p_d)
 
 
 def test_parent_root_goes_one_level_up_to_a_ticket_that_can_be_a_root(mini):

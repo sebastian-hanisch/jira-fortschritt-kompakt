@@ -35,8 +35,8 @@ def test_without_a_file_the_app_asks_for_one_and_stops():
 def test_the_headline_numbers_of_the_mini_project():
     at = _open(plan_csv(make_mini()))
     _ok(at)
-    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Nur Done, nach Ticketzahl", "Offenes Gewicht (SP, gesamt 10.50)"]
-    assert [m.value for m in at.metric] == ["66.7 %", "47.6 %", "50.0 %", "3.50"]            # 7 / 10.5; 5 / 10.5; 3 von 6; 10.5 · (1 − 7/10.5)
+    assert [m.label for m in at.metric] == ["Fortschritt (nach Status gewichtet)", "Nur Done, nach Gewicht", "Offenes Gewicht (SP, gesamt 10.50)"]
+    assert [m.value for m in at.metric] == ["66.7 %", "47.6 %", "3.50"]            # 7 / 10.5; 5 / 10.5; 10.5 · (1 − 7/10.5)
     assert [w.value for w in at.warning if "Bitte vor dem Hochladen" not in w.value] == [ev.unestimated_note(3, 6)[1]] and any("9 Tickets" in e.label for e in at.expander)       # nur die Meldung zum ungeschätzten Ticket (3 von 6 = 50 %); die Zahl der Tickets steht im Erkennungsbericht
 
 
@@ -68,7 +68,7 @@ def test_the_rule_for_unestimated_tickets_is_visible_and_changes_the_numbers():
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="unest_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
-        assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})" and any(f"Regel: {rule}" in w.value for w in at.warning)
+        assert at.metric[0].value == value and at.metric[2].label == f"Offenes Gewicht (SP, gesamt {weight})" and any(f"Regel: {rule}" in w.value for w in at.warning)
 
 
 def test_the_summary_is_always_one_level_below_the_root():
@@ -128,7 +128,7 @@ def test_a_file_without_estimates_weighs_every_ticket_the_same():
     at = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\nA-2;To Do\nA-3;In Progress\n".encode())
     _ok(at)
     assert any("Story-Points-Spalte" in w.value for w in at.warning) and at.metric[0].value == "33.3 %"          # (1 + 0 + 0) / 3
-    assert at.metric[3].label.startswith("Offenes Gewicht (SP,")
+    assert at.metric[2].label.startswith("Offenes Gewicht (SP,")
 
 
 def test_all_tickets_rejected_shows_a_dash_and_no_error():
@@ -215,7 +215,7 @@ def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="sub_rule").set_value(rule).run(timeout=TIMEOUT)
         _ok(at, rule)
-        assert at.metric[0].value == value and at.metric[3].label == f"Offenes Gewicht (SP, gesamt {weight})"
+        assert at.metric[0].value == value and at.metric[2].label == f"Offenes Gewicht (SP, gesamt {weight})"
     table = next(t.value for t in at.dataframe if "Zählende Tickets" in t.value.columns)
     assert list(table["Regel"]) == list(C.SUB_RULES)
 
@@ -223,7 +223,7 @@ def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
 def test_story_points_in_quarters_are_shown_with_two_decimals():
     at = _open("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;Epic;;\nS-1;To Do;Story;E-1;0,25\nS-2;To Do;Story;E-1;0,5\n".encode("utf-8"))
     _ok(at)
-    assert at.metric[3].label == "Offenes Gewicht (SP, gesamt 0.75)" and at.metric[3].value == "0.75"
+    assert at.metric[2].label == "Offenes Gewicht (SP, gesamt 0.75)" and at.metric[2].value == "0.75"
 
 
 def test_the_explanation_says_that_only_leaves_count_and_names_the_exceptions():

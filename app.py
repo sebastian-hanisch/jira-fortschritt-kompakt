@@ -107,13 +107,8 @@ def show_table(rows, key, formats=None, file_name="tabelle"):
     st.dataframe(shown, hide_index=True, width="stretch", column_config=config, key=f"df_{key}")
     st.download_button("⬇️ Als CSV", T.rows_to_csv(rows), file_name=f"{file_name}.csv", mime="text/csv", key=f"csv_{key}")
     with st.expander("📋 In Jira oder Confluence einfügen"):
-        wiki_tab, html_tab = st.tabs(["Wiki-Markup", "Tabelle zum Kopieren"])
-        with wiki_tab:
-            st.caption("Für Textfelder in Jira (Beschreibung, Kommentar im klassischen Editor) und für Confluence über „Einfügen → Markup“ (Wiki-Markup). Das Kopiersymbol oben rechts im Feld kopiert alles.")
-            st.code(T.rows_to_wiki(rows, formats), language=None)
-        with html_tab:
-            st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
-            st.html(T.rows_to_html(rows, formats))
+        st.caption("Die Tabelle unten markieren, kopieren und in Confluence oder ein Jira-Textfeld einfügen: Sie wird als Tabelle mit Kopfzeile übernommen.")
+        st.html(T.rows_to_html(rows, formats))
 
 
 def _below(root) -> str:
@@ -256,12 +251,11 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     if a.n_excluded:
         bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
         st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct))
     # Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.
     m2.metric("Nur Done, nach Gewicht", or_dash(a.progress_done, pct), delta=delta_points(a.progress_done, a.progress), delta_color="off")
-    m3.metric("Nur Done, nach Ticketzahl", or_dash(a.progress_count, pct), delta=delta_points(a.progress_count, a.progress), delta_color="off")
-    m4.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2))
+    m3.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2))
     kind, text = unestimated_note(a.n_unestimated, a.n_atoms, unest_rule)
     getattr(st, kind)(text)
     unknown = unrecognized_note(unrecognized_statuses(issues, a), a.weight)
@@ -296,7 +290,7 @@ def render_charts(a, root):
 
 
 def render_matrix(issues, a, root):
-    """Status-Matrix je Ticket unter der Wurzel mit CSV- und Wiki-Ausgabe."""
+    """Status-Matrix je Ticket unter der Wurzel mit CSV- und HTML-Ausgabe."""
     st.markdown("## 📋 Status-Matrix je Ticket unter " + _below(root))
     st.caption(
         "Eine Zeile je Ticket direkt unter der Wurzel (im ganzen Plan die obersten), mit allem darunter: die Summe der Story Points der zählenden Tickets je Status, die Status nach Gewicht geordnet und mit ihrem "

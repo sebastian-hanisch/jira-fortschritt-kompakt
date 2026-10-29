@@ -18,7 +18,7 @@ def test_progress_of_the_mini_project_by_hand(mini):
     a = ev.analyse(mini)
     # Blätter S1 (3), S3 (2), S4 (ungeschätzt: Median der Stufe 2.5), B1 (1), T1 und T2 (Stufe ohne geschätztes Ticket: je 1); Gutschriften 1, 0, 0.8 (In Review), 1, 1, 0
     assert (a.n_atoms, a.weight, a.n_unestimated, a.n_excluded) == (6, 10.5, 3, 0)
-    assert a.progress == pytest.approx(7 / 10.5) and a.progress_done == pytest.approx(5 / 10.5) and a.progress_count == pytest.approx(3 / 6)
+    assert a.progress == pytest.approx(7 / 10.5) and a.progress_done == pytest.approx(5 / 10.5)
     assert a.credits == {"In Progress": 0.0, "To Do": 0.0, "In Review": 0.8, "Done": 1.0}
     assert ev.check_consistency(a) == [] and [mini[i].key for i in a.atoms] == ["S1", "S3", "S4", "B1", "T1", "T2"]
 
@@ -62,7 +62,6 @@ def test_progress_without_the_rejected_by_hand():
     assert (a.n_atoms, a.weight, a.n_excluded) == (3, 6.0, 3)
     assert [TREE[i].key for i in a.atoms] == ["S1", "S3b", "X"] and [TREE[i].key for i in a.rejected_atoms] == ["S2", "S3a", "S4a"]
     assert a.progress == pytest.approx((2 * 1.0 + 1 * 1.0 + 3 * 0.8) / 6) and ev.check_consistency(a) == []          # 5.4 / 6
-    assert a.progress_count == pytest.approx(2 / 3)                                    # S1 und S3b sind erledigt, X ist nur Merged
 
 
 def test_median_uses_only_counted_tickets():
@@ -161,7 +160,7 @@ def test_every_sub_task_rule_by_hand(mini):
         a = ev.analyse(mini, ev.Settings(sub_rule=rule))
         assert (a.n_atoms, a.weight) == (n, pytest.approx(weight)) and a.progress == pytest.approx(credited / weight) and ev.check_consistency(a) == [], rule
     c = ev.analyse(mini, ev.Settings(sub_rule=C.SUB_SELF))
-    assert [mini[i].key for i in c.atoms] == ["S1", "S2", "S3", "S4", "B1"] and c.progress_done == pytest.approx(4 / 14) and c.progress_count == pytest.approx(2 / 5)
+    assert [mini[i].key for i in c.atoms] == ["S1", "S2", "S3", "S4", "B1"] and c.progress_done == pytest.approx(4 / 14)
     with pytest.raises(KeyError):
         ev.analyse(mini, ev.Settings(sub_rule="Unsinn"))
 
