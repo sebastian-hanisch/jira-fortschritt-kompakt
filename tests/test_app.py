@@ -309,3 +309,25 @@ def test_unusable_story_points_do_not_break_the_page_and_are_reported():
     at = _open(data)
     _ok(at)
     assert at.metric[0].value == "75.0 %" and any("nicht endlich oder negativ): 3" in w.value for w in at.warning)          # die drei unlesbaren Tickets wiegen wie der Median (2): 6 von 8 Story Points sind Done
+
+
+def test_changed_status_weights_do_not_move_into_the_next_file_after_deleting_the_data():
+    at = _open(plan_csv(make_mini()))
+    _ok(at)
+    at.session_state["overrides"] = (("Done", 0.5),)
+    at.run(timeout=TIMEOUT)
+    assert at.metric[0].value != "66.7 %"
+    at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
+    assert not at.session_state["overrides"] if "overrides" in at.session_state else True
+    at.file_uploader(key=f"upload_{at.session_state['upload_version']}").set_value(("zwei.csv", plan_csv(make_mini()), "text/csv")).run(timeout=TIMEOUT)
+    _ok(at)
+    assert at.metric[0].value == "66.7 %"
+
+
+def test_titles_with_dollar_signs_and_asterisks_are_escaped_in_the_markdown_texts():
+    data = "Hierarchie;Titel;Story Points;Übergeordnetes Element;Vorgangsschlüssel;Vorgangsstatus\nEpic;Kosten $5 bis $10 *neu*;;;E-1;In Arbeit\nStory;A;3;E-1;S-1;Done\n".encode("utf-8")
+    at = _open(data)
+    at.sidebar.selectbox(key="root").set_value("E-1").run(timeout=TIMEOUT)
+    _ok(at)
+    texts = " ".join(i.value for i in at.info)
+    assert r"Kosten \$5 bis \$10 \*neu\*" in texts and "Kosten $5" not in texts

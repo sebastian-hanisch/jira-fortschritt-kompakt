@@ -1,5 +1,6 @@
 """Kennzahlen: `analyse` ruft die Einheiten des Kerns nur der Reihe nach auf. Es gibt keine Rechenoptionen außer Teilprojekt, Behandlung ungeschätzter Tickets und von Sub-Tasks und geänderten Status-Gewichten."""
 
+import re
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -63,6 +64,11 @@ def credit_text(credit: float) -> str:
     return text[:-1] if text.endswith("0") else text
 
 
+def md_escape(text: str) -> str:
+    """Text aus den Daten (Titel, Dateiname, Status) für Markdown: Zeichen, die sonst Formatierung auslösen („$5 bis $10“ als Formel, „*“ als Hervorhebung), werden mit einem Rückstrich entschärft."""
+    return re.sub(r"([\\`*_\[\]~$])", r"\\\1", text)
+
+
 def pct(x: float) -> str:
     return de(100 * x) + " %"
 
@@ -111,7 +117,7 @@ def _count(issues, settings: Settings, plan, ctx: dict | None = None) -> _Counte
     atoms = A.cached(ctx, ("atoms", subtasks_out), lambda: A.select_atoms(issues, skip=rejected | subtasks))
     rejected_atoms = A.cached(ctx, ("rejected_atoms", subtasks_out), lambda: tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected))
     plan = A.cached(ctx, "plan", lambda: tuple(issues) if plan is None else tuple(plan))
-    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx)
+    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx, subtasks_out=subtasks_out)
     c, done, unest = A.cached(ctx, ("atom_arrays", subtasks_out, settings.overrides), lambda: (
         np.array([credit_of[issues[i].status] for i in atoms], dtype=float), np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool),
         np.array([issues[i].points is None for i in atoms], dtype=bool)))
@@ -161,7 +167,7 @@ def unrecognized_note(rows: list[tuple[str, int, float]], total_weight: float, l
     if not rows:
         return ""
     n, w = sum(r[1] for r in rows), sum(r[2] for r in rows)
-    names = ", ".join(f"„{status or '(ohne Status)'}“ ({count})" for status, count, _ in rows[:limit]) + (f" und {len(rows) - limit} weitere" if len(rows) > limit else "")
+    names = ", ".join(f"„{md_escape(status) or '(ohne Status)'}“ ({count})" for status, count, _ in rows[:limit]) + (f" und {len(rows) - limit} weitere" if len(rows) > limit else "")
     share = f" ({de(100 * w / total_weight)} % des Gewichts)" if total_weight > 0 else ""
     return (f"{n} zählende Tickets{share} stehen in Status, deren Name keine Regel kennt und die deshalb 0 % zählen: {names}. Ist das richtig (noch nicht begonnen), passt alles; sonst das Gewicht in der Tabelle "
             "„Gewichte der Status“ ändern.")

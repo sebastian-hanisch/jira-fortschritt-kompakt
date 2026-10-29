@@ -231,3 +231,10 @@ def test_the_note_names_at_most_six_statuses_and_counts_the_rest():
     rows = [(f"S{n}", 1, float(10 - n)) for n in range(8)]
     text = ev.unrecognized_note(rows, 100.0)
     assert "„S5“ (1)" in text and "„S6“" not in text and "und 2 weitere" in text
+
+
+def test_markdown_in_titles_and_names_is_defused_before_it_reaches_streamlit():
+    assert ev.md_escape("Kosten $5 bis $10, *wichtig*, a_b, [x](y), `c`, ~d") == r"Kosten \$5 bis \$10, \*wichtig\*, a\_b, \[x\](y), \`c\`, \~d"
+    assert ev.md_escape("Plain 123 äöü") == "Plain 123 äöü" and ev.md_escape("a\\b") == "a\\\\b"
+    note = ev.unrecognized_note([("Phase $2", 1, 1.0)], 4.0)
+    assert r"„Phase \$2“ (1)" in note

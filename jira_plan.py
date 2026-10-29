@@ -209,17 +209,20 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
         delimiter = None
     if delimiter is None:
         delimiter = ";" if first.count(";") > first.count(",") else ","          # die Kopfzeile besteht fast nur aus Trennzeichen; Titel mit Kommas verfälschen sie nicht
-    rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
-    if not rows:
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    header = next(reader, None)
+    if header is None:
         raise PlanImportError("Die Datei ist leer.")
-    header = rows[0]
     cols = _columns(header)
     for needed, label in (("key", "Vorgangsschlüssel"), ("status", "Vorgangsstatus")):
         if needed not in cols:
             raise PlanImportError(f"Die Spalte „{label}“ fehlt. Gefunden: {', '.join(h for h in header if h) or '(keine Kopfzeile)'}. Erwartet wird der CSV-Export aus Jira Plans.")
-    body = [r for r in rows[1:] if any(c.strip() for c in r)]
-    if len(body) > max_issues:
-        raise PlanImportError(f"{len(body)} Tickets sind mehr als die Obergrenze von {max_issues}. Bitte den Plan einschränken (Filter in Jira Plans) und neu exportieren.")
+    body = []
+    for r in reader:          # zeilenweise und mit Abbruch an der Obergrenze: Eine riesige Datei soll nicht erst ganz im Speicher stehen, bevor sie abgelehnt wird
+        if any(c.strip() for c in r):
+            body.append(r)
+            if len(body) > max_issues:
+                raise PlanImportError(f"Die Datei hat mehr Tickets als die Obergrenze von {max_issues}. Bitte den Plan einschränken (Filter in Jira Plans) und neu exportieren.")
 
     issues, bad_points = [], 0
     for row in body:

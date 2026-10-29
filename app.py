@@ -23,6 +23,7 @@ from jira_evaluation import (
     check_consistency,
     de,
     delta_points,
+    md_escape,
     or_dash,
     pct,
     sprint_stats,
@@ -64,6 +65,8 @@ def _on_weight_edit(version, shown, base):
 def _clear_loaded():
     """Löscht die geladenen Daten der Sitzung und stellt das Upload-Feld zurück."""
     st.session_state.pop("loaded", None)
+    st.session_state.pop("overrides", None)          # geänderte Gewichte gehören zu den gelöschten Daten und dürfen nicht in die nächste Datei wandern
+    st.session_state["weights_version"] = st.session_state.get("weights_version", 0) + 1
     st.session_state["upload_version"] = st.session_state.get("upload_version", 0) + 1
 
 
@@ -164,7 +167,7 @@ def render_loaded(file_name, issues_all, report):
         st.warning("Die Datei enthält keine Tickets.")
         st.button("🗑️ Daten jetzt löschen", on_click=_clear_loaded, key="clear_loaded")
         st.stop()
-    st.success(f"Geladen: {file_name} mit {len(issues_all)} Tickets. Die Datei selbst behält das Werkzeug nicht; im Arbeitsspeicher dieser Sitzung bleiben nur die für die Berechnung nötigen Felder. "
+    st.success(f"Geladen: {md_escape(file_name)} mit {len(issues_all)} Tickets. Die Datei selbst behält das Werkzeug nicht; im Arbeitsspeicher dieser Sitzung bleiben nur die für die Berechnung nötigen Felder. "
                "Die Plattform kann die hochgeladene Datei bis zum Ende der Sitzung noch im Speicher halten.")
     st.button("🗑️ Daten jetzt löschen", on_click=_clear_loaded, key="clear_loaded", help="Verwirft die geladenen Tickets dieser Sitzung und stellt das Upload-Feld zurück.")
     for note in report.notes:
@@ -202,7 +205,7 @@ def render_sidebar(issues_all, root_label, ctx):
             up_key = A.parent_root(issues_all, current_root, ctx)
             if up_key != C.ROOT_ALL:
                 st.button("⏫ Ganzer Plan", on_click=_go_to, args=(C.ROOT_ALL,), key="nav_top", width="stretch")
-            st.button("⬆ Eine Stufe hoch: " + root_label(up_key).lstrip("↳ "), on_click=_go_to, args=(up_key,), key="nav_up", width="stretch",
+            st.button("⬆ Eine Stufe hoch: " + md_escape(root_label(up_key).lstrip("↳ ")), on_click=_go_to, args=(up_key,), key="nav_up", width="stretch",
                       help="Wechselt zum übergeordneten Ticket, das als Wurzel taugt, sonst zum ganzen Plan.")
         root = st.selectbox(
             "Teilprojekt (Wurzel)", root_options, key="root", format_func=root_label, disabled=not root_depth,
@@ -249,10 +252,10 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     for problem in check_consistency(a):
         st.error(f"Interne Prüfung verletzt: {problem}")
     if root != C.ROOT_ALL:
-        st.info(f"Die Auswertung ist auf **{root_label(root).lstrip('↳ ')}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
+        st.info(f"Die Auswertung ist auf **{md_escape(root_label(root).lstrip('↳ '))}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
     if a.n_excluded:
         bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
-        st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
+        st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct))
     # Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.

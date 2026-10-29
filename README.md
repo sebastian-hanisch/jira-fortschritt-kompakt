@@ -154,7 +154,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_tables.py` | Tabellen (Status-Matrix, Gegenprobe zu Jira, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |
 | `jira_charts.py` | Plotly-Diagramme |
 | `jira_privacy.py` | Filter, der Ausnahmemeldungen aus dem Protokoll nimmt |
-| `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten |
+| `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten; `test_oracle_progress.py` rechnet den Fortschritt unabhängig aus der Definition nach (Orakel) und vergleicht ihn für Zufallsprojekte, alle Regeln und mehrere Wurzeln; `test_oracle_tables.py` tut dasselbe für Status-Matrix, Sprint-Tabelle und Gegenprobe zu Jira |
 | `ruff.toml` | Lint-Regeln (`ruff check .`, läuft auch in der CI) |
 
 ## Lizenz

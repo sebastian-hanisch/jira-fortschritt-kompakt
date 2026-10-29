@@ -335,12 +335,17 @@ def _median_table(source, members, key_of) -> dict:
     return {k: float(median(v)) for k, v in groups.items()}
 
 
-def _plan_pool(plan_issues, ctx=None) -> list[int]:
-    """Die geschätzten zählenden Tickets des ganzen Plans (ohne zurückgewiesene): Grundlage der Mediane „im ganzen Plan“."""
-    return cached(ctx, "plan_pool", lambda: [j for j in select_atoms(plan_issues, skip=rejected_indices(plan_issues)) if plan_issues[j].points is not None])
+def _plan_pool(plan_issues, ctx=None, subtasks_out: bool = False) -> list[int]:
+    """Die geschätzten zählenden Tickets des ganzen Plans (ohne zurückgewiesene; mit `subtasks_out` auch ohne Sub-Tasks, wie bei der Sub-Task-Regel c): Grundlage der Mediane „im ganzen Plan“."""
+    def build():
+        skip = rejected_indices(plan_issues)
+        if subtasks_out:
+            skip = skip | frozenset(i for i, t in enumerate(plan_issues) if t.is_subtask)
+        return [j for j in select_atoms(plan_issues, skip=skip) if plan_issues[j].points is not None]
+    return cached(ctx, ("plan_pool", subtasks_out), build)
 
 
-def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None):
+def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None, subtasks_out: bool = False):
     """Funktion Ticketindex -> Gewicht für ein Ticket ohne Story Points nach `rule`. Gebaut werden nur die Mediantabellen, die die Regel braucht."""
     if rule == C.UNEST_ONE:
         return lambda i: 1.0
@@ -348,7 +353,7 @@ def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None):
         return lambda i: 0.0
     if rule == C.UNEST_PLAN:
         plan_depth = cached(ctx, "plan_depth", lambda: dict(zip((t.key for t in plan_issues), tree_depths(plan_issues), strict=True)))
-        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues, ctx), lambda j: plan_depth[plan_issues[j].key])
+        by_plan_level = _median_table(plan_issues, _plan_pool(plan_issues, ctx, subtasks_out), lambda j: plan_depth[plan_issues[j].key])
         return lambda i: by_plan_level.get(plan_depth.get(issues[i].key), 1.0)
     depth = tree_depths(issues, ctx)
     by_level = _median_table(issues, pool, lambda i: depth[i])
@@ -363,7 +368,7 @@ def _unestimated_weight(issues, pool, rule: str, plan_issues, ctx=None):
     if rule == C.UNEST_TEAM:
         by_team = _median_table(issues, pool, lambda i: issues[i].team)
         return lambda i: by_team.get(issues[i].team, 1.0)
-    plan_pool = _plan_pool(plan_issues, ctx)
+    plan_pool = _plan_pool(plan_issues, ctx, subtasks_out)
     plan_median = float(median([plan_issues[j].points for j in plan_pool])) if plan_pool else None
 
     def chain(i: int) -> float:         # Rückfallkette: Geschwister, Typ, Stufe, Median des ganzen Plans, sonst 1
@@ -388,18 +393,19 @@ def _shared_points(issues, atoms) -> dict[int, float]:
     return share
 
 
-def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False, ctx: dict | None = None) -> np.ndarray:
+def atom_weights(issues, atoms, rule: str = C.DEFAULT_UNEST, basis=None, plan=None, distribute: bool = False, ctx: dict | None = None, subtasks_out: bool = False) -> np.ndarray:
     """Gewicht je Atom: die Story Points des Tickets; fehlen sie, entscheidet die Regel (die Buchstaben stehen in `jira_constants`). Die Regeln mit Median nehmen den Median der geschätzten Atome
     aus `basis` (Voreinstellung: `atoms`, z. B. die gezählten Atome, wenn die Gewichte zurückgewiesener Atome bestimmt werden), und zwar aus derselben Gruppe wie das Ticket: A gleiche Stufe
     (Tiefe im Ticket-Baum), C gleicher Typ, D gleiches übergeordnetes Ticket, E gleiches Team; B gleiche Stufe im ganzen Plan (`plan`, Voreinstellung `issues`: die Stufe zählt dann in
     den Tiefen des ganzen Plans, nicht des Teilbaums); F die erste Gruppe der Kette Geschwister, Typ, Stufe, sonst der Median aller geschätzten Atome des ganzen Plans. Gibt es in der
     Gruppe kein geschätztes Atom, gilt 1. H setzt 1, I setzt 0 (das Ticket zählt dann nicht im Gewicht). Mit `distribute` teilen die Atome unter einer geschätzten, nicht
     zusammenfassenden Eltern-Story die Story Points der Story gleichmäßig unter sich auf, wenn keines von ihnen eigene Story Points hat; sonst gilt die Regel. `ctx` (siehe `cached`) lässt
-    viele Aufrufe mit denselben `issues` und `plan`, aber verschiedenen Regeln die Stufen und den Pool des Plans nur einmal berechnen."""
+    viele Aufrufe mit denselben `issues` und `plan`, aber verschiedenen Regeln die Stufen und den Pool des Plans nur einmal berechnen. Mit `subtasks_out` (Sub-Task-Regel c) zählen Sub-Tasks auch im Pool
+    des ganzen Plans nicht."""
     if rule not in C.UNEST_RULES:
         raise KeyError(rule)
     pool = [i for i in (atoms if basis is None else basis) if issues[i].points is not None]
-    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan, ctx)
+    fill = _unestimated_weight(issues, pool, rule, issues if plan is None else plan, ctx, subtasks_out)
     share = _shared_points(issues, atoms) if distribute else {}
     return np.array([issues[i].points if issues[i].points is not None else share.get(i, fill(i)) for i in atoms], dtype=float)
 

@@ -251,3 +251,10 @@ def test_the_delimiter_comes_from_the_header_line_not_from_the_titles():
     titles = "Vorgangsschlüssel;Vorgangsstatus;Titel\nA-1;Done;" + "eins, zwei, drei, vier, fünf, sechs, sieben, acht, neun, zehn"
     issues, _ = J.read_plan(titles.encode("utf-8"))
     assert [(i.key, i.status) for i in issues] == [("A-1", "Done")]
+
+
+def test_a_huge_file_is_refused_without_parsing_all_of_it():
+    lines = ["Vorgangsschlüssel;Vorgangsstatus"] + [f"P-{n};Done" for n in range(200)]
+    with pytest.raises(J.PlanImportError, match="Obergrenze von 50"):
+        J.read_plan("\n".join(lines).encode("utf-8"), max_issues=50)
+    assert len(J.read_plan("\n".join(lines[:51]).encode("utf-8"), max_issues=50)[0]) == 50

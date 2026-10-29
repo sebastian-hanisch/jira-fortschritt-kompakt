@@ -39,7 +39,7 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name
     der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
-    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan)
+    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan, subtasks_out=a.settings.sub_rule == C.SUB_SELF)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({credit_text(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
