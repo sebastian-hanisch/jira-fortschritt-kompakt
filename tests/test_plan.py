@@ -104,7 +104,7 @@ def test_a_file_without_estimate_parent_and_sprint_columns_warns_instead_of_gues
 
 def test_unreadable_estimates_count_as_unestimated_and_are_reported():
     issues, report = J.read_plan("Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Done;5\nA-2;Done;viel\nA-3;Done;1,5\n".encode())
-    assert [i.points for i in issues] == [5.0, None, 1.5] and any("Nicht lesbare Story Points (keine Zahl): 1" in n for n in report.notes)
+    assert [i.points for i in issues] == [5.0, None, 1.5] and any("Nicht lesbare Story Points (keine Zahl, nicht endlich oder negativ): 1" in n for n in report.notes)
     assert J.parse_number(None) is None and J.parse_number(True) is None and J.parse_number(2) == 2.0 and J.parse_number(" 3,5 ") == 3.5 and J.parse_number("") is None
 
 
@@ -211,3 +211,43 @@ def test_jiras_own_progress_columns_are_read_for_the_comparison_only():
 @pytest.mark.parametrize("text, expected", [("35", 0.35), ("35,5", 0.355), ("35 %", 0.35), (" 100% ", 1.0), ("0", 0.0), ("", None), ("viel", None), (None, None)])
 def test_percent_values_are_read_as_shares(text, expected):
     assert J.parse_percent(text) == pytest.approx(expected) if expected is not None else J.parse_percent(text) is None
+
+
+# ---------------------------------------------------------------- Fehler, die die Prüfung auf Randfälle fand
+
+HEAD = "Hierarchie;Titel;Story Points;Übergeordnetes Element;Vorgangsschlüssel;Vorgangsstatus\n"
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "1e999", "-3", "-0,5"])
+def test_story_points_that_are_not_finite_or_negative_count_as_unreadable(value):
+    issues, report = J.read_plan((HEAD + f"Story;A;{value};;A-1;Done\nStory;B;2;;A-2;To Do\n").encode("utf-8"))
+    assert [i.points for i in issues] == [None, 2.0] and any("nicht endlich oder negativ): 1" in n for n in report.notes)
+
+
+def test_the_same_checks_apply_to_jiras_own_numbers():
+    assert J.parse_number("nan") is None and J.parse_number(float("inf")) is None and J.parse_number(-1) is None and J.parse_number("0") == 0.0
+    assert J.parse_percent("nan") is None and J.parse_percent("-5 %") is None and J.parse_percent("50 %") == 0.5
+
+
+def test_duplicate_keys_self_parents_and_cycles_are_reported():
+    issues, report = J.read_plan((HEAD + "Epic;E;;;A-1;In Arbeit\nStory;B;2;A-1;A-2;To Do\nStory;C;3;A-1;A-2;Done\n").encode("utf-8"))
+    assert any("Schlüssel, die mehrfach vorkommen: 1 (A-2)" in n for n in report.notes) and len(issues) == 3
+    issues, report = J.read_plan((HEAD + "Story;A;3;A-1;A-1;Done\nStory;B;2;;A-2;To Do\n").encode("utf-8"))
+    assert issues[0].parent == "" and any("sich selbst als übergeordnetes Ticket nennen: 1" in n for n in report.notes) and not any("keinem Ticket" in n for n in report.notes)
+    issues, report = J.read_plan((HEAD + "Story;A;3;A-2;A-1;Done\nStory;B;2;A-1;A-2;To Do\nStory;C;1;;A-3;To Do\n").encode("utf-8"))
+    assert any("Zyklus der Eltern-Verweise: 2 (A-1, A-2)" in n for n in report.notes)
+    clean = J.read_plan((HEAD + "Epic;E;;;A-1;In Arbeit\nStory;B;2;A-1;A-2;To Do\n").encode("utf-8"))[1]
+    assert not any(word in n for n in clean.notes for word in ("mehrfach", "Zyklus", "selbst"))
+
+
+def test_a_sep_line_from_excel_is_skipped_and_names_the_delimiter():
+    issues, _ = J.read_plan(("sep=;\n" + HEAD + "Story;A;3;;A-1;Done\n").encode("utf-8"))
+    assert [i.key for i in issues] == ["A-1"]
+    issues, _ = J.read_plan("sep=,\nVorgangsschlüssel,Vorgangsstatus,Titel\nA-1,Done,\"a; b; c; d\"\n".encode("utf-8"))
+    assert [(i.key, i.summary) for i in issues] == [("A-1", "a; b; c; d")]
+
+
+def test_the_delimiter_comes_from_the_header_line_not_from_the_titles():
+    titles = "Vorgangsschlüssel;Vorgangsstatus;Titel\nA-1;Done;" + "eins, zwei, drei, vier, fünf, sechs, sieben, acht, neun, zehn"
+    issues, _ = J.read_plan(titles.encode("utf-8"))
+    assert [(i.key, i.status) for i in issues] == [("A-1", "Done")]

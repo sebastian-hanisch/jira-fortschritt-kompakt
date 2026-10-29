@@ -295,3 +295,8 @@ def test_jiras_three_progress_columns_are_checked_against_each_other():
     assert bad[0][T.DERIVED_COL] == pytest.approx(0.4) and bad[0][T.GAP_COL] == pytest.approx(10.0)
     assert T.jira_consistency(()) == (0, []) and T.jira_consistency((Issue(key="G", jira_progress=0.41, jira_done=4.0, jira_left=6.0),)) == (1, [])        # genau 1 Punkt Abstand ist erlaubt
     assert T.jira_consistency((Issue(key="H", jira_progress=0.42, jira_done=4.0, jira_left=6.0),))[1][0][T.ROW_COL] == "H"
+
+
+def test_csv_cells_that_excel_would_read_as_formulas_are_marked_as_text():
+    raw = T.rows_to_csv([{"Ticket": "=HYPERLINK(\"x\")", "Titel": "+1", "Name": "@sum", "Gruppe": "-a", "Zahl": -2.5, "Text": "ok"}]).decode("utf-8-sig")
+    assert raw == "Ticket;Titel;Name;Gruppe;Zahl;Text\n'=HYPERLINK(\"x\");'+1;'@sum;'-a;-2,5;ok\n"

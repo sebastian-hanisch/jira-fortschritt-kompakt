@@ -302,3 +302,10 @@ def test_jiras_columns_are_checked_against_each_other_in_the_comparison():
     no_values = _open(JIRA_PROGRESS_CSV.replace(b";4;6\n", b";;\n"))
     _ok(no_values)
     assert any("Kein Ticket hat alle drei Werte" in c.value for c in no_values.caption)
+
+
+def test_unusable_story_points_do_not_break_the_page_and_are_reported():
+    data = "Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Done;nan\nA-2;To Do;inf\nA-3;Done;-4\nA-4;Done;2\n".encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    assert at.metric[0].value == "75.0 %" and any("nicht endlich oder negativ): 3" in w.value for w in at.warning)          # die drei unlesbaren Tickets wiegen wie der Median (2): 6 von 8 Story Points sind Done

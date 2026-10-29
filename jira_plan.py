@@ -7,11 +7,13 @@ Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
 import csv
 import io
+import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field, replace
 
 import jira_constants as C
-from jira_core import Issue
+from jira_core import Issue, cycle_members
 
 
 class PlanImportError(Exception):
@@ -50,18 +52,20 @@ _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgab
 
 
 def parse_number(text) -> float | None:
-    """Story Points aus Text oder Zahl; Komma oder Punkt als Dezimaltrenner, leer oder unlesbar = None."""
+    """Story Points aus Text oder Zahl; Komma oder Punkt als Dezimaltrenner. Leer, unlesbar, nicht endlich („nan“, „inf“, „1e999“) oder negativ = None: Ein solcher Wert würde jede Summe verfälschen."""
     if text is None or isinstance(text, bool):
         return None
     if isinstance(text, (int, float)):
-        return float(text)
-    t = str(text).strip().replace(",", ".")
-    if not t:
-        return None
-    try:
-        return float(t)
-    except ValueError:
-        return None
+        value = float(text)
+    else:
+        t = str(text).strip().replace(",", ".")
+        if not t:
+            return None
+        try:
+            value = float(t)
+        except ValueError:
+            return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def parse_percent(text) -> float | None:
@@ -127,7 +131,7 @@ def _resolve_parents(issues: list[Issue]) -> list[Issue]:
             by_title.setdefault(i.summary.strip().lower(), []).append(i.key)
     out = []
     for issue in issues:
-        p = issue.parent
+        p = "" if issue.parent == issue.key else issue.parent          # ein Ticket, das sich selbst als Eltern nennt, hat keine
         if p and p not in keys:
             m = _KEY_AT_START.match(p)
             found = m.group(1) if m and m.group(1) in keys else ""
@@ -165,7 +169,11 @@ def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, 
     return issue, bool(raw_points) and points is None
 
 
-def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: int, bad_points: int) -> list[str]:
+def _first_keys(keys, limit: int = 3) -> str:
+    return ", ".join(keys[:limit]) + (" …" if len(keys) > limit else "")
+
+
+def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: int, bad_points: int, duplicate_keys=(), self_parents: int = 0, cycle_keys=()) -> list[str]:
     """Was dem Nutzer vor der ersten Zahl gesagt werden muss: fehlende Spalten, verlorene Eltern, unlesbare Story Points."""
     notes = []
     if "points" not in cols:
@@ -179,15 +187,28 @@ def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: i
     if lost_parents:
         notes.append(f"{lost_parents} Verweise auf übergeordnete Tickets konnten keinem Ticket der Datei zugeordnet werden (Eltern außerhalb der Datei, oder ein Titel statt eines Schlüssels, der nicht eindeutig ist).")
     if bad_points:
-        notes.append(f"Nicht lesbare Story Points (keine Zahl): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+        notes.append(f"Nicht lesbare Story Points (keine Zahl, nicht endlich oder negativ): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+    if duplicate_keys:
+        notes.append(f"Schlüssel, die mehrfach vorkommen: {len(duplicate_keys)} ({_first_keys(duplicate_keys)}). Die Zuordnung zu übergeordneten Tickets und die Wahl eines Teilprojekts können dann falsch sein. Bitte den Export prüfen.")
+    if self_parents:
+        notes.append(f"Tickets, die sich selbst als übergeordnetes Ticket nennen: {self_parents}. Dieser Verweis wird ignoriert.")
+    if cycle_keys:
+        notes.append(f"Tickets in einem Zyklus der Eltern-Verweise: {len(cycle_keys)} ({_first_keys(cycle_keys)}). Sie zählen nicht, ihre Story Points fehlen im Fortschritt. Bitte den Export prüfen.")
     return notes
 
 
 def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple[Issue, ...], ImportReport]:
     """Liest den CSV-Export aus Jira Plans (Trennzeichen Semikolon oder Komma). Pflicht sind Schlüssel und Status; alles andere ist optional."""
     text = _decode(data)
-    sample = text[:4096]
-    delimiter = ";" if sample.count(";") > sample.count(",") else ","
+    first, _, rest = text.partition("\n")
+    if first.strip().lower().startswith("sep="):          # Excel schreibt manchmal „sep=;“ als erste Zeile: sie nennt das Trennzeichen und ist keine Kopfzeile
+        declared = first.strip()[4:5]
+        text, first = rest, rest.partition("\n")[0]
+        delimiter = declared if declared in (";", ",") else None
+    else:
+        delimiter = None
+    if delimiter is None:
+        delimiter = ";" if first.count(";") > first.count(",") else ","          # die Kopfzeile besteht fast nur aus Trennzeichen; Titel mit Kommas verfälschen sie nicht
     rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
     if not rows:
         raise PlanImportError("Die Datei ist leer.")
@@ -208,9 +229,12 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
         issues.append(issue)
         bad_points += unreadable
     with_parent = sum(bool(i.parent) for i in issues)
+    self_parents = sum(i.parent == i.key for i in issues)
     issues = _resolve_parents(issues)
-    lost_parents = with_parent - sum(bool(i.parent) for i in issues)
+    lost_parents = with_parent - self_parents - sum(bool(i.parent) for i in issues)
+    duplicate_keys = [key for key, n in Counter(i.key for i in issues).items() if n > 1]
+    cycle_keys = [issues[n].key for n in cycle_members(issues)]
     report = ImportReport(issues=len(issues))
     report.columns = coverage_rows(issues, {name: ", ".join(dict.fromkeys(header[i].strip() for i in idx)) for name, idx in cols.items()})
-    report.notes = _report_notes(cols, header, lost_parents, bad_points)
+    report.notes = _report_notes(cols, header, lost_parents, bad_points, duplicate_keys, self_parents, cycle_keys)
     return tuple(issues), report

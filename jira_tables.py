@@ -245,7 +245,8 @@ def rows_to_csv(rows: list[dict]) -> bytes:
             return ""
         if isinstance(v, float):
             return repr(v).replace(".", ",")
-        return str(v).replace(";", ",").replace("\n", " ")
+        text = str(v).replace(";", ",").replace("\n", " ")
+        return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text          # Excel liest solche Zellen sonst als Formel (CSV-Injection)
     header = list(rows[0])
     lines = [";".join(h.replace(";", ",") for h in header)] + [";".join(cell(r.get(h)) for h in header) for r in rows]
     return ("\n".join(lines) + "\n").encode("utf-8-sig")

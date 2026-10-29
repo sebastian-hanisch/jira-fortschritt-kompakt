@@ -161,7 +161,7 @@ def unrecognized_note(rows: list[tuple[str, int, float]], total_weight: float, l
     if not rows:
         return ""
     n, w = sum(r[1] for r in rows), sum(r[2] for r in rows)
-    names = ", ".join(f"„{status}“ ({count})" for status, count, _ in rows[:limit]) + (f" und {len(rows) - limit} weitere" if len(rows) > limit else "")
+    names = ", ".join(f"„{status or '(ohne Status)'}“ ({count})" for status, count, _ in rows[:limit]) + (f" und {len(rows) - limit} weitere" if len(rows) > limit else "")
     share = f" ({de(100 * w / total_weight)} % des Gewichts)" if total_weight > 0 else ""
     return (f"{n} zählende Tickets{share} stehen in Status, deren Name keine Regel kennt und die deshalb 0 % zählen: {names}. Ist das richtig (noch nicht begonnen), passt alles; sonst das Gewicht in der Tabelle "
             "„Gewichte der Status“ ändern.")

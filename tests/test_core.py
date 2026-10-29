@@ -301,3 +301,13 @@ def test_the_sprint_of_a_counting_ticket_is_its_last_one_or_the_group_without_sp
 def test_assigning_labels_splits_a_ticket_with_several_labels_into_equal_shares():
     first = A.assign_labels([["Sprint 10"], ["Sprint 2", "Sprint 10"], ["(ohne Sprint)"]])
     assert first.labels == ("Sprint 2", "Sprint 10", "(ohne Sprint)") and first.share.tolist() == [1.0, 0.5, 0.5, 1.0]
+
+
+def test_cycle_members_are_the_tickets_on_a_loop_of_parent_references_and_nothing_else():
+    issues = (Issue(key="A", parent="B"), Issue(key="B", parent="A"), Issue(key="C", parent="A"),        # A und B bilden den Zyklus, C hängt daran
+              Issue(key="D", parent="D"), Issue(key="E"), Issue(key="F", parent="E"), Issue(key="G", parent="X"))
+    assert A.cycle_members(issues) == [0, 1, 3] and A.cycle_members(()) == [] and A.cycle_members(make_mini_for_cycles()) == []
+
+
+def make_mini_for_cycles():
+    return (Issue(key="E"), Issue(key="S", parent="E"), Issue(key="T", parent="S"))

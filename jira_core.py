@@ -223,6 +223,25 @@ def select_atoms(issues, skip: frozenset[int] = frozenset()) -> list[int]:
     return [i for i, t in enumerate(issues) if i not in skip and not t.is_epic and t.key not in parents]
 
 
+def cycle_members(issues) -> list[int]:
+    """Indizes der Tickets, die in einem Zyklus der Eltern-Verweise liegen (A hat B als Eltern, B hat A; auch ein Ticket, das sich selbst als Eltern nennt). Sie haben je ein Kind, sind also nie Blätter
+    und zählen deshalb nicht; Tickets darunter bleiben unberührt."""
+    index = {t.key: n for n, t in enumerate(issues)}
+    state = [0] * len(issues)          # 0 nicht besucht, 1 auf dem aktuellen Weg, 2 fertig
+    members: list[int] = []
+    for start in range(len(issues)):
+        path, node = [], start
+        while node is not None and state[node] == 0:
+            state[node] = 1
+            path.append(node)
+            node = index.get(issues[node].parent)
+        if node is not None and state[node] == 1:
+            members.extend(path[path.index(node):])
+        for visited in path:
+            state[visited] = 2
+    return sorted(members)
+
+
 def tree_depths(issues, ctx: dict | None = None) -> list[int]:
     """Tiefe jedes Tickets im Ticket-Baum (0 = oberste Stufe der Daten, bei einem Teilprojekt die Wurzel); die Stufe des Tickets im Sinne von „gleiche Stufe“. `ctx`: siehe `cached`."""
     def build():
