@@ -1,7 +1,7 @@
 # Jira-Fortschritt kompakt
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
-Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Hierarchiegraph und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
+Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Teilprojektbaum und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
 Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
@@ -71,15 +71,15 @@ Sonst gibt es nichts einzustellen.
 
 ## Hoch und runter im Baum
 
-**Runter:** Ein Klick auf eine Kachel oder einen Knoten des Graphen, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Graph und die Tabellen folgen der neuen Wurzel. Ein Klick auf
+**Runter:** Ein Klick auf eine Kachel oder einen Knoten des Teilprojektbaums, der Kinder hat, öffnet ihn als Teilprojekt; die Zahlen, die Kachelansicht, der Teilprojektbaum und die Tabellen folgen der neuen Wurzel. Ein Klick auf
 ein Blatt (ein Ticket ohne Kinder) bewirkt nichts. **Hoch:** Die Knöpfe über der Auswahl in der Seitenleiste gehen eine Stufe hoch („Eine Stufe hoch“) oder zurück zum ganzen Plan („Ganzer Plan“). Alternativ
 wechselt die Auswahl „Teilprojekt“ die Wurzel. Der Klick kommt in Streamlit als Auswahl eines Diagrammpunkts an (`on_select`); den Weg von der Auswahl bis zur neuen Wurzel prüfen die Tests und ein Mausklick im Browser
-(Chromium-basiert, erfundener Plan mit 37 Tickets, Kachel- und Graphansicht). Wenn der Klick bei euch nichts bewirkt,
+(Chromium-basiert, erfundener Plan mit 37 Tickets, Kachelansicht und Teilprojektbaum). Wenn der Klick bei euch nichts bewirkt,
 bitte melden.
 
 ## Ausgabe
 
-Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Hierarchiegraph und eine Tabelle: die
+Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Teilprojektbaum und eine Tabelle: die
 **Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Haben Tickets einen Sprint, kommt der **Fortschritt je Sprint** dazu (Balken und Tabelle: Tickets, Gewicht, Fortschritt, „nur Done“, mitgenommene Tickets); jedes zählende Ticket steht in seinem letzten Sprint, eine Sub-Task ohne Sprint erbt den ihrer Story. Enthält der Export Jiras eigene Fortschrittsspalten, kommt die **Gegenprobe** dazu: je Ticket Jiras Wert neben „Nur Done, nach Gewicht“ und der Abstand in Prozentpunkten.
 
 ## Datenschutz
@@ -123,7 +123,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
 - **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung zählt 0 %, ohne Warnung.
-- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Graphen höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 20000 Tickets und 50 MB je Datei.
+- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum höchstens 250 Knoten (die tiefste Ebene wird zusammengefasst), höchstens 20000 Tickets und 50 MB je Datei.
 - **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
 
@@ -132,7 +132,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
 - **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
 - **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
-- **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachel- und Graphansicht an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
+- **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Gegenprobe zu Jira.** Jiras eigene Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ werden nur neben „Nur Done, nach Gewicht“ gezeigt und gehen in keine Rechnung ein. Wie Jira sie berechnet, steht nicht im Export; die Gegenprobe ist an keinem echten Export mit Inhalten geprüft.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
@@ -149,7 +149,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `app.py` | Oberfläche (Streamlit): `main()` setzt die Seite aus `render_*`-Schritten zusammen |
 | `jira_texts.py` | Die langen Erklärtexte der App |
 | `jira_plan.py` | Einlesen des Plan-Exports, Bearbeiter ersetzen |
-| `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Hierarchiegraph |
+| `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen (Status-Matrix, Gegenprobe zu Jira, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |
 | `jira_charts.py` | Plotly-Diagramme |

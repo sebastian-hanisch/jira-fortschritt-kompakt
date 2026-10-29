@@ -1,4 +1,4 @@
-"""Kern an der Mini-Instanz (tests/conftest.py), alle Zahlen von Hand: Atome, Gewichte, Gruppen, Teilprojekt, Zeitraum, Hierarchiestufen, Hierarchiegraph."""
+"""Kern an der Mini-Instanz (tests/conftest.py), alle Zahlen von Hand: Atome, Gewichte, Gruppen, Teilprojekt, Zeitraum, Hierarchiestufen, Teilprojektbaum."""
 
 import numpy as np
 import pytest
@@ -139,7 +139,7 @@ def test_summary_level_is_always_the_tickets_directly_below_the_root(mini):
     assert sorted(set(A.level_labels(mini, A.select_atoms(mini), A.summary_level(C.ROOT_ALL)))) == ["B1", "E1: Epic A", "E2: Epic B"]         # die obersten Tickets
 
 
-# ---------------------------------------------------------------- Hierarchiegraph
+# ---------------------------------------------------------------- Teilprojektbaum
 
 def _graph(mini, **kw):
     atoms = A.select_atoms(mini)

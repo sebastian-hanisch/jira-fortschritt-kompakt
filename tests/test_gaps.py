@@ -15,7 +15,7 @@ import jira_plan as J
 from conftest import make_mini
 from jira_core import Issue
 
-# ---------------------------------------------------------------- Hierarchiegraph: Zeilen und Fortschritt
+# ---------------------------------------------------------------- Teilprojektbaum: Zeilen und Fortschritt
 
 
 def _graph_of(issues, w, c, credit_of, **kw):

@@ -257,7 +257,7 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
 
 
 def render_charts(a, root):
-    """Balken je Ticket unter der Wurzel, Kachelansicht und Hierarchiegraph (die beiden letzten mit Klick-Navigation)."""
+    """Balken je Ticket unter der Wurzel, Kachelansicht und Teilprojektbaum (die beiden letzten mit Klick-Navigation)."""
     unit = C.UNIT
     st.markdown("### Fortschritt je Ticket direkt unter " + _below(root))
     st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
@@ -273,13 +273,13 @@ def render_charts(a, root):
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 
-    st.markdown("### 🌳 Hierarchiegraph")
+    st.markdown("### 🌳 Teilprojektbaum")
     g = a.tree
     graph_key = f"chart_graph_{root}"
     st.plotly_chart(build_tree_graph(g, unit), width="stretch", key=graph_key, on_select=partial(_drill, graph_key), selection_mode="points")
     st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
                "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt** (ein Blatt reagiert nicht)."
-               + (f" Der Graph hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
+               + (f" Der Teilprojektbaum hätte {g.n_total} Knoten; gezeichnet werden die obersten Ebenen bis Ebene {g.shown_depth} (höchstens {C.GRAPH_MAX_NODES} Knoten). Ein Teilprojekt als Wurzel zeigt mehr Tiefe." if g.hidden.any() else ""))
 
 
 def render_matrix(issues, a, root):

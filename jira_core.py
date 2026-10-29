@@ -274,7 +274,7 @@ def parent_root(issues, root: str, ctx: dict | None = None) -> str:
 
 def root_for_click(issues, key: str) -> str | None:
     """Wohin führt ein Klick auf das Ticket `key` in einem Diagramm? Auf ein Ticket, das als Wurzel taugt (siehe `root_choices`, also eines mit Kindern), und auf das ganze Projekt; sonst (Blatt,
-    unbekannter Schlüssel, die Sammelwurzel „Projekt“ des Graphen) nirgendwohin (None)."""
+    unbekannter Schlüssel, die Sammelwurzel „Projekt“ des Teilprojektbaums) nirgendwohin (None)."""
     return key if key == C.ROOT_ALL or key in dict(root_choices(issues)) else None
 
 
@@ -511,11 +511,11 @@ def overall(w: np.ndarray, c: np.ndarray, done: np.ndarray) -> tuple[float, floa
     return p_w, p_d, p_n
 
 
-# ---------------------------------------------------------------- Hierarchiegraph
+# ---------------------------------------------------------------- Teilprojektbaum
 
 @dataclass(frozen=True)
 class TreeGraph:
-    """Knoten des Hierarchiegraphen, ein Eintrag je Knoten in Tiefensuche-Reihenfolge (Eltern vor Kindern). `x` ist die Tiefe, `y` die Zeile; Elternknoten stehen mittig
+    """Knoten des Teilprojektbaums, ein Eintrag je Knoten in Tiefensuche-Reihenfolge (Eltern vor Kindern). `x` ist die Tiefe, `y` die Zeile; Elternknoten stehen mittig
     vor ihren Kindern. `progress` ist NaN, wenn der Knoten nichts Messbares trägt."""
 
     keys: tuple[str, ...]

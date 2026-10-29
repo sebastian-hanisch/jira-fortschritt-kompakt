@@ -29,7 +29,7 @@ COMPLETED_MIN_CREDIT = 0.9      # „Completed“ der Status-Matrix: alle Status
 NO_SPRINT = "(ohne Sprint)"      # Gruppe der Tickets, die weder selbst noch über ein übergeordnetes Ticket einen Sprint haben (die Klammer sortiert sie ans Ende)
 
 ROOT_ALL = ""              # Wurzel der Auswertung: leer = ganzes Projekt
-GRAPH_MAX_NODES = 250      # Hierarchiegraph: mehr Knoten lassen sich nicht lesen; die tiefste Ebene wird dann zusammengefasst
+GRAPH_MAX_NODES = 250      # Teilprojektbaum: mehr Knoten lassen sich nicht lesen; die tiefste Ebene wird dann zusammengefasst
 GRAPH_LABEL_MAX = 60       # bis zu dieser Knotenzahl trägt jeder Knoten seinen Schlüssel, darüber nur die Knoten mit Kindern
 
 COLOR_DONE = "#2F6B65"

@@ -1,4 +1,4 @@
-"""Plotly-Abbildungen: Fortschrittsbalken, Kachelansicht und Hierarchiegraph. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
+"""Plotly-Abbildungen: Fortschrittsbalken, Kachelansicht und Teilprojektbaum. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
 
 from dataclasses import dataclass
 
@@ -100,7 +100,7 @@ TILE_PAD, TILE_HEAD = 0.5, 3.6     # Rand und Kopfzeile einer Kachel der Stufe 1
 
 
 def tile_layout(g) -> list[Tile]:
-    """Kacheln für die Kinder der Wurzel des Graphen (Knoten 0) und deren Kinder, Fläche = Gewicht. Knoten ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) haben keine Kachel."""
+    """Kacheln für die Kinder der Wurzel des Teilprojektbaums (Knoten 0) und deren Kinder, Fläche = Gewicht. Knoten ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) haben keine Kachel."""
     kids: dict[int, list[int]] = {}
     for k in range(len(g.keys)):
         if g.parent[k] >= 0:

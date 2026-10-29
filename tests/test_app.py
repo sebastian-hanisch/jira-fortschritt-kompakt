@@ -44,7 +44,7 @@ def test_the_treemap_and_the_hierarchy_graph_are_shown():
     at = _open(plan_csv(make_mini()))
     _ok(at)
     headings = [m.value for m in at.markdown]
-    assert any("Kachelansicht" in h for h in headings) and any("Hierarchiegraph" in h for h in headings)
+    assert any("Kachelansicht" in h for h in headings) and any("Teilprojektbaum" in h for h in headings)
     only_unestimated = _open("Vorgangsschlüssel;Vorgangsstatus\nA-1;Done\n".encode())
     at = only_unestimated
     at.sidebar.selectbox(key="unest_rule").set_value(C.UNEST_IGNORE).run(timeout=TIMEOUT)
