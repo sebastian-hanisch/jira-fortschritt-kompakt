@@ -1,6 +1,5 @@
 """Tabellen von Hand: Status-Matrix je Ticket unter der Wurzel, Wirkung der Regeln und die Ausgabe als CSV, Wiki-Markup und HTML für Jira und Confluence."""
 
-from dataclasses import replace
 
 import pytest
 
@@ -224,35 +223,6 @@ def test_assumptions_text_has_the_three_parts_and_matches_the_readme():
     assert text.strip() in readme                                                                  # die README gibt denselben Text wieder
 
 
-def _with_jira():
-    return tuple(replace(t, jira_progress=0.5, jira_done=19.0, jira_left=19.0) if t.key == "E1" else t for t in ITEMS)
-
-
-def test_jira_crosscheck_puts_jiras_values_next_to_the_done_share_of_the_same_tickets():
-    items = _with_jira()
-    a = ev.analyse(items)
-    rows = {r[T.ROW_COL]: r for r in T.jira_crosscheck(items, a)}
-    e1, e2 = rows["E1: Eins"], rows["E2: Zwei"]
-    assert (e1[T.JIRA_PROGRESS_COL], e1[T.JIRA_DONE_COL], e1[T.JIRA_LEFT_COL]) == (0.5, 19.0, 19.0)
-    assert e1[T.OWN_TOTAL_COL] == 38.0 and e1[T.OWN_DONE_COL] == pytest.approx(8 / 38)                       # nur Ready4Prod (S7) zählt als fertig; die 7 von S8 (Rejected) zählen nicht
-    assert e1[T.GAP_COL] == pytest.approx(100 * (0.5 - 8 / 38))
-    assert e2[T.JIRA_PROGRESS_COL] is None and e2[T.GAP_COL] is None and e2[T.OWN_DONE_COL] == pytest.approx(4 / 15)         # ohne Jira-Wert kein Abstand
-    assert list(e1) == [T.ROW_COL, T.JIRA_PROGRESS_COL, T.JIRA_DONE_COL, T.JIRA_LEFT_COL, T.OWN_DONE_COL, T.OWN_TOTAL_COL, T.GAP_COL]
-
-
-def test_jira_crosscheck_follows_the_subproject_and_is_offered_only_with_jira_values():
-    assert T.has_jira_progress(_with_jira()) and not T.has_jira_progress(ITEMS)
-    sub = scope_issues(_with_jira(), "E1")
-    rows = T.jira_crosscheck(sub, ev.analyse(sub, ev.Settings(root="E1")))
-    assert {r[T.ROW_COL] for r in rows} == {"S1", "S2", "S3", "S4", "S5", "S6", "S7"} and all(r[T.JIRA_PROGRESS_COL] is None for r in rows)       # Jiras Wert für E1 selbst steht über dieser Stufe
-
-
-def test_jira_crosscheck_with_a_weightless_group_has_no_done_share():
-    items = (Issue(key="E", type="Epic", jira_progress=0.2), Issue(key="S", parent="E", status="Done"))
-    rows = T.jira_crosscheck(items, ev.analyse(items, ev.Settings(unest_rule=C.UNEST_IGNORE)))
-    assert rows[0][T.OWN_DONE_COL] is None and rows[0][T.GAP_COL] is None
-
-
 def test_sprint_rows_put_every_counting_ticket_into_its_last_sprint_by_hand():
     from conftest import make_mini
     mini = make_mini()
@@ -283,18 +253,6 @@ def test_sprint_statistics_for_the_chart_match_the_table():
     stats = ev.sprint_stats(mini, a)
     assert stats.labels == ("Sprint 1", "Sprint 2", C.NO_SPRINT) and stats.weight.tolist() == [3.0, 5.5, 2.0] and stats.count.tolist() == [1.0, 4.0, 1.0]
     assert stats.progress.tolist() == pytest.approx([1.0, 4 / 5.5, 0.0]) and stats.unestimated.tolist() == [0.0, 3.0, 0.0]          # S4, T1 und T2 haben keine eigenen Story Points
-
-
-def test_jiras_three_progress_columns_are_checked_against_each_other():
-    ok = Issue(key="A", jira_progress=0.4, jira_done=4.0, jira_left=6.0)
-    rounded = Issue(key="B", jira_progress=0.33, jira_done=1.0, jira_left=2.0)              # 33,3 % gerundet auf 33: im erlaubten Abstand
-    off = Issue(key="C", jira_progress=0.5, jira_done=4.0, jira_left=6.0)
-    unknown = (Issue(key="D", jira_progress=0.5), Issue(key="E", jira_progress=0.0, jira_done=0.0, jira_left=0.0), Issue(key="F"))        # fehlende Werte und leere Summe: nicht geprüft
-    checked, bad = T.jira_consistency((ok, rounded, off, *unknown))
-    assert checked == 3 and [row[T.ROW_COL] for row in bad] == ["C"]
-    assert bad[0][T.DERIVED_COL] == pytest.approx(0.4) and bad[0][T.GAP_COL] == pytest.approx(10.0)
-    assert T.jira_consistency(()) == (0, []) and T.jira_consistency((Issue(key="G", jira_progress=0.41, jira_done=4.0, jira_left=6.0),)) == (1, [])        # genau 1 Punkt Abstand ist erlaubt
-    assert T.jira_consistency((Issue(key="H", jira_progress=0.42, jira_done=4.0, jira_left=6.0),))[1][0][T.ROW_COL] == "H"
 
 
 def test_csv_cells_that_excel_would_read_as_formulas_are_marked_as_text():

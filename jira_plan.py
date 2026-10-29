@@ -1,8 +1,8 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Story Points, Sprint und Team. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Dazu Jiras eigene Fortschrittsspalten („Fortschritt (%)“, „Fortschritt
-abgeschlossen (SP)“, „Verbleibender Fortschritt (SP)“), die nur der Gegenprobe dienen und in keine Rechnung eingehen. Spalten mit „(hochrechnen)“ sind Summen über die
+Story Points, Sprint und Team. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
+Schätzungsspalten) werden bewusst nicht gelesen: Atlassian nennt keine Formel, und die Werte beziehen auch im Plan ausgeblendete Vorgänge und alle Hierarchieebenen ein. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
 import csv
@@ -31,7 +31,7 @@ class ImportReport:
 
 FIELD_LABELS = (
     ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
-    ("sprint", "Sprint"), ("team", "Team"), ("jira_progress", "Jira: Fortschritt (%)"), ("jira_done", "Jira: Fortschritt abgeschlossen (SP)"), ("jira_left", "Jira: Verbleibender Fortschritt (SP)"))
+    ("sprint", "Sprint"), ("team", "Team"))
 NOT_FOUND = "nicht gefunden"
 
 _ALIASES = {
@@ -43,9 +43,6 @@ _ALIASES = {
     "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang"),
     "sprint": ("sprint",),
     "team": ("team",),
-    "jira_progress": ("fortschritt (%)",),
-    "jira_done": ("fortschritt abgeschlossen (sp)",),
-    "jira_left": ("verbleibender fortschritt (sp)",),
 }
 DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # die Schätzung in Tagen des Plan-Exports: wird nicht gelesen, nur gemeldet
 _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgabe", "untervorgang"}
@@ -66,12 +63,6 @@ def parse_number(text) -> float | None:
         except ValueError:
             return None
     return value if math.isfinite(value) and value >= 0 else None
-
-
-def parse_percent(text) -> float | None:
-    """Prozentwert aus Text („35“, „35,5“, „35 %“) als Anteil 0..1; leer oder unlesbar = None."""
-    value = parse_number(str(text).replace("%", "")) if text is not None else None
-    return None if value is None else value / 100
 
 
 def _split_list(text: str) -> tuple[str, ...]:
@@ -107,8 +98,7 @@ def field_counts(issues) -> dict[str, int]:
     return {
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
-        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "jira_progress": sum(i.jira_progress is not None for i in issues),
-        "jira_done": sum(i.jira_done is not None for i in issues), "jira_left": sum(i.jira_left is not None for i in issues)}
+        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues)}
 
 
 def coverage_rows(issues, found_in: dict[str, str]) -> list[dict]:
@@ -164,8 +154,7 @@ def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, 
     points = parse_number(raw_points)
     issue = Issue(
         key=_cell(row, cols, "key"), summary=_cell(row, cols, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=_cell(row, cols, "status"), points=points,
-        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"),
-        jira_progress=parse_percent(_cell(row, cols, "jira_progress")), jira_done=parse_number(_cell(row, cols, "jira_done")), jira_left=parse_number(_cell(row, cols, "jira_left")))
+        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"))
     return issue, bool(raw_points) and points is None
 
 

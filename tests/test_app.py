@@ -250,17 +250,6 @@ JIRA_PROGRESS_CSV = (
     "Story;B;6;E-1;S-2;To Do;;;\n").encode("utf-8")
 
 
-def test_the_comparison_with_jiras_own_progress_appears_only_when_the_export_has_it():
-    with_jira = _open(JIRA_PROGRESS_CSV)
-    _ok(with_jira)
-    assert any("Gegenprobe: Jiras eigener Fortschritt" in m.value for m in with_jira.markdown)
-    table = next(t.value for t in with_jira.dataframe if "Jira: Fortschritt (%)" in t.value.columns)
-    assert table["Jira: Fortschritt (%)"].tolist() == [40.0] and table["Hier: Nur Done, nach Gewicht"].tolist() == [40.0] and table["Abstand Jira − hier (Punkte)"].tolist() == [0.0]
-    without = _open(plan_csv(make_mini()))
-    _ok(without)
-    assert not any("Gegenprobe: Jiras eigener Fortschritt" in m.value for m in without.markdown) and not any("Jira: Fortschritt (%)" in t.value.columns for t in without.dataframe)
-
-
 def test_the_sprint_section_shows_a_bar_chart_and_a_table_when_tickets_have_sprints():
     at = _open(plan_csv(make_mini()))
     _ok(at)
@@ -292,18 +281,6 @@ def test_unknown_status_names_are_reported_under_the_numbers_and_known_ones_are_
     assert not [w for w in clean.warning if "keine Regel kennt" in w.value]
 
 
-def test_jiras_columns_are_checked_against_each_other_in_the_comparison():
-    ok = _open(JIRA_PROGRESS_CSV)
-    _ok(ok)
-    assert any("Jiras drei Fortschrittsspalten passen zusammen" in s.value for s in ok.success)                    # 4 von 4 + 6 = 40 %
-    bad = _open(JIRA_PROGRESS_CSV.replace(b"E-1;In Arbeit;40;4;6", b"E-1;In Arbeit;55;4;6"))
-    _ok(bad)
-    assert any("1 von 1 Tickets mit allen drei Werten" in w.value for w in bad.warning)
-    no_values = _open(JIRA_PROGRESS_CSV.replace(b";4;6\n", b";;\n"))
-    _ok(no_values)
-    assert any("Kein Ticket hat alle drei Werte" in c.value for c in no_values.caption)
-
-
 def test_unusable_story_points_do_not_break_the_page_and_are_reported():
     data = "Vorgangsschlüssel;Vorgangsstatus;Story Points\nA-1;Done;nan\nA-2;To Do;inf\nA-3;Done;-4\nA-4;Done;2\n".encode("utf-8")
     at = _open(data)
@@ -331,3 +308,13 @@ def test_titles_with_dollar_signs_and_asterisks_are_escaped_in_the_markdown_text
     _ok(at)
     texts = " ".join(i.value for i in at.info)
     assert r"Kosten \$5 bis \$10 \*neu\*" in texts and "Kosten $5" not in texts
+
+
+def test_jiras_own_progress_columns_are_ignored_and_no_comparison_is_shown():
+    at = _open(JIRA_PROGRESS_CSV)
+    _ok(at)
+    assert not any("Gegenprobe" in m.value for m in at.markdown if m.value.lstrip().startswith("#"))
+    assert not any("Jira:" in str(t.value.columns.tolist()) for t in at.dataframe)
+    found = next(t.value for t in at.dataframe if "Gefunden in" in t.value.columns)
+    assert not any("Jira" in str(name) for name in found["Feld"].tolist())            # der Erkennungsbericht kennt die Spalten nicht
+    assert at.metric[0].value == "40.0 %"                                              # Story A (4, Done) von 10 Story Points: allein Status und Story Points zählen

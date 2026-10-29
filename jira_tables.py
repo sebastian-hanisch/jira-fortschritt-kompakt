@@ -108,53 +108,6 @@ def sprint_rows(issues, a: Analysis) -> list[dict]:
     return rows
 
 
-JIRA_PROGRESS_COL, JIRA_DONE_COL, JIRA_LEFT_COL = "Jira: Fortschritt (%)", "Jira: abgeschlossen (SP)", "Jira: verbleibend (SP)"
-OWN_DONE_COL, OWN_TOTAL_COL, GAP_COL = "Hier: Nur Done, nach Gewicht", "Hier: Total (ohne Rejected, SP)", "Abstand Jira − hier (Punkte)"
-
-
-JIRA_TOLERANCE = 0.01      # erlaubter Abstand zwischen Jiras Fortschritt (%) und dem aus abgeschlossen und verbleibend berechneten: ein Prozentpunkt (Rundung auf ganze Prozent)
-DERIVED_COL = "Aus abgeschlossen und verbleibend"
-
-
-def jira_consistency(issues) -> tuple[int, list[dict]]:
-    """Passen Jiras drei Fortschrittsspalten zusammen? Für jedes Ticket mit allen drei Werten wird „Fortschritt (%)“ mit abgeschlossen ÷ (abgeschlossen + verbleibend) verglichen. Rückgabe: Zahl der
-    geprüften Tickets und die Tickets, deren Abstand über `JIRA_TOLERANCE` liegt (Zeilen mit Schlüssel, Jiras Werten, dem berechneten Wert und dem Abstand in Prozentpunkten)."""
-    checked, bad = 0, []
-    for t in issues:
-        if t.jira_progress is None or t.jira_done is None or t.jira_left is None or t.jira_done + t.jira_left <= 0:
-            continue
-        checked += 1
-        derived = t.jira_done / (t.jira_done + t.jira_left)
-        if abs(t.jira_progress - derived) > JIRA_TOLERANCE + 1e-9:
-            bad.append({ROW_COL: t.key, JIRA_PROGRESS_COL: t.jira_progress, JIRA_DONE_COL: t.jira_done, JIRA_LEFT_COL: t.jira_left, DERIVED_COL: derived, GAP_COL: 100 * (t.jira_progress - derived)})
-    return checked, bad
-
-
-def has_jira_progress(issues) -> bool:
-    """Steht in den Daten Jiras eigener Fortschritt (Spalte „Fortschritt (%)“) bei mindestens einem Ticket?"""
-    return any(t.jira_progress is not None for t in issues)
-
-
-def jira_crosscheck(issues, a: Analysis) -> list[dict]:
-    """Gegenprobe zu Jiras eigener Fortschrittsspalte: je Ticket direkt unter der Wurzel (dieselben Zeilen wie die Status-Matrix) Jiras Werte für dieses Ticket und der Wert „nur Done, nach
-    Gewicht“ aus den zählenden Tickets darunter, dazu der Abstand in Prozentpunkten. Jiras Werte gelten für das Ticket selbst mit allem darunter; wie Jira rechnet, steht nicht in den Daten."""
-    ticket_of, label = _row_tickets(issues, a)
-    groups: dict[str, dict] = {}
-    for pos, i in enumerate(a.atoms):
-        t = ticket_of(i)
-        g = groups.setdefault(label(t), {"ticket": t, "total": 0.0, "done": 0.0})
-        g["total"] += float(a.w[pos])
-        g["done"] += float(a.w[pos]) if a.done[pos] else 0.0
-    rows = []
-    for name in sorted(groups, key=A.natural_key):
-        t, total = groups[name]["ticket"], groups[name]["total"]
-        own = groups[name]["done"] / total if total > 0 else None
-        jira = None if t is None else t.jira_progress
-        rows.append({ROW_COL: name, JIRA_PROGRESS_COL: jira, JIRA_DONE_COL: None if t is None else t.jira_done, JIRA_LEFT_COL: None if t is None else t.jira_left,
-                     OWN_DONE_COL: own, OWN_TOTAL_COL: total, GAP_COL: None if jira is None or own is None else 100 * (jira - own)})
-    return rows
-
-
 # ---------------------------------------------------------------- Ausgabe: CSV, Wiki-Markup, HTML
 
 def format_cell(value, fmt=None) -> str:

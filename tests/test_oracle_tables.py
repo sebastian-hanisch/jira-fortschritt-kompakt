@@ -1,10 +1,7 @@
-"""Orakel-Test für die Tabellen: Status-Matrix, Fortschritt je Sprint und Gegenprobe zu Jira werden ein zweites Mal aus der Definition gerechnet und mit den Tabellen des Werkzeugs verglichen.
+"""Orakel-Test für die Tabellen: Status-Matrix und Fortschritt je Sprint werden ein zweites Mal aus der Definition gerechnet und mit den Tabellen des Werkzeugs verglichen.
 
 Die Referenz nutzt nur Schleifen und Wörterbücher (Gewichte und Zählung stammen aus `solve` in `test_oracle_progress.py`, ebenfalls ohne Code des Werkzeugs). Verglichen wird für Zufallsprojekte
 mit allen Regeln für ungeschätzte Tickets und für Sub-Tasks sowie für den ganzen Plan und mehrere Wurzeln. Jeder Wert jeder Zelle muss übereinstimmen."""
-
-import dataclasses
-import random
 
 import pytest
 from test_oracle_progress import CREDIT, DONE, SUBS, UNEST, _rejected, _roots, solve
@@ -127,37 +124,9 @@ def _check_sprints(got_rows, expected):
         assert row[T.CARRIED_COUNT_COL] == g["carried"] and _same(row[T.CARRIED_WEIGHT_COL], g["carried_w"]), label
 
 
-def expected_crosscheck(plan, root, unest, sub):
-    solved = solve(plan, root, unest, sub)
-    groups = {}
-    for t in solved.atoms:
-        label, top = _row_ticket(t, root, solved.by_key)
-        g = groups.setdefault(label, {"top": top, "total": 0.0, "done": 0.0})
-        g["total"] += solved.weights[t.key]
-        g["done"] += solved.weights[t.key] if t.status in DONE else 0.0
-    return groups
-
-
-def _check_crosscheck(got_rows, groups):
-    assert {r[T.ROW_COL] for r in got_rows} == set(groups) and len(got_rows) == len(groups)
-    for row in got_rows:
-        g = groups[row[T.ROW_COL]]
-        top = g["top"]
-        own = g["done"] / g["total"] if g["total"] > 0 else None
-        jira = None if top is None else top.jira_progress
-        assert _same(row[T.JIRA_PROGRESS_COL], jira) and _same(row[T.JIRA_DONE_COL], None if top is None else top.jira_done), row[T.ROW_COL]
-        assert _same(row[T.JIRA_LEFT_COL], None if top is None else top.jira_left) and _same(row[T.OWN_DONE_COL], own) and _same(row[T.OWN_TOTAL_COL], g["total"]), row[T.ROW_COL]
-        assert _same(row[T.GAP_COL], None if jira is None or own is None else 100 * (jira - own)), row[T.ROW_COL]
-
-
-def _with_jira(plan, seed):
-    rng = random.Random(1000 + seed)
-    return tuple(dataclasses.replace(t, jira_progress=round(rng.random(), 2), jira_done=float(rng.randint(0, 20)), jira_left=float(rng.randint(0, 20))) if rng.random() < 0.6 else t for t in plan)
-
-
 @pytest.mark.parametrize("seed", range(8))
 def test_the_tables_match_the_reference_for_every_rule_combination_and_root(seed):
-    plan = _with_jira(random_project(seed, n_epics=4), seed)
+    plan = random_project(seed, n_epics=4)
     for root in _roots(plan):
         scoped = A.scope_issues(plan, root)
         for letter, unest in UNEST.items():
@@ -167,17 +136,16 @@ def test_the_tables_match_the_reference_for_every_rule_combination_and_root(seed
                 try:
                     _check_matrix(T.status_matrix(scoped, a)[0], expected_matrix(plan, root, letter, sub_letter))
                     _check_sprints(T.sprint_rows(scoped, a), expected_sprints(plan, root, letter, sub_letter))
-                    _check_crosscheck(T.jira_crosscheck(scoped, a), expected_crosscheck(plan, root, letter, sub_letter))
                 except AssertionError as exc:
                     raise AssertionError(f"{context}: {exc}") from exc
     assert C.NO_SPRINT == NO_SPRINT
 
 
 def test_the_random_projects_contain_the_cases_the_tables_must_get_right():
-    """Damit das Orakel nicht ins Leere läuft: Es kommen zurückgewiesene Blätter, mitgenommene Tickets, Tickets ohne Sprint, Jira-Werte mit und ohne Gegenstück und Zeilen ohne Stufe vor."""
-    seen = dict.fromkeys(("rejected", "carried", "no_sprint", "jira", "no_jira", "no_level", "unestimated"), False)
+    """Damit das Orakel nicht ins Leere läuft: Es kommen zurückgewiesene Blätter, mitgenommene Tickets, Tickets ohne Sprint, Zeilen ohne Stufe und ungeschätzte Tickets vor."""
+    seen = dict.fromkeys(("rejected", "carried", "no_sprint", "no_level", "unestimated"), False)
     for seed in range(8):
-        plan = _with_jira(random_project(seed, n_epics=4), seed)
+        plan = random_project(seed, n_epics=4)
         for root in _roots(plan):
             scoped = A.scope_issues(plan, root)
             a = ev.analyse(scoped, ev.Settings(root=root), plan)
@@ -187,8 +155,5 @@ def test_the_random_projects_contain_the_cases_the_tables_must_get_right():
             sprints = T.sprint_rows(scoped, a)
             seen["carried"] |= any(r[T.CARRIED_COUNT_COL] > 0 for r in sprints)
             seen["no_sprint"] |= any(r[T.SPRINT_COL] == NO_SPRINT for r in sprints)
-            cross = T.jira_crosscheck(scoped, a)
-            seen["jira"] |= any(r[T.GAP_COL] is not None for r in cross)
-            seen["no_jira"] |= any(r[T.JIRA_PROGRESS_COL] is None for r in cross)
             seen["unestimated"] |= a.n_unestimated > 0
     assert all(seen.values()), seen

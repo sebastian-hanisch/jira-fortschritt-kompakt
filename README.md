@@ -25,7 +25,6 @@ CSV-Export aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder K
 | Eltern | Übergeordnetes Element (als Schlüssel, Schlüssel mit Titel oder eindeutiger Titel) |
 | Gewicht | Story Points (die Schätzung in Tagen, „Schätzung (T)“, wird nicht gelesen; unlesbare, unendliche und negative Werte gelten als nicht geschätzt) |
 | weitere | Titel, Sprint, Team (alle anderen Spalten, auch Personen, werden nicht gelesen) |
-| Gegenprobe | Fortschritt (%), Fortschritt abgeschlossen (SP), Verbleibender Fortschritt (SP): Jiras eigene Werte, nur zum Vergleich |
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
 Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gelesen werden konnte, meldet die App oben, bevor sie eine Zahl zeigt.
@@ -79,7 +78,7 @@ bitte melden.
 ## Ausgabe
 
 Kennzahlen (nach Status gewichtet, nur Done nach Gewicht, nur Done nach Ticketzahl, offenes Gewicht), Fortschrittsbalken je Ticket direkt unter der Wurzel, Kachelansicht, Teilprojektbaum und eine Tabelle: die
-**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Haben Tickets einen Sprint, kommt der **Fortschritt je Sprint** dazu (Balken und Tabelle: Tickets, Gewicht, Fortschritt, „nur Done“, mitgenommene Tickets); jedes zählende Ticket steht in seinem letzten Sprint, eine Sub-Task ohne Sprint erbt den ihrer Story. Enthält der Export Jiras eigene Fortschrittsspalten, kommt die **Gegenprobe** dazu: je Ticket Jiras Wert neben „Nur Done, nach Gewicht“ und der Abstand in Prozentpunkten, dazu die Prüfung, ob Jiras drei Spalten untereinander zusammenpassen (Fortschritt (%) gegen abgeschlossen ÷ (abgeschlossen + verbleibend)). Status, deren Name keine Regel kennt, meldet die App unter den Kennzahlen.
+**Status-Matrix** mit einer Zeile je Ticket direkt unter der Wurzel (die Summe der Story Points je Status mit dem Gewicht im Kopf, Rejected getrennt, Completed ab 90 % und gewichteter Fortschritt). Haben Tickets einen Sprint, kommt der **Fortschritt je Sprint** dazu (Balken und Tabelle: Tickets, Gewicht, Fortschritt, „nur Done“, mitgenommene Tickets); jedes zählende Ticket steht in seinem letzten Sprint, eine Sub-Task ohne Sprint erbt den ihrer Story. Status, deren Name keine Regel kennt, meldet die App unter den Kennzahlen.
 
 ## Datenschutz
 
@@ -132,7 +131,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
 - **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
 - **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
-- **Gegenprobe zu Jira.** Jiras eigene Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ werden nur neben „Nur Done, nach Gewicht“ gezeigt und gehen in keine Rechnung ein. Wie Jira sie berechnet, steht nicht im Export; die Gegenprobe ist an keinem echten Export mit Inhalten geprüft.
+- **Jiras eigener Fortschritt wird nicht verwendet.** Die Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ des Exports liest das Werkzeug nicht. Laut [Atlassian](https://support.atlassian.com/jira-software-cloud/docs/track-progress-using-estimates-in-advanced-roadmaps/) bezieht Jiras Fortschritt die Schätzungen aller Hierarchieebenen und auch im Plan ausgeblendete Vorgänge ein, die Seite nennt keine Formel, und die Roll-up-Schätzung eines Elternvorgangs kann vom Fortschrittsbalken abweichen. In einem Export aus der eigenen Jira-Instanz stimmten die drei Spalten untereinander nicht überein (bis zu 0 % gegen 100 % von der Formel abgeschlossen ÷ (abgeschlossen + verbleibend)). Ein Vergleich mit der Zahl dieses Werkzeugs wäre deshalb nicht aussagekräftig. Was der Export nicht liefert, zeigt das Werkzeug nicht: Der Fortschritt hier folgt allein Status und Story Points der zählenden Tickets.
 - **Zahlenformat der Story Points.** Ein Komma gilt als Dezimaltrenner: „1,000“ liest das Werkzeug als 1, nicht als tausend. Werte, die keine Zahl sind, nicht endlich (nan, inf) oder negativ sind, zählen als nicht geschätzt, und die App meldet ihre Zahl.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).
@@ -151,10 +150,10 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 | `jira_plan.py` | Einlesen des Plan-Exports |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
-| `jira_tables.py` | Tabellen (Status-Matrix, Gegenprobe zu Jira, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |
+| `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV, Wiki-Markup, HTML |
 | `jira_charts.py` | Plotly-Diagramme |
 | `jira_privacy.py` | Filter, der Ausnahmemeldungen aus dem Protokoll nimmt |
-| `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten; `test_oracle_progress.py` rechnet den Fortschritt unabhängig aus der Definition nach (Orakel) und vergleicht ihn für Zufallsprojekte, alle Regeln und mehrere Wurzeln; `test_oracle_tables.py` tut dasselbe für Status-Matrix, Sprint-Tabelle und Gegenprobe zu Jira |
+| `tests/` | Tests an einer von Hand gerechneten Mini-Instanz, Zufallsprojekte für Summen und Grenzen, App-Tests mit AppTest; `test_gaps.py` prüft Randfälle und Stellen, die andere Tests nicht festhielten; `test_oracle_progress.py` rechnet den Fortschritt unabhängig aus der Definition nach (Orakel) und vergleicht ihn für Zufallsprojekte, alle Regeln und mehrere Wurzeln; `test_oracle_tables.py` tut dasselbe für Status-Matrix und Sprint-Tabelle |
 | `ruff.toml` | Lint-Regeln (`ruff check .`, läuft auch in der CI) |
 
 ## Lizenz

@@ -30,9 +30,6 @@ class Issue:
     parent: str = ""                 # Schlüssel des übergeordneten Tickets, leer ohne Eltern
     sprints: tuple[str, ...] = ()    # in Jira-Reihenfolge; der letzte ist der aktuelle
     team: str = ""
-    jira_progress: float | None = None      # Jiras eigene Spalte „Fortschritt (%)“ als Anteil 0..1 (nur zum Vergleich, geht in keine Rechnung ein)
-    jira_done: float | None = None          # Jiras „Fortschritt abgeschlossen (SP)“
-    jira_left: float | None = None          # Jiras „Verbleibender Fortschritt (SP)“
 
     @property
     def is_epic(self) -> bool:

@@ -57,7 +57,7 @@ def test_rollup_columns_are_ignored_and_the_values_of_the_ticket_itself_are_read
 
 def test_all_columns_of_the_real_export_are_known_or_deliberately_skipped():
     used = {REAL_HEADER[i] for idx in J._columns(REAL_HEADER).values() for i in idx}
-    assert used == {"Hierarchie", "Titel", "Team", "Sprint", "Story Points", "Übergeordnetes Element", "Vorgangsschlüssel", "Vorgangsstatus", "Fortschritt (%)"}
+    assert used == {"Hierarchie", "Titel", "Team", "Sprint", "Story Points", "Übergeordnetes Element", "Vorgangsschlüssel", "Vorgangsstatus"}
 
 
 def test_the_day_estimate_is_never_read_and_a_file_with_only_days_says_so():
@@ -167,8 +167,7 @@ def test_people_releases_areas_priorities_labels_and_components_are_not_read_at_
     """Die Spalten stehen in der Datei (mit Namen und Werten), landen aber in keinem Ticket und nicht im Erkennungsbericht."""
     issues, report = J.read_plan(_csv(EPIC, STORY_A, STORY_B))
     assert not any(hasattr(i, name) for i in issues for name in ("assignee", "versions", "area", "priority", "labels", "components"))
-    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team", "Jira: Fortschritt (%)",
-                                                       "Jira: Fortschritt abgeschlossen (SP)", "Jira: Verbleibender Fortschritt (SP)"]
+    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team"]
     assert "Person A" not in repr(issues) and "ux" not in repr(issues)
 
 
@@ -193,26 +192,6 @@ def _sp_csv(*rows):
     return ("\n".join(";".join(r[h] for h in SP_HEADER) for r in rows) + "\n").encode("utf-8")
 
 
-def test_jiras_own_progress_columns_are_read_for_the_comparison_only():
-    cells = dict.fromkeys(SP_HEADER, "")
-    cells.update({"Hierarchie": "Epic", "Vorgangsschlüssel": "A-1", "Vorgangsstatus": "In Arbeit", "Fortschritt (%)": "35,5", "Fortschritt abgeschlossen (SP)": "7", "Verbleibender Fortschritt (SP)": "13"})
-    plain = dict.fromkeys(SP_HEADER, "")
-    plain.update({"Hierarchie": "Story", "Vorgangsschlüssel": "A-2", "Vorgangsstatus": "Done", "Story Points": "3", "Übergeordnetes Element": "A-1"})
-    data = _sp_csv(dict(zip(SP_HEADER, SP_HEADER, strict=True)), cells, plain)
-    issues, report = J.read_plan(data)
-    epic, story = issues
-    assert (epic.jira_progress, epic.jira_done, epic.jira_left) == (pytest.approx(0.355), 7.0, 13.0) and (story.jira_progress, story.jira_done, story.jira_left) == (None, None, None)
-    found = {row["Feld"]: (row["Gefunden in"], row["Tickets mit Wert"]) for row in report.columns}
-    assert found["Jira: Fortschritt (%)"] == ("Fortschritt (%)", 1) and found["Jira: Fortschritt abgeschlossen (SP)"] == ("Fortschritt abgeschlossen (SP)", 1)
-    assert found["Jira: Verbleibender Fortschritt (SP)"] == ("Verbleibender Fortschritt (SP)", 1)
-    assert story.points == 3.0                                                                          # die Spalten verändern keine Rechnung
-
-
-@pytest.mark.parametrize("text, expected", [("35", 0.35), ("35,5", 0.355), ("35 %", 0.35), (" 100% ", 1.0), ("0", 0.0), ("", None), ("viel", None), (None, None)])
-def test_percent_values_are_read_as_shares(text, expected):
-    assert J.parse_percent(text) == pytest.approx(expected) if expected is not None else J.parse_percent(text) is None
-
-
 # ---------------------------------------------------------------- Fehler, die die Prüfung auf Randfälle fand
 
 HEAD = "Hierarchie;Titel;Story Points;Übergeordnetes Element;Vorgangsschlüssel;Vorgangsstatus\n"
@@ -224,9 +203,8 @@ def test_story_points_that_are_not_finite_or_negative_count_as_unreadable(value)
     assert [i.points for i in issues] == [None, 2.0] and any("nicht endlich oder negativ): 1" in n for n in report.notes)
 
 
-def test_the_same_checks_apply_to_jiras_own_numbers():
-    assert J.parse_number("nan") is None and J.parse_number(float("inf")) is None and J.parse_number(-1) is None and J.parse_number("0") == 0.0
-    assert J.parse_percent("nan") is None and J.parse_percent("-5 %") is None and J.parse_percent("50 %") == 0.5
+def test_parse_number_accepts_only_finite_non_negative_numbers():
+    assert J.parse_number("nan") is None and J.parse_number(float("inf")) is None and J.parse_number(-1) is None and J.parse_number("0") == 0.0 and J.parse_number("2,5") == 2.5
 
 
 def test_duplicate_keys_self_parents_and_cycles_are_reported():
@@ -258,3 +236,12 @@ def test_a_huge_file_is_refused_without_parsing_all_of_it():
     with pytest.raises(J.PlanImportError, match="Obergrenze von 50"):
         J.read_plan("\n".join(lines).encode("utf-8"), max_issues=50)
     assert len(J.read_plan("\n".join(lines[:51]).encode("utf-8"), max_issues=50)[0]) == 50
+
+
+def test_jiras_own_progress_columns_are_not_read():
+    """Die Spalten stehen im Export, werden aber nicht gelesen (Grund siehe README): kein Feld im Ticket, keine Zeile im Erkennungsbericht."""
+    cells = dict.fromkeys(SP_HEADER, "")
+    cells.update({"Hierarchie": "Epic", "Vorgangsschlüssel": "A-1", "Vorgangsstatus": "In Arbeit", "Fortschritt (%)": "35,5", "Fortschritt abgeschlossen (SP)": "7", "Verbleibender Fortschritt (SP)": "13"})
+    issues, report = J.read_plan(_sp_csv(dict(zip(SP_HEADER, SP_HEADER, strict=True)), cells))
+    assert not any(hasattr(i, name) for i in issues for name in ("jira_progress", "jira_done", "jira_left"))
+    assert not any("Jira" in row["Feld"] for row in report.columns) and not hasattr(J, "parse_percent")

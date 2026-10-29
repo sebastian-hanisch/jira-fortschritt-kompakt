@@ -322,30 +322,6 @@ def render_sprints(issues, a):
     show_table(T.sprint_rows(issues, a), "sprints", formats, "fortschritt-je-sprint")
 
 
-def render_crosscheck(issues, a, root):
-    """Gegenprobe zu Jiras eigener Fortschrittsspalte; nur wenn der Export sie enthält."""
-    if not T.has_jira_progress(issues):
-        return
-    st.markdown("## 🔍 Gegenprobe: Jiras eigener Fortschritt")
-    st.caption(
-        "Eine Zeile je Ticket direkt unter " + _below(root) + " wie in der Status-Matrix. Links stehen die Werte, die Jira selbst im Export liefert (Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“, „Verbleibender Fortschritt (SP)“), "
-        "rechts der Wert „Nur Done, nach Gewicht“ aus den zählenden Tickets darunter, weil er Jiras Zahl am nächsten kommt. Wie Jira rechnet, steht nicht im Export und ist hier nicht geprüft. Ein Abstand heißt nicht, dass eine der Zahlen "
-        "falsch ist: Typische Gründe sind Status, die hier nach ihrem Namen nicht als fertig gelten (oder umgekehrt), Story Points von Zwischentickets, zurückgewiesene Tickets und eine andere Einheit des Plans. Die Zahlen von Jira gehen in keine Rechnung ein.")
-    formats = {T.JIRA_PROGRESS_COL: "percent", T.JIRA_DONE_COL: "%.2f", T.JIRA_LEFT_COL: "%.2f", T.OWN_DONE_COL: "percent", T.OWN_TOTAL_COL: "%.2f", T.GAP_COL: "%.1f"}
-    show_table(T.jira_crosscheck(issues, a), "jira", formats, "gegenprobe-jira")
-    checked, bad = T.jira_consistency(issues)
-    if not checked:
-        st.caption("Ob Jiras „Fortschritt (%)“ aus „abgeschlossen“ und „verbleibend“ folgt, lässt sich nicht prüfen: Kein Ticket hat alle drei Werte.")
-    elif not bad:
-        st.success(f"Jiras drei Fortschrittsspalten passen zusammen: Bei allen {checked} Tickets mit allen drei Werten ist „Fortschritt (%)“ gleich abgeschlossen ÷ (abgeschlossen + verbleibend). Erlaubt ist ein Abstand "
-                   "bis 1 Prozentpunkt wegen der Rundung. Das sagt, wie Jira aus seinen Zahlen rechnet, nicht, welche Tickets und Status Jira dabei zählt.")
-    else:
-        st.warning(f"Bei {len(bad)} von {checked} Tickets mit allen drei Werten ist Jiras „Fortschritt (%)“ nicht gleich abgeschlossen ÷ (abgeschlossen + verbleibend) (erlaubt: 1 Prozentpunkt Abstand). "
-                   "Dann rechnet Jira anders, als die Spaltennamen vermuten lassen, oder die Spalten stammen aus verschiedenen Ständen; ein Vergleich mit unseren Zahlen ist mit Vorsicht zu lesen.")
-        with st.expander(f"Tickets mit abweichendem Wert ({len(bad)})"):
-            st.dataframe(bad[:50], hide_index=True, width="stretch")
-
-
 def render_rule_effects(issues, a):
     """Wirkung der wählbaren Regeln auf die geladenen Daten (im Ausklapper „Berechnungsmöglichkeiten“)."""
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
@@ -383,7 +359,6 @@ def main():
         render_charts(a, root)
         render_matrix(issues, a, root)
         render_sprints(issues, a)
-        render_crosscheck(issues, a, root)
     with options_box, guard("Berechnungsmöglichkeiten"):
         render_rule_effects(issues, a)
     render_explanations()
