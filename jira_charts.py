@@ -176,22 +176,50 @@ def tile_label(t: Tile) -> str:
     return t.key
 
 
+def _frame_pieces(t: Tile) -> list[tuple[float, float, float, float]]:
+    """Der Rahmen einer Kachel mit Kopfzeile als vier Rechtecke (x, y, Breite, Höhe): Kopfzeile, linker und rechter Rand, unterer Rand. Zusammen mit dem Inneren, in dem die kleinen Kacheln liegen
+    (siehe `tile_layout`), ergeben sie genau die Fläche der Kachel, ohne Überlappung."""
+    inner_y, inner_h = t.y + TILE_HEAD, t.h - TILE_HEAD - TILE_PAD
+    return [(t.x, t.y, t.w, TILE_HEAD), (t.x, inner_y, TILE_PAD, inner_h), (t.x + t.w - TILE_PAD, inner_y, TILE_PAD, inner_h), (t.x, t.y + t.h - TILE_PAD, t.w, TILE_PAD)]
+
+
+def _on_white(p: float, alpha: float) -> str:
+    """Die Farbe zum Fortschritt, mit `alpha` über Weiß gelegt, als deckende Farbe (sie darf nicht durchscheinen, weil die Teile des Rahmens ohne Überlappung aneinanderstoßen)."""
+    return "rgb(" + ",".join(str(round(255 - alpha * (255 - v))) for v in progress_rgb(p)) + ")"
+
+
 def build_tiles(g, unit: str):
     """Kachelansicht: Fläche = Gewicht, Farbe = Fortschritt. Die Kinder der Wurzel sind große Kacheln mit einer Kopfzeile, ihre Kinder liegen als kleinere Kacheln darin. Jede Kachel ist ein Balken und in der
-    ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen, Kacheln ohne Kinder reagieren nicht."""
+    ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen, Kacheln ohne Kinder reagieren nicht.
+
+    Kein Balken überlappt einen anderen: Der Rahmen einer großen Kachel besteht aus vier schmalen Balken um die kleinen Kacheln herum. Bei überlappenden Balken wählt Plotly für Tooltip und Klick
+    nicht verlässlich den obersten, und jede Stelle der Fläche gehört so zu genau einer Kachel."""
     tiles = tile_layout(g)
     fig = go.Figure()
-    # Die kleinen Kacheln (Stufe 2) liegen innerhalb der großen. Bei überlappenden Balken wählt Plotly für Tooltip und Klick den ersten Trace; er soll die kleine Kachel sein, nicht der Rahmen des
-    # Elternknotens. Deshalb steht Stufe 2 in der Trace-Reihenfolge vorn und wird über `zorder` trotzdem vorn gezeichnet.
-    for level in (2, 1):
+    shapes = []
+    for level in (1, 2):
         sel = [t for t in tiles if t.level == level]
         if not sel:
             continue
-        hover = [_node_hover(g, t.node, unit) + ("<br><i>Klick: als Teilprojekt öffnen</i>" if t.drillable else "") for t in sel]
+        rects, keys, hovers, colors, lines, widths = [], [], [], [], [], []
+        for t in sel:
+            hover = _node_hover(g, t.node, unit) + ("<br><i>Klick: als Teilprojekt öffnen</i>" if t.drillable else "")
+            if t.framed:
+                pieces, color = _frame_pieces(t), _on_white(t.progress, 0.35)
+                shapes.append(dict(type="rect", xref="x", yref="y", x0=t.x, x1=t.x + t.w, y0=t.y, y1=t.y + t.h, line=dict(color="white", width=2), layer="above"))
+            else:
+                pieces, color = [(t.x, t.y, t.w, t.h)], progress_color(t.progress, 1.0)
+            for x, y, w, h in pieces:
+                rects.append((x + w / 2, y, w, h))
+                keys.append([t.key])
+                hovers.append(hover)
+                colors.append(color)
+                lines.append(color if t.framed else "white")
+                widths.append(1 if t.framed or level == 2 else 2)
         fig.add_trace(go.Bar(
-            x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel], customdata=[[t.key] for t in sel],
-            marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
-            hovertext=hover, hoverinfo="text", showlegend=False, zorder=level,
+            x=[r[0] for r in rects], y=[r[3] for r in rects], base=[r[1] for r in rects], width=[r[2] for r in rects], customdata=keys,
+            marker=dict(color=colors, line=dict(color=lines, width=widths)),
+            hovertext=hovers, hoverinfo="text", showlegend=False,
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     notes = []
     for t in tiles:         # Beschriftungen als Annotationen: Der Text von Balken würde bei einer Auswahl (Klick) abgedunkelt, eine Annotation nicht
@@ -200,7 +228,7 @@ def build_tiles(g, unit: str):
                               text=f"<b>{t.key}</b> {100 * t.progress:.0f} %" if t.progress == t.progress else f"<b>{t.key}</b>"))
         elif tile_label(t):
             notes.append(dict(x=t.x + t.w / 2, y=t.y + t.h / 2, xanchor="center", yanchor="middle", showarrow=False, font=dict(size=11, color=text_color_on(t.progress)), text=tile_label(t)))
-    fig.update_layout(annotations=notes, barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
+    fig.update_layout(annotations=notes, shapes=shapes, barmode="overlay", bargap=0, height=520, margin=dict(l=0, r=0, t=10, b=0), plot_bgcolor="rgba(0,0,0,0)", showlegend=False)
     fig.update_xaxes(visible=False, range=[0, TILE_W], fixedrange=True)
     fig.update_yaxes(visible=False, range=[TILE_H, 0], fixedrange=True)
     return fig

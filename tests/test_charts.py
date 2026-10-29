@@ -4,9 +4,25 @@ import numpy as np
 import pytest
 
 import jira_constants as C
+import jira_core as A
 import jira_evaluation as ev
 from conftest import random_project
-from jira_charts import MAX_BARS, TILE_H, TILE_W, build_progress_bars, build_tiles, build_tree_graph, progress_color, progress_rgb, selected_key, squarify, text_color_on, tile_label, tile_layout
+from jira_charts import (
+    MAX_BARS,
+    TILE_H,
+    TILE_HEAD,
+    TILE_W,
+    build_progress_bars,
+    build_tiles,
+    build_tree_graph,
+    progress_color,
+    progress_rgb,
+    selected_key,
+    squarify,
+    text_color_on,
+    tile_label,
+    tile_layout,
+)
 from jira_core import Issue
 
 
@@ -107,11 +123,13 @@ def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
     g = ev.analyse(mini).tree
     fig = build_tiles(g, "SP")
     assert [t.type for t in fig.data] == ["bar", "bar"] and fig.layout.barmode == "overlay"
-    small, large = fig.data                                                                       # erst die kleinen Kacheln, dann die großen (siehe den Test zur Reihenfolge)
-    assert [d[0] for d in large.customdata] == ["E1", "E2", "B1"] and sorted(d[0] for d in small.customdata) == ["S1", "S2", "S3", "S4"]
-    assert fig.layout.yaxis.range == (TILE_H, 0) and "Klick: als Teilprojekt öffnen" in large.hovertext[0] and "Klick" not in large.hovertext[2]          # B1 hat keine Kinder
+    large, small = fig.data
+    assert list(dict.fromkeys(d[0] for d in large.customdata)) == ["E1", "E2", "B1"] and sorted(d[0] for d in small.customdata) == ["S1", "S2", "S3", "S4"]
+    assert large.customdata[0][0] == "E1" and "Klick: als Teilprojekt öffnen" in large.hovertext[0] and "Klick" not in large.hovertext[list(d[0] for d in large.customdata).index("B1")]          # B1 hat keine Kinder
+    assert fig.layout.yaxis.range == (TILE_H, 0)
     headers = [a.text for a in fig.layout.annotations if a.text.startswith("<b>")]
     assert len(headers) == 2 and headers[0].startswith("<b>E1</b>") and headers[1].startswith("<b>E2</b>")          # Kopfzeilen der beiden Kacheln mit Kindern
+    assert len(fig.layout.shapes) == 2                                                                               # weiße Umrandung der beiden Kacheln mit Kindern
 
 
 def test_build_tiles_without_weight_is_an_empty_figure():
@@ -182,14 +200,31 @@ def test_label_color_has_contrast_on_the_tile_color():
     assert progress_rgb(0.0) == (201, 83, 75) and progress_rgb(1.0) == (47, 107, 101) and progress_rgb(float("nan")) == (190, 190, 190)
 
 
-def test_small_tiles_come_first_in_the_trace_order_so_that_tooltip_and_click_hit_them_and_not_the_frame(mini):
-    """Plotly wählt bei überlappenden Balken den ersten Trace. Die kleinen Kacheln liegen innerhalb der großen: Sie müssen zuerst stehen, aber über `zorder` vorn gezeichnet werden."""
+def _rectangles(fig):
+    return [(x - w / 2, x + w / 2, b, b + h, key[0], tip) for tr in fig.data for x, w, b, h, key, tip in zip(tr.x, tr.width, tr.base, tr.y, tr.customdata, tr.hovertext, strict=True)]
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_no_tile_overlaps_another_and_the_tiles_fill_the_whole_area_so_that_every_spot_belongs_to_one_tile(seed):
+    """Plotly wählt bei überlappenden Balken Tooltip und Klick nicht verlässlich; deshalb darf nichts überlappen. Außerdem gehört zu jedem Balken der Tooltip seiner Kachel."""
+    plan = random_project(seed, n_epics=4)
+    for root in ("", plan[0].key):
+        issues = A.scope_issues(plan, root)
+        rects = _rectangles(build_tiles(ev.analyse(issues, ev.Settings(root=root), plan).tree, "SP"))
+        assert rects
+        for i, (ax0, ax1, ay0, ay1, _, _) in enumerate(rects):
+            for bx0, bx1, by0, by1, _, _ in rects[i + 1:]:
+                assert min(ax1, bx1) - max(ax0, bx0) < 1e-9 or min(ay1, by1) - max(ay0, by0) < 1e-9          # keine gemeinsame Fläche
+        assert sum((x1 - x0) * (y1 - y0) for x0, x1, y0, y1, _, _ in rects) == pytest.approx(TILE_W * TILE_H)       # lückenlos
+        assert all(tip.startswith(key + ":") or tip.startswith(key + "<br>") for _, _, _, _, key, tip in rects)
+
+
+def test_the_frame_of_a_large_tile_is_four_bars_around_its_small_tiles(mini):
     fig = build_tiles(ev.analyse(mini).tree, "SP")
-    small, large = fig.data
-    assert sorted(d[0] for d in small.customdata) == ["S1", "S2", "S3", "S4"]
-    assert small.zorder > large.zorder
-    assert all(small.hovertext[i].startswith(small.customdata[i][0] + ":") or small.hovertext[i].startswith(small.customdata[i][0] + "<br>") for i in range(len(small.customdata)))        # Tooltip und Schlüssel gehören zusammen
-    assert all(large.hovertext[i].startswith(large.customdata[i][0] + ":") or large.hovertext[i].startswith(large.customdata[i][0] + "<br>") for i in range(len(large.customdata)))
+    frame = [r for r in _rectangles(fig) if r[4] == "E1"]
+    assert len(frame) == 4
+    top = min(frame, key=lambda r: r[2])
+    assert top[3] - top[2] == pytest.approx(TILE_HEAD) and sum((x1 - x0) * (y1 - y0) for x0, x1, y0, y1, _, _ in frame) < 0.4 * TILE_W * TILE_H
 
 
 def test_html_characters_in_titles_are_shown_as_text_in_tooltips_and_labels_and_keys_for_clicks_stay_raw():
