@@ -1,4 +1,4 @@
-"""Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma). Das Ergebnis ist eine Liste von `Issue`.
+"""Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
 Story Points, Sprint und Team. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
@@ -74,6 +74,14 @@ def _norm(name: str) -> str:
 
 
 def _decode(data: bytes) -> str:
+    """Text der Datei: UTF-16 (Excel „Unicode-Text“, mit oder ohne Kennung), sonst UTF-8 mit oder ohne Kennung, sonst Windows-1252."""
+    utf16 = ("utf-16" if data.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-16-le" if data[1:2] == b"\x00" and data[3:4] == b"\x00"
+             else "utf-16-be" if data[0:1] == b"\x00" and data[2:3] == b"\x00" else None)
+    if utf16:
+        try:
+            return data.decode(utf16)
+        except UnicodeDecodeError:
+            pass
     for enc in ("utf-8-sig", "cp1252"):
         try:
             return data.decode(enc)
@@ -187,7 +195,7 @@ def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: i
 
 
 def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple[Issue, ...], ImportReport]:
-    """Liest den CSV-Export aus Jira Plans (Trennzeichen Semikolon oder Komma). Pflicht sind Schlüssel und Status; alles andere ist optional."""
+    """Liest den CSV-Export aus Jira Plans (Trennzeichen Semikolon, Komma oder Tab). Pflicht sind Schlüssel und Status; alles andere ist optional."""
     text = _decode(data)
     first, _, rest = text.partition("\n")
     if first.strip().lower().startswith("sep="):          # Excel schreibt manchmal „sep=;“ als erste Zeile: sie nennt das Trennzeichen und ist keine Kopfzeile
@@ -197,7 +205,19 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
     else:
         delimiter = None
     if delimiter is None:
-        delimiter = ";" if first.count(";") > first.count(",") else ","          # die Kopfzeile besteht fast nur aus Trennzeichen; Titel mit Kommas verfälschen sie nicht
+        counts = {";": first.count(";"), ",": first.count(","), "\t": first.count("\t")}          # die Kopfzeile besteht fast nur aus Trennzeichen; Titel mit Kommas verfälschen sie nicht
+        delimiter = max(counts, key=lambda d: (counts[d], d == ","))                                # bei Gleichstand das Komma
+    try:
+        return _read_rows(text, delimiter, max_issues)
+    except csv.Error as exc:
+        if "field larger than field limit" in str(exc):
+            raise PlanImportError("Eine Zelle der Datei ist größer als 128 KB: Das ist wahrscheinlich eine Beschreibung oder ein Kommentar. Bitte solche Spalten vor dem Hochladen löschen "
+                                  "(nur Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element und Story Points werden gebraucht).") from exc
+        raise PlanImportError(f"Die Datei lässt sich nicht als CSV lesen ({exc}). Erwartet wird der CSV-Export aus Jira Plans.") from exc
+
+
+def _read_rows(text: str, delimiter: str, max_issues: int) -> tuple[tuple[Issue, ...], ImportReport]:
+    """Der Teil von `read_plan` nach der Wahl von Kodierung und Trennzeichen."""
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     header = next(reader, None)
     if header is None:

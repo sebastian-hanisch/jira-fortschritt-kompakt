@@ -190,3 +190,18 @@ def test_small_tiles_come_first_in_the_trace_order_so_that_tooltip_and_click_hit
     assert small.zorder > large.zorder
     assert all(small.hovertext[i].startswith(small.customdata[i][0] + ":") or small.hovertext[i].startswith(small.customdata[i][0] + "<br>") for i in range(len(small.customdata)))        # Tooltip und Schlüssel gehören zusammen
     assert all(large.hovertext[i].startswith(large.customdata[i][0] + ":") or large.hovertext[i].startswith(large.customdata[i][0] + "<br>") for i in range(len(large.customdata)))
+
+
+def test_html_characters_in_titles_are_shown_as_text_in_tooltips_and_labels_and_keys_for_clicks_stay_raw():
+    from jira_charts import _plain
+    issues = (Issue(key="E", type="Epic", summary="Titel <b>fett</b> & <i>x</i>"), Issue(key="S", parent="E", points=2.0, status="Done", summary="a < b > c"))
+    a = ev.analyse(issues, ev.Settings(), issues)
+    assert _plain("<b>x</b> & y") == "&lt;b&gt;x&lt;/b&gt; &amp; y" and _plain("Plain äöü 'q' \"d\"") == "Plain äöü 'q' \"d\""
+    tiles = build_tiles(a.tree, "SP")
+    texts = [h for trace in tiles.data for h in trace.hovertext]
+    assert any("E: Titel &lt;b&gt;fett&lt;/b&gt; &amp; &lt;i&gt;x&lt;/i&gt;" in h for h in texts) and any("S: a &lt; b &gt; c" in h for h in texts)
+    assert not any("<b>fett" in h for h in texts)
+    bars = build_progress_bars(a.stats, "SP")
+    assert list(bars.data[0].y) == ["E: Titel &lt;b&gt;fett&lt;/b&gt; &amp; &lt;i&gt;x&lt;/i&gt;"]
+    graph = build_tree_graph(a.tree, "SP")
+    assert "E" in [d for trace in graph.data[1:] for d in trace.customdata]                          # die Schlüssel für den Klick bleiben unverändert

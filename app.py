@@ -298,7 +298,7 @@ def render_charts(a, root):
         tiles_key = f"chart_tiles_{root}"
         st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key, on_select=partial(_drill, tiles_key), selection_mode="points")
         st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. **Ein Klick auf eine Kachel mit Kindern öffnet sie als Teilprojekt** "
-                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht); mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen. Sind es zu viele Kacheln, fasst eine Kachel „Rest“ die leichtesten zusammen.")
+                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht). Eine große Kachel öffnet ihr Ticket über die Kopfzeile, die kleinen Kacheln darin öffnen ihr eigenes Ticket; mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen. Sind es zu viele Kacheln, fasst eine Kachel „Rest“ die leichtesten zusammen.")
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 

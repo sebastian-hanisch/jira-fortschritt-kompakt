@@ -245,3 +245,36 @@ def test_jiras_own_progress_columns_are_not_read():
     issues, report = J.read_plan(_sp_csv(dict(zip(SP_HEADER, SP_HEADER, strict=True)), cells))
     assert not any(hasattr(i, name) for i in issues for name in ("jira_progress", "jira_done", "jira_left"))
     assert not any("Jira" in row["Feld"] for row in report.columns) and not hasattr(J, "parse_percent")
+
+
+# ---------------------------------------------------------------- Kodierung, Trennzeichen und CSV-Fehler
+
+CSV_TEXT = "Vorgangsschlüssel;Vorgangsstatus;Titel;Story Points\nA-1;Done;Über 100 %;3\n"
+
+
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be", "utf-8", "utf-8-sig", "cp1252"])
+def test_files_in_every_usual_encoding_are_read_including_utf16_from_excel(encoding):
+    issues, _ = J.read_plan(CSV_TEXT.encode(encoding))
+    assert [(i.key, i.status, i.summary, i.points) for i in issues] == [("A-1", "Done", "Über 100 %", 3.0)]
+
+
+def test_a_tab_separated_file_is_read_like_a_comma_or_semicolon_file():
+    tab = chr(9)
+    issues, _ = J.read_plan(f"Vorgangsschlüssel{tab}Vorgangsstatus{tab}Titel{tab}Story Points\nA-1{tab}Done{tab}x, y; z{tab}2,5\n".encode("utf-8"))
+    assert [(i.key, i.summary, i.points) for i in issues] == [("A-1", "x, y; z", 2.5)]
+
+
+def test_a_cell_larger_than_the_csv_limit_is_reported_in_plain_words():
+    data = ("Vorgangsschlüssel;Vorgangsstatus;Beschreibung\nA-1;Done;" + "x" * 200_000 + "\n").encode("utf-8")
+    with pytest.raises(J.PlanImportError, match="größer als 128 KB"):
+        J.read_plan(data)
+
+
+def test_any_other_csv_error_becomes_an_import_error_without_the_data(monkeypatch):
+    import csv
+
+    def broken(*args, **kwargs):
+        raise csv.Error("line 7: kaputt")
+    monkeypatch.setattr(J.csv, "reader", broken)
+    with pytest.raises(J.PlanImportError, match="lässt sich nicht als CSV lesen"):
+        J.read_plan(CSV_TEXT.encode("utf-8"))

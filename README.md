@@ -15,7 +15,7 @@ Tests: `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
 
 ## Eingabe
 
-CSV-Export aus Jira Plans (deutsche oder englische Oberfläche, Semikolon oder Komma); wie man ihn erzeugt, steht im nächsten Abschnitt. Die Spalten werden an ihren Köpfen erkannt:
+CSV-Export aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma oder Tab als Trennzeichen; UTF-8, Windows-1252 oder UTF-16); wie man ihn erzeugt, steht im nächsten Abschnitt. Die Spalten werden an ihren Köpfen erkannt:
 
 | Feld | Spalte (deutsch) |
 |---|---|

@@ -1,5 +1,6 @@
 """Plotly-Abbildungen: Fortschrittsbalken, Kachelansicht und Teilprojektbaum. Alle Achsen sind gesperrt (fixedrange), damit Touch-Geräte beim Scrollen nicht am Diagramm hängen bleiben."""
 
+import html
 from dataclasses import dataclass
 
 import numpy as np
@@ -23,7 +24,7 @@ def _pct_text(progress: float, weight: float, unit: str) -> str:
 def build_progress_bars(stats, unit: str):
     """Ein Balken je Gruppe, Länge = Gewicht: erledigt (dunkel), durch Status angerechnet (hell), offen (grau). Beschriftung rechts: Fortschritt und Gewicht."""
     order = sorted(np.argsort(-stats.weight, kind="stable")[:MAX_BARS])           # die gewichtsstärksten Gruppen, in der natürlichen Reihenfolge der Gruppen gezeigt
-    labels = [stats.labels[i] for i in order]
+    labels = [_plain(stats.labels[i]) for i in order]
     done = np.minimum(stats.done_weight[order], stats.credited[order])
     partial = np.maximum(stats.credited[order] - done, 0.0)
     rest = np.maximum(stats.weight[order] - done - partial, 0.0)
@@ -205,10 +206,15 @@ def build_tiles(g, unit: str):
     return fig
 
 
+def _plain(text: str) -> str:
+    """Text aus den Daten (Titel, Schlüssel, Status) für Plotly: Plotly liest in Beschriftungen und Tooltips einige HTML-Zeichen („<b>“, „<br>“) als Formatierung; mit Entitäten erscheint der Text, wie er ist."""
+    return html.escape(text, quote=False)
+
+
 def _node_hover(g, k: int, unit: str) -> str:
-    lines = [g.keys[k] + (f": {g.titles[k]}" if g.titles[k] else "")]
+    lines = [_plain(g.keys[k]) + (f": {_plain(g.titles[k])}" if g.titles[k] else "")]
     if g.types[k] or g.statuses[k]:
-        lines.append(" · ".join(x for x in (g.types[k], g.statuses[k]) if x))
+        lines.append(" · ".join(_plain(x) for x in (g.types[k], g.statuses[k]) if x))
     lines.append("kein Gewicht" if g.weight[k] <= 0 else f"Gewicht {g.weight[k]:.2f} {unit}")
     lines.append("kein Fortschritt messbar" if np.isnan(g.progress[k]) else f"Fortschritt {100 * g.progress[k]:.0f} %")
     if not g.is_atom[k] and g.is_leaf[k] and g.weight[k] <= 0 and not np.isnan(g.progress[k]):
@@ -258,9 +264,9 @@ def build_tree_graph(g, unit: str):
             continue
         radius = size[k] / 2
         if g.is_leaf[k]:
-            notes.append(dict(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="left", yanchor="middle", xshift=radius + 3, font=dict(size=11)))
+            notes.append(dict(x=g.x[k], y=g.y[k], text=_plain(g.keys[k]), showarrow=False, xanchor="left", yanchor="middle", xshift=radius + 3, font=dict(size=11)))
         else:
-            notes.append(dict(x=g.x[k], y=g.y[k], text=g.keys[k], showarrow=False, xanchor="center", yanchor="bottom", yshift=radius + 2, font=dict(size=11)))
+            notes.append(dict(x=g.x[k], y=g.y[k], text=_plain(g.keys[k]), showarrow=False, xanchor="center", yanchor="bottom", yshift=radius + 2, font=dict(size=11)))
     depth = int(g.x.max()) if n else 0
     fig.update_xaxes(visible=False, range=[-0.4, depth + 1.8])
     fig.update_yaxes(visible=False, autorange="reversed")
