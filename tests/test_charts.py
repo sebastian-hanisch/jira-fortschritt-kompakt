@@ -107,8 +107,9 @@ def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
     g = ev.analyse(mini).tree
     fig = build_tiles(g, "SP")
     assert [t.type for t in fig.data] == ["bar", "bar"] and fig.layout.barmode == "overlay"
-    assert [d[0] for d in fig.data[0].customdata] == ["E1", "E2", "B1"] and sorted(d[0] for d in fig.data[1].customdata) == ["S1", "S2", "S3", "S4"]
-    assert fig.layout.yaxis.range == (TILE_H, 0) and "Klick: als Teilprojekt öffnen" in fig.data[0].hovertext[0] and "Klick" not in fig.data[0].hovertext[2]          # B1 hat keine Kinder
+    small, large = fig.data                                                                       # erst die kleinen Kacheln, dann die großen (siehe den Test zur Reihenfolge)
+    assert [d[0] for d in large.customdata] == ["E1", "E2", "B1"] and sorted(d[0] for d in small.customdata) == ["S1", "S2", "S3", "S4"]
+    assert fig.layout.yaxis.range == (TILE_H, 0) and "Klick: als Teilprojekt öffnen" in large.hovertext[0] and "Klick" not in large.hovertext[2]          # B1 hat keine Kinder
     headers = [a.text for a in fig.layout.annotations if a.text.startswith("<b>")]
     assert len(headers) == 2 and headers[0].startswith("<b>E1</b>") and headers[1].startswith("<b>E2</b>")          # Kopfzeilen der beiden Kacheln mit Kindern
 
@@ -179,3 +180,13 @@ def test_tile_labels_depend_on_the_size_of_the_tile():
 def test_label_color_has_contrast_on_the_tile_color():
     assert text_color_on(1.0) == "#ffffff" and text_color_on(0.5) == "#1f2933" and text_color_on(float("nan")) == "#1f2933"
     assert progress_rgb(0.0) == (201, 83, 75) and progress_rgb(1.0) == (47, 107, 101) and progress_rgb(float("nan")) == (190, 190, 190)
+
+
+def test_small_tiles_come_first_in_the_trace_order_so_that_tooltip_and_click_hit_them_and_not_the_frame(mini):
+    """Plotly wählt bei überlappenden Balken den ersten Trace. Die kleinen Kacheln liegen innerhalb der großen: Sie müssen zuerst stehen, aber über `zorder` vorn gezeichnet werden."""
+    fig = build_tiles(ev.analyse(mini).tree, "SP")
+    small, large = fig.data
+    assert sorted(d[0] for d in small.customdata) == ["S1", "S2", "S3", "S4"]
+    assert small.zorder > large.zorder
+    assert all(small.hovertext[i].startswith(small.customdata[i][0] + ":") or small.hovertext[i].startswith(small.customdata[i][0] + "<br>") for i in range(len(small.customdata)))        # Tooltip und Schlüssel gehören zusammen
+    assert all(large.hovertext[i].startswith(large.customdata[i][0] + ":") or large.hovertext[i].startswith(large.customdata[i][0] + "<br>") for i in range(len(large.customdata)))

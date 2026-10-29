@@ -180,7 +180,9 @@ def build_tiles(g, unit: str):
     ganzen Fläche anklickbar (`customdata` = Schlüssel); Kacheln mit Kindern lassen sich per Klick als Teilprojekt öffnen, Kacheln ohne Kinder reagieren nicht."""
     tiles = tile_layout(g)
     fig = go.Figure()
-    for level in (1, 2):
+    # Die kleinen Kacheln (Stufe 2) liegen innerhalb der großen. Bei überlappenden Balken wählt Plotly für Tooltip und Klick den ersten Trace; er soll die kleine Kachel sein, nicht der Rahmen des
+    # Elternknotens. Deshalb steht Stufe 2 in der Trace-Reihenfolge vorn und wird über `zorder` trotzdem vorn gezeichnet.
+    for level in (2, 1):
         sel = [t for t in tiles if t.level == level]
         if not sel:
             continue
@@ -188,7 +190,7 @@ def build_tiles(g, unit: str):
         fig.add_trace(go.Bar(
             x=[t.x + t.w / 2 for t in sel], y=[t.h for t in sel], base=[t.y for t in sel], width=[t.w for t in sel], customdata=[[t.key] for t in sel],
             marker=dict(color=[progress_color(t.progress, 0.35 if t.framed else 1.0) for t in sel], line=dict(color="white", width=2 if level == 1 else 1)),
-            hovertext=hover, hoverinfo="text", showlegend=False,
+            hovertext=hover, hoverinfo="text", showlegend=False, zorder=level,
             selected=dict(marker=dict(opacity=1)), unselected=dict(marker=dict(opacity=1))))
     notes = []
     for t in tiles:         # Beschriftungen als Annotationen: Der Text von Balken würde bei einer Auswahl (Klick) abgedunkelt, eine Annotation nicht
