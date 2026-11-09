@@ -79,7 +79,7 @@ def test_all_tickets_rejected_gives_no_progress_and_no_crash():
 def test_graph_marks_rejected_nodes_as_not_measurable():
     g = ev.analyse(TREE).tree
     by = {k: (p, ign) for k, p, ign in zip(g.keys, g.progress.tolist(), g.ignored.tolist())}
-    assert by["S2"][1] and math.isnan(by["S2"][0]) and by["E2"][1] and math.isnan(by["E2"][0]) and by["S4a"][1] and by["S3a"][1]
+    assert by["S2"][1] and math.isnan(by["S2"][0]) and by["E2"][1] and math.isnan(by["E2"][0]) and by["S4"][1] and not by["S3"][1]      # S3a und S4a liegen unter der zweiten Ebene und sind nicht gezeichnet
     assert by["E1"][0] == pytest.approx(1.0) and by["S1"][1] is False
 
 

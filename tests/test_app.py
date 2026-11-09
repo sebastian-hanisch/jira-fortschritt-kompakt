@@ -245,7 +245,7 @@ def test_the_assumptions_box_is_in_the_app_with_the_limits():
     at = _open(plan_csv(make_mini()))
     box = next(e for e in at.expander if e.label == "⚠️ Annahmen, Grenzen und bekannte Probleme")
     text = " ".join(m.value for m in box.markdown)
-    assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.GRAPH_MAX_NODES} Einträge" in text
+    assert "Nur ein Stichtag" in text and "Obergrenzen" in text and f"{consts.MAX_UPLOAD_MB} MB" in text and f"{consts.MAX_IMPORT_ISSUES} Tickets" in text and f"{consts.TREE_LEVEL_LIMITS[0]} Einträgen" in text and f"{consts.TREE_LEVEL_LIMITS[1]} in der zweiten" in text
 
 
 JIRA_PROGRESS_CSV = (

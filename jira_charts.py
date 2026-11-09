@@ -250,7 +250,7 @@ def _node_hover(g, k: int, unit: str) -> str:
     if g.ignored is not None and g.ignored[k]:
         lines.append("ausgeschlossen: zählt nicht (zurückgewiesen)")
     if g.hidden[k]:
-        lines.append(f"{g.hidden[k]} Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst")
+        lines.append(f"{g.hidden[k]} Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst" if not g.is_leaf[k] else f"{g.hidden[k]} Tickets darunter sind hier nicht einzeln gezeichnet")
     return "<br>".join(lines)
 
 

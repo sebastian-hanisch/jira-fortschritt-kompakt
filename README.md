@@ -1,7 +1,7 @@
 # Jira-Fortschritt kompakt
 
 Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
-Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Teilprojektbaum (bei vielen Tickets nur die schwersten, der Rest in einem Eintrag „Rest“) und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
+Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Teilprojektbaum (zwei Ebenen unter der Wurzel, bei vielen Tickets nur die schwersten, der Rest in einem Eintrag „Rest“) und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
 Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
 ## Starten
@@ -121,7 +121,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
 - **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
-- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum und in den Kacheln höchstens 250 Einträge (die schwersten; die leichtesten Tickets einer Ebene stehen zusammen in einem Eintrag „Rest“), höchstens 20000 Tickets und 50 MB je Datei.
+- **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum und in den Kacheln zwei Ebenen unter der Wurzel mit höchstens 60 Einträgen in der ersten und 200 in der zweiten (die schwersten; die leichtesten Kinder eines Knotens stehen zusammen in einem Eintrag „Rest“, und wo es wenige sind, auch kleine einzeln; was tiefer liegt, öffnet ein Klick), höchstens 20000 Tickets und 50 MB je Datei.
 - **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
 

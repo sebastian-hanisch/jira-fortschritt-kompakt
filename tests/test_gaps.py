@@ -26,7 +26,7 @@ def _graph_of(issues, w, c, credit_of, **kw):
 def test_graph_rows_put_leaves_one_below_the_other_and_parents_in_the_middle_of_their_children():
     mini = make_mini()
     atoms = A.select_atoms(mini)
-    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {})
+    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {}, limits=(10, 10, 10))
     assert g.keys == ("Projekt", "E1", "S1", "S2", "T1", "T2", "E2", "S3", "S4", "B1")
     # Blätter S1, T1, T2, S3, S4, B1 in den Zeilen 0 bis 5; S2 mitten über T1 und T2, E1 mitten über S1 und S2, E2 über S3 und S4, das Projekt über E1 und B1
     assert g.y.tolist() == [2.875, 0.75, 0.0, 1.5, 1.0, 2.0, 3.5, 3.0, 4.0, 5.0]
@@ -53,7 +53,7 @@ def test_graph_of_nothing_has_only_the_project_node_without_progress():
 def test_graph_with_exactly_the_node_limit_is_drawn_completely():
     mini = make_mini()
     atoms = A.select_atoms(mini)
-    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {}, max_nodes=10)
+    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {}, limits=(10, 10, 10))
     assert g.n_total == 10 and g.shown_depth == 3 and not g.hidden.any()
 
 
@@ -174,7 +174,7 @@ def test_squarify_stays_inside_the_rectangle_and_keeps_the_rectangles_reasonably
 
 def test_inner_tiles_lie_inside_the_frame_of_their_outer_tile(mini):
     atoms = A.select_atoms(mini)
-    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {})
+    g = A.tree_graph(mini, atoms, A.atom_weights(mini, atoms), np.array([1.0, 0.0, 0.8, 1.0, 1.0, 0.0]), {}, limits=(10, 10, 10))
     tiles = CH.tile_layout(g)
     outer = {t.node: t for t in tiles if t.level == 1}
     for t in (t for t in tiles if t.level == 2):
@@ -198,7 +198,7 @@ def test_node_hover_names_what_is_missing_and_what_is_left_out(mini):
         is_atom=np.array([False, True]), is_leaf=np.array([True, True]), hidden=np.array([0, 3]), ignored=np.array([True, False]))
     a, b = CH._node_hover(g, 0, "SP"), CH._node_hover(g, 1, "SP")
     assert a == "A: Titel<br>Story · Done<br>kein Gewicht<br>Fortschritt 100 %<br>zählt nicht selbst (Zählebene)<br>ausgeschlossen: zählt nicht (zurückgewiesen)"
-    assert b == "B<br>Gewicht 2.00 SP<br>kein Fortschritt messbar<br>3 Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst"
+    assert b == "B<br>Gewicht 2.00 SP<br>kein Fortschritt messbar<br>3 Tickets darunter sind hier nicht einzeln gezeichnet"
 
 
 def test_node_hover_does_not_call_a_weighted_or_partial_atom_not_counting():
@@ -208,3 +208,11 @@ def test_node_hover_does_not_call_a_weighted_or_partial_atom_not_counting():
     assert "zählt nicht selbst" not in CH._node_hover(g, 0, "SP")           # hat Gewicht
     assert "zählt nicht selbst" not in CH._node_hover(g, 1, "SP")           # ist selbst ein Atom
     assert "zählt nicht selbst" not in CH._node_hover(g, 2, "SP")           # hat Kinder
+
+
+def test_node_hover_tells_a_node_with_a_rest_node_from_a_node_at_the_last_drawn_level():
+    g = types.SimpleNamespace(
+        keys=("A", "B"), titles=("", ""), types=("", ""), statuses=("", ""), weight=np.array([2.0, 2.0]), progress=np.array([0.5, 0.5]),
+        is_atom=np.array([False, False]), is_leaf=np.array([False, True]), hidden=np.array([4, 2]), ignored=None)
+    assert CH._node_hover(g, 0, "SP").endswith("4 Tickets darunter sind im Sammelknoten „Rest“ zusammengefasst")
+    assert CH._node_hover(g, 1, "SP").endswith("2 Tickets darunter sind hier nicht einzeln gezeichnet")

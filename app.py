@@ -299,7 +299,7 @@ def render_charts(a, root):
         tiles_key = f"chart_tiles_{root}"
         st.plotly_chart(build_tiles(a.tree, unit), width="stretch", key=tiles_key, on_select=partial(_drill, tiles_key), selection_mode="points")
         st.caption("Fläche = Gewicht, Farbe = Fortschritt, große Kacheln = Kinder von " + ("Wurzel" if root != C.ROOT_ALL else "Projekt") + ", die kleinen darin = deren Kinder. **Ein Klick auf eine Kachel mit Kindern öffnet sie als Teilprojekt** "
-                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht). Eine große Kachel öffnet ihr Ticket über die Kopfzeile, die kleinen Kacheln darin öffnen ihr eigenes Ticket; mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen. Sind es zu viele Kacheln, fasst eine Kachel „Rest“ die leichtesten zusammen.")
+                   "(eine Stufe tiefer, Kacheln ohne Kinder reagieren nicht). Eine große Kachel öffnet ihr Ticket über die Kopfzeile, die kleinen Kacheln darin öffnen ihr eigenes Ticket; mit den Knöpfen in der Seitenleiste geht es wieder hoch. Kacheln ohne Gewicht (zurückgewiesen, ohne Story Points bei „nicht zählen“) fehlen. Gibt es viele kleine Tickets, fasst eine Kachel „Rest“ die leichtesten eines Knotens zusammen; sind es wenige, stehen auch kleine einzeln da.")
     else:
         st.info("Kein Ticket hat Gewicht; die Kachelansicht bleibt leer. Die Auswahl „Tickets ohne Story Points“ ändern.")
 
@@ -309,7 +309,8 @@ def render_charts(a, root):
     st.plotly_chart(build_tree_graph(g, unit), width="stretch", key=graph_key, on_select=partial(_drill, graph_key), selection_mode="points")
     st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
                "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, Raute = „Rest“ (die leichtesten Tickets einer Ebene, nicht einzeln gezeichnet), grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt** (ein Blatt reagiert nicht)."
-               + (f" Der Teilprojektbaum hätte {g.n_total} Knoten; gezeichnet werden die schwersten (höchstens {C.GRAPH_MAX_NODES} Einträge), die übrigen stehen in den Sammelknoten „Rest“. Ein Teilprojekt als Wurzel zeigt mehr." if g.is_rest.any() else ""))
+               f" Gezeigt werden zwei Ebenen unter {_below(root)} (darunter liegen insgesamt {g.n_total - 1} Tickets); was tiefer liegt, zeigt ein Klick auf den Knoten."
+               + (f" Je Ebene stehen die schwersten Tickets einzeln (höchstens {C.TREE_LEVEL_LIMITS[0]} in der ersten, {C.TREE_LEVEL_LIMITS[1]} in der zweiten), die übrigen eines Knotens zusammen im „Rest“." if g.is_rest.any() else ""))
 
 
 def render_matrix(issues, a, root):

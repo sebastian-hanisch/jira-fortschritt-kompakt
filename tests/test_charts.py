@@ -175,7 +175,7 @@ def test_labels_are_annotations_so_that_a_selection_cannot_dim_them(mini):
 def test_graph_labels_sit_right_of_leaves_and_above_nodes_with_children(mini):
     g = ev.analyse(mini).tree
     by_key = {a.text: a for a in build_tree_graph(g, "SP").layout.annotations}
-    assert by_key["T1"].xanchor == "left" and by_key["T1"].xshift > 0 and by_key["E1"].yanchor == "bottom" and by_key["E1"].yshift > 0
+    assert by_key["S1"].xanchor == "left" and by_key["S1"].xshift > 0 and by_key["E1"].yanchor == "bottom" and by_key["E1"].yshift > 0
 
 
 def test_large_graphs_label_only_the_nodes_with_children():
