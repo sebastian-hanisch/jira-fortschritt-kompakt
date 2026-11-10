@@ -45,6 +45,38 @@ def test_groups_by_hierarchy_level_are_part_of_the_analysis(mini):
     assert ev.analyse(mini, ev.Settings(level=2)).stats.labels == ("S1", "S2", "S3", "S4", "(keine Stufe 2)")
 
 
+def _with_manual(mini, **percent):
+    return tuple(dataclasses.replace(t, manual_pct=percent[t.key]) if t.key in percent else t for t in mini)
+
+
+def test_a_manual_percent_replaces_the_credit_of_the_status_by_hand(mini):
+    issues = _with_manual(mini, S1=50.0, S2=60.0, S3=100.0, E1=100.0)               # S4 (In Review) und B1 (Done) bleiben beim Status; das Epic E1 zählt nie, sein Wert wird nicht gelesen
+    a = ev.analyse(issues)
+    assert (a.n_atoms, a.weight, a.n_manual) == (5, 14.0, 3)
+    assert a.c.tolist() == [0.5, 0.6, 1.0, 0.8, 1.0] and a.done.tolist() == [False, False, True, False, True]               # S1 steht auf Done, aber nur zu 50 %; S3 auf To Do, aber zu 100 %
+    assert a.progress == pytest.approx((3 * 0.5 + 5 * 0.6 + 2 * 1.0 + 3 * 0.8 + 1) / 14) and a.progress_done == pytest.approx(3 / 14)          # 9.9 / 14; S3 (2) und B1 (1)
+    assert ev.check_consistency(a) == [] and ev.analyse(mini).n_manual == 0
+
+
+def test_a_manual_percent_of_zero_overrides_a_done_status_and_a_rejected_status_still_wins():
+    items = (Issue(key="A", status="Done", points=4.0, manual_pct=0.0), Issue(key="B", status="Rejected", points=6.0, manual_pct=100.0), Issue(key="C", status="To Do", points=2.0))
+    a = ev.analyse(items)
+    assert [items[i].key for i in a.atoms] == ["A", "C"] and a.n_excluded == 1 and a.n_manual == 1
+    assert a.progress == 0.0 and a.progress_done == 0.0
+
+
+def test_a_manual_percent_is_not_changed_by_the_status_weights(mini):
+    issues = _with_manual(mini, S1=50.0)
+    a = ev.analyse(issues, ev.Settings(overrides=(("Done", 0.2),)))
+    assert a.c.tolist() == [0.5, 0.0, 0.0, 0.8, 0.2]                                    # S1 bleibt bei 50 %, B1 folgt dem geänderten Status
+
+
+def test_the_graph_shows_the_manual_percent_for_a_leaf_without_weight(mini):
+    ignore = ev.Settings(unest_rule=C.UNEST_IGNORE)                                      # S4 ist ungeschätzt und wiegt dann 0
+    manual, plain = (ev.analyse(issues, ignore).tree for issues in (_with_manual(mini, S4=40.0), mini))
+    assert dict(zip(manual.keys, manual.progress.tolist()))["S4"] == pytest.approx(0.4) and dict(zip(plain.keys, plain.progress.tolist()))["S4"] == pytest.approx(0.8)       # sonst die 80 % von In Review
+
+
 def test_status_list_orders_by_credit_then_not_started_first(mini):
     assert ev.status_list(mini) == ["To Do", "In Progress", "In Review", "Done"]
     assert ev.status_list(()) == []

@@ -31,6 +31,7 @@ class Issue:
     parent: str = ""                 # Schlüssel des übergeordneten Tickets, leer ohne Eltern
     sprints: tuple[str, ...] = ()    # in Jira-Reihenfolge; der letzte ist der aktuelle
     team: str = ""
+    manual_pct: float | None = None  # „Prozent erledigt (manuell)“ (0 bis 100); ist es gesetzt, gilt es bei einem zählenden Ticket statt der Gutschrift des Status
 
     @property
     def is_epic(self) -> bool:
@@ -626,7 +627,7 @@ def heaviest_by_level(parent, weight, limits) -> tuple[list[int], dict[int, list
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, limits: tuple[int, ...] = C.TREE_LEVEL_LIMITS,
                excluded: frozenset[int] = frozenset(), ctx: dict | None = None) -> TreeGraph:
     """Gewicht und Fortschritt je Knoten des Hierarchiebaums. Ein Knoten trägt die Summe seiner Atome (er selbst, falls er eins ist, und alle darunter), der Fortschritt ist
-    die gewichtete Gutschrift dieser Summe. Ein Blatt ohne Gewicht zeigt die Gutschrift seines Status (z. B. Sub-Tasks); alles andere ohne Gewicht bleibt leer. Ohne `root` steht
+    die gewichtete Gutschrift dieser Summe. Ein Blatt ohne Gewicht zeigt die Gutschrift seines Status oder seinen manuellen Prozentwert; alles andere ohne Gewicht bleibt leer. Ohne `root` steht
     ein Knoten „Projekt“ über allen Wurzeln. Gezeichnet werden nur so viele Ebenen unter der Wurzel, wie `limits` Grenzen hat, je Ebene die schwersten Knoten (siehe `heaviest_by_level`); die ausgelassenen Kinder eines Knotens stehen zusammen
     in einem Sammelknoten „Rest“ mit ihrer Summe aus Gewicht und Gutschrift. Ein Knoten in der letzten Ebene, unter dem noch Tickets liegen, trägt deren Zahl in `hidden`."""
     order = tree_order(issues, root, ctx)
@@ -715,7 +716,8 @@ def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str,
         elif wsum[v] > 0:
             out_progress.append(float(csum[v] / wsum[v]))
         elif size[v] == 1 and node_issue[v] >= 0 and not issues[node_issue[v]].is_epic:
-            out_progress.append(float(credit_of.get(issues[node_issue[v]].status, np.nan)))
+            manual = issues[node_issue[v]].manual_pct
+            out_progress.append(float(credit_of.get(issues[node_issue[v]].status, np.nan)) if manual is None else manual / 100)
         else:
             out_progress.append(float("nan"))
         out_atom.append(bool(is_atom[v]))

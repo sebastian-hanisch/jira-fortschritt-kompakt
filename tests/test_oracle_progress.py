@@ -1,7 +1,7 @@
 """Orakel-Test: Der Fortschritt wird ein zweites Mal aus der Definition gerechnet, ohne Code des Werkzeugs (kein numpy, keine Hilfsfunktionen aus `jira_core`), und mit `analyse` verglichen.
 
 Die Definition (Abschnitt „So wird gerechnet“): Zählende Tickets sind die Blätter des Ticket-Baums (keine Epics, keine Sub-Tasks: eine Story zählt selbst; zurückgewiesene Tickets samt allem darunter fallen heraus). Gewicht ist
-die Story-Points-Zahl, bei fehlender Zahl entscheidet die Regel A bis F, H oder I. Die Gutschrift folgt dem Statusnamen. Fortschritt = Summe(Gewicht · Gutschrift) / Summe(Gewicht).
+die Story-Points-Zahl, bei fehlender Zahl entscheidet die Regel A bis F, H oder I. Die Gutschrift folgt dem Statusnamen, bei einem Ticket mit „Prozent erledigt (manuell)“ diesem Wert. Fortschritt = Summe(Gewicht · Gutschrift) / Summe(Gewicht).
 
 Verglichen wird für Zufallsprojekte in allen Kombinationen aus Regel für ungeschätzte Tickets (8) und Wurzel (ganzer Plan, Epics, Stories mit Sub-Tasks).
 Die Statusnamen stammen aus `conftest.STATUSES`; ihre Gutschriften stehen hier ausdrücklich, damit auch die Erkennung der Namen unabhängig geprüft wird."""
@@ -21,6 +21,21 @@ from conftest import random_project
 CREDIT = {"Backlog": 0.0, "Specification": 0.0, "In Arbeit": 0.0, "In Review": 0.8, "Merged": 0.8, "Ready4Test": 0.9, "Ready4Prod": 1.0}
 DONE = {"Ready4Prod"}
 UNEST = {"A": C.UNEST_MEDIAN, "B": C.UNEST_PLAN, "C": C.UNEST_TYPE, "D": C.UNEST_SIBLINGS, "E": C.UNEST_TEAM, "F": C.UNEST_CHAIN, "H": C.UNEST_ONE, "I": C.UNEST_IGNORE}
+
+
+def manualize(plan):
+    """Setzt bei jedem vierten Ticket einen manuellen Prozentwert, auch bei Epics und zurückgewiesenen Tickets (dort gilt er nicht): So kommen alle Fälle vor."""
+    values = (0.0, 25.0, 50.0, 90.0, 100.0, 33.3)
+    return tuple(dataclasses.replace(t, manual_pct=values[k % len(values)]) if k % 4 == 0 else t for k, t in enumerate(plan))
+
+
+def credit_of(t):
+    """Gutschrift eines zählenden Tickets: der manuelle Prozentwert, sonst die des Status."""
+    return CREDIT[t.status] if t.manual_pct is None else t.manual_pct / 100
+
+
+def is_done(t):
+    return t.status in DONE if t.manual_pct is None else t.manual_pct >= 100
 
 
 def _depth(t, by_key):
@@ -119,7 +134,7 @@ def reference(plan, root, unest):
     total = sum(weights.values())
     if total <= 0:
         return {"weight": total, "n": len(atoms), "progress": math.nan, "done": math.nan, "unestimated": sum(a.points is None for a in atoms)}
-    return {"weight": total, "n": len(atoms), "progress": sum(weights[a.key] * CREDIT[a.status] for a in atoms) / total, "done": sum(weights[a.key] for a in atoms if a.status in DONE) / total,
+    return {"weight": total, "n": len(atoms), "progress": sum(weights[a.key] * credit_of(a) for a in atoms) / total, "done": sum(weights[a.key] for a in atoms if is_done(a)) / total,
             "unestimated": sum(a.points is None for a in atoms)}
 
 
@@ -137,7 +152,7 @@ def _same(a, b):
 
 @pytest.mark.parametrize("seed", range(12))
 def test_analyse_matches_the_reference_for_every_rule_and_root(seed):
-    plan = random_project(seed, n_epics=4)
+    plan = manualize(random_project(seed, n_epics=4))
     for root in _roots(plan):
         scoped = A.scope_issues(plan, root)
         for letter, unest in UNEST.items():

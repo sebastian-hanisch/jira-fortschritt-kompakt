@@ -22,7 +22,7 @@ def _pct_text(progress: float, weight: float, unit: str) -> str:
 
 
 def build_progress_bars(stats, unit: str):
-    """Ein Balken je Gruppe, Länge = Gewicht: erledigt (dunkel), durch Status angerechnet (hell), offen (grau). Beschriftung rechts: Fortschritt und Gewicht."""
+    """Ein Balken je Gruppe, Länge = Gewicht: erledigt (dunkel), teilweise angerechnet (hell), offen (grau). Beschriftung rechts: Fortschritt und Gewicht."""
     order = sorted(np.argsort(-stats.weight, kind="stable")[:MAX_BARS])           # die gewichtsstärksten Gruppen, in der natürlichen Reihenfolge der Gruppen gezeigt
     labels = [_plain(stats.labels[i]) for i in order]
     done = np.minimum(stats.done_weight[order], stats.credited[order])
@@ -30,7 +30,7 @@ def build_progress_bars(stats, unit: str):
     rest = np.maximum(stats.weight[order] - done - partial, 0.0)
     prog = stats.progress[order]
     fig = go.Figure()
-    for name, values, color in (("erledigt", done, C.COLOR_DONE), ("durch Status angerechnet", partial, C.COLOR_PARTIAL), ("offen", rest, C.COLOR_OPEN)):
+    for name, values, color in (("erledigt", done, C.COLOR_DONE), ("teilweise angerechnet", partial, C.COLOR_PARTIAL), ("offen", rest, C.COLOR_OPEN)):
         fig.add_trace(go.Bar(y=labels, x=values, orientation="h", name=name, marker_color=color, hovertemplate=f"%{{y}}<br>{name}: %{{x:.2f}} {unit}<extra></extra>"))
     top = float(max(stats.weight[order].max(), 1e-9)) if len(order) else 1.0
     fig.update_layout(annotations=[dict(x=w, y=label, text=" " + _pct_text(p, w, unit), showarrow=False, xanchor="left", font=dict(size=12)) for label, p, w in zip(labels, prog, stats.weight[order])])

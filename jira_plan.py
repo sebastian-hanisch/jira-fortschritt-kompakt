@@ -1,7 +1,7 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Story Points, Sprint und Team. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
+Story Points, Sprint, Team und „Prozent erledigt (manuell)“. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
 Schätzungsspalten) werden bewusst nicht gelesen: Atlassian nennt keine Formel, und die Werte beziehen auch im Plan ausgeblendete Vorgänge und alle Hierarchieebenen ein. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
@@ -31,7 +31,7 @@ class ImportReport:
 
 FIELD_LABELS = (
     ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
-    ("sprint", "Sprint"), ("team", "Team"))
+    ("sprint", "Sprint"), ("team", "Team"), ("manual", "Prozent erledigt (manuell)"))
 NOT_FOUND = "nicht gefunden"
 
 _ALIASES = {
@@ -43,6 +43,7 @@ _ALIASES = {
     "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang"),
     "sprint": ("sprint",),
     "team": ("team",),
+    "manual": ("prozent erledigt (manuell)",),
 }
 DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # die Schätzung in Tagen des Plan-Exports: wird nicht gelesen, nur gemeldet
 _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgabe", "untervorgang"}
@@ -63,6 +64,15 @@ def parse_number(text) -> float | None:
         except ValueError:
             return None
     return value if math.isfinite(value) and value >= 0 else None
+
+
+def parse_manual_percent(text) -> float | None:
+    """„Prozent erledigt (manuell)“ aus Text oder Zahl: eine Zahl von 0 bis 100 (Prozent, nicht Anteil: „0,5“ sind 0,5 %), mit oder ohne Prozentzeichen, Komma oder Punkt als Dezimaltrenner.
+    Leer, unlesbar, nicht endlich oder außerhalb von 0 bis 100 = None: Ein solcher Wert würde den Fortschritt verfälschen."""
+    if isinstance(text, str):
+        text = text.strip().rstrip("%").strip()
+    value = parse_number(text)
+    return value if value is not None and value <= 100 else None
 
 
 def _split_list(text: str) -> tuple[str, ...]:
@@ -106,7 +116,7 @@ def field_counts(issues) -> dict[str, int]:
     return {
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
-        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues)}
+        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "manual": sum(i.manual_pct is not None for i in issues)}
 
 
 def coverage_rows(issues, found_in: dict[str, str]) -> list[dict]:
@@ -155,22 +165,24 @@ def _listed(row: list[str], cols: dict[str, list[int]], name: str) -> tuple[str,
     return tuple(part for value in _cells(row, cols, name) for part in _split_list(value))
 
 
-def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, bool]:
-    """Ein Ticket aus einer Zeile des Exports; der zweite Wert sagt, ob die Story Points einen Text enthielten, der keine Zahl ist."""
+def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, bool, bool]:
+    """Ein Ticket aus einer Zeile des Exports; die beiden letzten Werte sagen, ob die Story Points bzw. der manuelle Prozentwert einen Text enthielten, der keine brauchbare Zahl ist."""
     type_name = _cell(row, cols, "type") or "Story"
     raw_points = _cell(row, cols, "points")
     points = parse_number(raw_points)
+    raw_manual = _cell(row, cols, "manual")
+    manual = parse_manual_percent(raw_manual)
     issue = Issue(
         key=_cell(row, cols, "key"), summary=_cell(row, cols, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=_cell(row, cols, "status"), points=points,
-        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"))
-    return issue, bool(raw_points) and points is None
+        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"), manual_pct=manual)
+    return issue, bool(raw_points) and points is None, bool(raw_manual) and manual is None
 
 
 def _first_keys(keys, limit: int = 3) -> str:
     return ", ".join(keys[:limit]) + (" …" if len(keys) > limit else "")
 
 
-def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: int, bad_points: int, duplicate_keys=(), self_parents: int = 0, cycle_keys=()) -> list[str]:
+def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: int, bad_points: int, duplicate_keys=(), self_parents: int = 0, cycle_keys=(), bad_manual: int = 0) -> list[str]:
     """Was dem Nutzer vor der ersten Zahl gesagt werden muss: fehlende Spalten, verlorene Eltern, unlesbare Story Points."""
     notes = []
     if "points" not in cols:
@@ -185,6 +197,8 @@ def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: i
         notes.append(f"{lost_parents} Verweise auf übergeordnete Tickets konnten keinem Ticket der Datei zugeordnet werden (Eltern außerhalb der Datei, oder ein Titel statt eines Schlüssels, der nicht eindeutig ist).")
     if bad_points:
         notes.append(f"Nicht lesbare Story Points (keine Zahl, nicht endlich oder negativ): {bad_points}. Diese Tickets gelten als ungeschätzt.")
+    if bad_manual:
+        notes.append(f"Nicht lesbare Werte in „Prozent erledigt (manuell)“ (keine Zahl von 0 bis 100): {bad_manual}. Diese Tickets nutzen ihren Status.")
     if duplicate_keys:
         notes.append(f"Schlüssel, die mehrfach vorkommen: {len(duplicate_keys)} ({_first_keys(duplicate_keys)}). Die Zuordnung zu übergeordneten Tickets und die Wahl eines Teilprojekts können dann falsch sein. Bitte den Export prüfen.")
     if self_parents:
@@ -233,13 +247,14 @@ def _read_rows(text: str, delimiter: str, max_issues: int) -> tuple[tuple[Issue,
             if len(body) > max_issues:
                 raise PlanImportError(f"Die Datei hat mehr Tickets als die Obergrenze von {max_issues}. Bitte den Plan einschränken (Filter in Jira Plans) und neu exportieren.")
 
-    issues, bad_points = [], 0
+    issues, bad_points, bad_manual = [], 0, 0
     for row in body:
         if not _cell(row, cols, "key"):
             continue
-        issue, unreadable = _issue_from_row(row, cols)
+        issue, unreadable, unreadable_manual = _issue_from_row(row, cols)
         issues.append(issue)
         bad_points += unreadable
+        bad_manual += unreadable_manual
     with_parent = sum(bool(i.parent) for i in issues)
     self_parents = sum(i.parent == i.key for i in issues)
     issues = _resolve_parents(issues)
@@ -248,5 +263,5 @@ def _read_rows(text: str, delimiter: str, max_issues: int) -> tuple[tuple[Issue,
     cycle_keys = [issues[n].key for n in cycle_members(issues)]
     report = ImportReport(issues=len(issues))
     report.columns = coverage_rows(issues, {name: ", ".join(dict.fromkeys(header[i].strip() for i in idx)) for name, idx in cols.items()})
-    report.notes = _report_notes(cols, header, lost_parents, bad_points, duplicate_keys, self_parents, cycle_keys)
+    report.notes = _report_notes(cols, header, lost_parents, bad_points, duplicate_keys, self_parents, cycle_keys, bad_manual)
     return tuple(issues), report

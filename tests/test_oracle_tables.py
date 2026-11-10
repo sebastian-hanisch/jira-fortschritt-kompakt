@@ -4,7 +4,7 @@ Die Referenz nutzt nur Schleifen und Wörterbücher (Gewichte und Zählung stamm
 mit allen Regeln für ungeschätzte Tickets sowie für den ganzen Plan und mehrere Wurzeln. Jeder Wert jeder Zelle muss übereinstimmen."""
 
 import pytest
-from test_oracle_progress import CREDIT, DONE, UNEST, _rejected, _roots, solve
+from test_oracle_progress import CREDIT, UNEST, _rejected, _roots, credit_of, is_done, manualize, solve
 
 import jira_constants as C
 import jira_core as A
@@ -54,17 +54,18 @@ def expected_matrix(plan, root, unest):
 
     def entry(t):
         label, _ = _row_ticket(t, root, solved.by_key)
-        return rows.setdefault(label, {"by_status": {}, "rejected": 0.0, "credited": 0.0})
+        return rows.setdefault(label, {"by_status": {}, "rejected": 0.0, "credited": 0.0, "done": 0.0})
     for t in solved.atoms:
         row = entry(t)
         w = solved.weights[t.key]
         row["by_status"][t.status] = row["by_status"].get(t.status, 0.0) + w
-        row["credited"] += w * CREDIT[t.status]
+        row["credited"] += w * credit_of(t)
+        row["done"] += w if credit_of(t) >= 0.9 - 1e-9 else 0.0          # „Completed“: Gutschrift ab 90 %, ob vom Status oder von Hand
     for t in _rejected_leaves(solved):
         entry(t)["rejected"] += t.points if t.points is not None else solved.fallback(t)
     statuses = {t.status for t in solved.atoms}
     done_statuses = {s for s in statuses if CREDIT[s] >= 0.9}
-    return rows, statuses, done_statuses
+    return rows, statuses, done_statuses | ({"manuell"} if any(t.manual_pct is not None for t in solved.atoms) else set())
 
 
 def _check_matrix(got_rows, expected):
@@ -72,7 +73,7 @@ def _check_matrix(got_rows, expected):
     by_label = {r[T.ROW_COL]: r for r in got_rows}
     assert set(by_label) == set(rows) | ({T.SUM_LABEL} if rows else set())
     merged = {"by_status": {s: sum(r["by_status"].get(s, 0.0) for r in rows.values()) for s in statuses}, "rejected": sum(r["rejected"] for r in rows.values()),
-              "credited": sum(r["credited"] for r in rows.values())}
+              "credited": sum(r["credited"] for r in rows.values()), "done": sum(r["done"] for r in rows.values())}
     for label, row in {**rows, **({T.SUM_LABEL: merged} if rows else {})}.items():
         got = by_label[label]
         assert len(got) == 1 + len(statuses) + 4, label
@@ -82,7 +83,7 @@ def _check_matrix(got_rows, expected):
         net = sum(row["by_status"].values())
         assert _same(got[T.REJECTED_COL], row["rejected"]) and _same(got[T.TOTAL_NET_COL], net), label
         values = list(got.values())
-        completed = sum(row["by_status"].get(s, 0.0) for s in done_statuses) / net if net > 0 and done_statuses else None
+        completed = row["done"] / net if net > 0 and done_statuses else None
         assert _same(values[-2], completed) and _same(got[T.PROGRESS_COL], row["credited"] / net if net > 0 else None), label
 
 
@@ -102,8 +103,8 @@ def expected_sprints(plan, root, unest):
         w = solved.weights[t.key]
         g["n"] += 1
         g["w"] += w
-        g["credited"] += w * CREDIT[t.status]
-        g["done"] += w if t.status in DONE else 0.0
+        g["credited"] += w * credit_of(t)
+        g["done"] += w if is_done(t) else 0.0
         if len(sprints) > 1:
             g["carried"] += 1
             g["carried_w"] += w
@@ -126,7 +127,7 @@ def _check_sprints(got_rows, expected):
 
 @pytest.mark.parametrize("seed", range(8))
 def test_the_tables_match_the_reference_for_every_rule_and_root(seed):
-    plan = random_project(seed, n_epics=4)
+    plan = manualize(random_project(seed, n_epics=4))
     for root in _roots(plan):
         scoped = A.scope_issues(plan, root)
         for letter, unest in UNEST.items():

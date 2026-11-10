@@ -7,7 +7,7 @@ UPLOAD_NOTICE = f"""
 **Bitte vor dem Hochladen lesen.** Die Datei geht zur Berechnung an den Server, auf dem diese App läuft (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA), und liegt dort nur für Ihre
 Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
 ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
-und Story Points (optional Titel, Sprint und Team). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
+und Story Points (optional Titel, Sprint, Team und Prozent erledigt (manuell)). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
 den Server aber mit der Datei. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
 """
 
@@ -21,7 +21,7 @@ Story Points tragen; Tickets ohne Story Points behandelt die Auswahl „Tickets 
 
 **2. Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** des Plans sichtbar ist. Deshalb zuerst die Filter so setzen, dass genau der Teil des Plans erscheint, der
 ausgewertet werden soll (die Hierarchie darüber, z. B. Initiativen, gehört dazu, wenn sie als Wurzel wählbar sein soll), und über **Add fields** die Spalten einblenden: mindestens Vorgangsschlüssel und
-Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint und Team. Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
+Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint, Team und Prozent erledigt (manuell). Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
 
 **3. Exportieren.** In der Timeline-Ansicht: **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 Die erzeugte CSV-Datei hier hochladen; vorher Spalten wie Beschreibung und Kommentare, falls vorhanden, löschen.
@@ -36,8 +36,8 @@ Die deutsche Oberfläche und neuere Versionen können anders heißen; an einer e
 
 DATA_SOURCE_MARKDOWN = """
 **Plan-Export.** Wie man ihn erzeugt, steht oben unter „So kommt die Datei zustande“. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
-Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint* und *Team*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
-übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten, darunter Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten: Sie werden nicht einmal eingelesen. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt allein dem Statusnamen.
+Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Team* und *Prozent erledigt (manuell)*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
+übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten, darunter Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten: Sie werden nicht einmal eingelesen. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt dem Statusnamen oder, wenn eines eingetragen ist, dem Wert aus *Prozent erledigt (manuell)*.
 
 **Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum
 Ende der Sitzung noch im Speicher halten. Nach dem Einlesen bleiben nur die berechnungsrelevanten Felder (Namen von Personen werden gar nicht erst gelesen), und „Daten jetzt löschen“ verwirft die geladenen Tickets. Fehlermeldungen nennen nur den Fehlertyp, und die Ausnahmemeldungen stehen nicht im Protokoll der App (sie könnten Daten enthalten). Es gibt bewusst keine
@@ -61,7 +61,7 @@ Wo ein Zwischenticket doch eine Rolle spielt:
 
 **Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;
-Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern.
+Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern. Steht bei einem zählenden Ticket ein Wert (0 bis 100, mit oder ohne %-Zeichen) in der Spalte *Prozent erledigt (manuell)*, gilt dieser statt der Gutschrift des Status; ohne Wert bleibt es beim Status.
 
 **Fortschritt** einer Gruppe $G$ ist die Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte:
 """
@@ -160,6 +160,7 @@ ASSUMPTIONS_MARKDOWN = """
 - **Sub-Tasks** zählen nicht einzeln: Die Story zählt selbst mit ihren Story Points und ihrem Status, der Fortschritt ihrer Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt.
 - **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Jiras eigener Fortschritt wird nicht verwendet.** Die Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ des Exports liest das Werkzeug nicht. Laut [Atlassian](https://support.atlassian.com/jira-software-cloud/docs/track-progress-using-estimates-in-advanced-roadmaps/) bezieht Jiras Fortschritt die Schätzungen aller Hierarchieebenen und auch im Plan ausgeblendete Vorgänge ein, die Seite nennt keine Formel, und die Roll-up-Schätzung eines Elternvorgangs kann vom Fortschrittsbalken abweichen. In einem Export aus der eigenen Jira-Instanz stimmten die drei Spalten untereinander nicht überein (bis zu 0 % gegen 100 % von der Formel abgeschlossen ÷ (abgeschlossen + verbleibend)). Ein Vergleich mit der Zahl dieses Werkzeugs wäre deshalb nicht aussagekräftig. Was der Export nicht liefert, zeigt das Werkzeug nicht: Der Fortschritt hier folgt allein Status und Story Points der zählenden Tickets.
+- **Prozent erledigt (manuell).** Der Wert der Spalte ersetzt bei einem zählenden Ticket die Gutschrift des Status (0 bis 100, als Prozent: „0,5“ sind 0,5 %); die Tabelle der Gewichte ändert daran nichts. Ein zurückgewiesener Status geht vor: Das Ticket fällt trotzdem heraus. Bei einem Epic oder einer anderen Zusammenfassung zählt der Wert nicht, denn deren Fortschritt entsteht aus den Tickets darunter. „Nur Done“ und „Completed“ in der Status-Matrix zählen ein solches Ticket bei 100 % bzw. ab 90 %, die Spalten der Matrix gehören weiter dem Status. Die App kann nicht prüfen, ob der Wert stimmt.
 - **Zahlenformat der Story Points.** Ein Komma gilt als Dezimaltrenner: „1,000“ liest das Werkzeug als 1, nicht als tausend. Werte, die keine Zahl sind, nicht endlich (nan, inf) oder negativ sind, zählen als nicht geschätzt, und die App meldet ihre Zahl.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).

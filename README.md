@@ -24,6 +24,7 @@ CSV-Export aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma
 | Typ / Hierarchie | Hierarchie |
 | Eltern | Übergeordnetes Element (als Schlüssel, Schlüssel mit Titel oder eindeutiger Titel) |
 | Gewicht | Story Points (die Schätzung in Tagen, „Schätzung (T)“, wird nicht gelesen; unlesbare, unendliche und negative Werte gelten als nicht geschätzt) |
+| Fortschritt von Hand (optional) | Prozent erledigt (manuell): eine Zahl von 0 bis 100, mit oder ohne %-Zeichen; ist sie gefüllt, gilt sie bei einem zählenden Ticket statt der Gutschrift des Status, sonst der Status |
 | weitere | Titel, Sprint, Team (alle anderen Spalten, auch Personen, werden nicht gelesen) |
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
@@ -38,7 +39,7 @@ Instanz geprüft ist das nicht.
    hinzufügen. Laut Atlassian sind Story Points nur wählbar, wenn alle Teams im Plan Scrum-Teams sind (bei einem Kanban-Team fehlt die Option), Story Points und Zeitschätzungen (Tage, Stunden) sind nicht
    austauschbar, und beim Wechsel gehen nicht gespeicherte Schätzungen verloren. Steht der Plan auf Tagen, heißt die Spalte „Schätzung (T)“, und die liest dieses Werkzeug nicht. Die Tickets selbst müssen Story Points tragen.
 2. **Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** sichtbar ist: Filter auf den auszuwertenden Teil des Plans setzen (inklusive der Ebenen darüber, wenn sie als Wurzel
-   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint und Team.
+   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint, Team und Prozent erledigt (manuell).
 3. **Exportieren:** in der Timeline-Ansicht **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 4. **Prüfen:** Unter „Was wurde erkannt?“ zeigt die App, bei wie vielen Tickets Story Points stehen; fehlt die Spalte, warnt sie.
 
@@ -51,7 +52,7 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
   aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen) gehen nicht ein. Ausnahmen: Ein zurückgewiesenes Zwischenticket nimmt alle Blätter darunter mit; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
 * **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
-  Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %.
+  Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Steht in der Spalte „Prozent erledigt (manuell)“ ein Wert, gilt er statt dieser Gutschrift.
 * **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
 * **Fortschritt** einer Gruppe: Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte.
 
@@ -129,6 +130,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Sub-Tasks** zählen nicht einzeln: Die Story zählt selbst mit ihren Story Points und ihrem Status, der Fortschritt ihrer Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt.
 - **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Jiras eigener Fortschritt wird nicht verwendet.** Die Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ des Exports liest das Werkzeug nicht. Laut [Atlassian](https://support.atlassian.com/jira-software-cloud/docs/track-progress-using-estimates-in-advanced-roadmaps/) bezieht Jiras Fortschritt die Schätzungen aller Hierarchieebenen und auch im Plan ausgeblendete Vorgänge ein, die Seite nennt keine Formel, und die Roll-up-Schätzung eines Elternvorgangs kann vom Fortschrittsbalken abweichen. In einem Export aus der eigenen Jira-Instanz stimmten die drei Spalten untereinander nicht überein (bis zu 0 % gegen 100 % von der Formel abgeschlossen ÷ (abgeschlossen + verbleibend)). Ein Vergleich mit der Zahl dieses Werkzeugs wäre deshalb nicht aussagekräftig. Was der Export nicht liefert, zeigt das Werkzeug nicht: Der Fortschritt hier folgt allein Status und Story Points der zählenden Tickets.
+- **Prozent erledigt (manuell).** Der Wert der Spalte ersetzt bei einem zählenden Ticket die Gutschrift des Status (0 bis 100, als Prozent: „0,5“ sind 0,5 %); die Tabelle der Gewichte ändert daran nichts. Ein zurückgewiesener Status geht vor: Das Ticket fällt trotzdem heraus. Bei einem Epic oder einer anderen Zusammenfassung zählt der Wert nicht, denn deren Fortschritt entsteht aus den Tickets darunter. „Nur Done“ und „Completed“ in der Status-Matrix zählen ein solches Ticket bei 100 % bzw. ab 90 %, die Spalten der Matrix gehören weiter dem Status. Die App kann nicht prüfen, ob der Wert stimmt.
 - **Zahlenformat der Story Points.** Ein Komma gilt als Dezimaltrenner: „1,000“ liest das Werkzeug als 1, nicht als tausend. Werte, die keine Zahl sind, nicht endlich (nan, inf) oder negativ sind, zählen als nicht geschätzt, und die App meldet ihre Zahl.
 - **Nur an erfundenen Beispielen geprüft.** Die Rechenregeln sind in Tests von Hand nachgerechnet, an einem echten Export der eigenen Jira-Instanz aber nicht.
 - **Datenschutz.** Die Datei geht an den Server der App; die App speichert sie nicht, die Plattform kann sie aber bis zum Sitzungsende im Speicher halten (siehe „Datenquelle und Datenschutz“).

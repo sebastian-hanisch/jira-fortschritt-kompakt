@@ -43,33 +43,35 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({credit_text(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
-    completed_col = f"Completed ({'+'.join(done_statuses)})/(Total−Rejected)" if done_statuses else "Completed (kein Status ab 90 %)"
+    has_manual = any(issues[i].manual_pct is not None for i in keep)          # ein manueller Prozentwert ab 90 % zählt wie ein Status ab 90 %
+    names = "+".join([*done_statuses, *(["manuell ab 90 %"] if has_manual else [])])
+    completed_col = f"Completed ({names})/(Total−Rejected)" if done_statuses or has_manual else "Completed (kein Status ab 90 %)"
     ticket_of, label = _row_tickets(issues, a)
     cells: dict[str, dict] = {}
 
     def entry(i):
         t = ticket_of(i)
-        return cells.setdefault(label(t), {"by_status": {}, "rejected": 0.0, "credited": 0.0})
+        return cells.setdefault(label(t), {"by_status": {}, "rejected": 0.0, "credited": 0.0, "done": 0.0})
     for pos, i in enumerate(keep):
         row = entry(i)
         row["by_status"][issues[i].status] = row["by_status"].get(issues[i].status, 0.0) + float(a.w[pos])
         row["credited"] += float(a.w[pos] * a.c[pos])
+        row["done"] += float(a.w[pos]) if a.c[pos] >= C.COMPLETED_MIN_CREDIT - 1e-9 else 0.0
     for pos, i in enumerate(rej):
         entry(i)["rejected"] += float(w_rej[pos])
 
     def build(name, row):
         net = sum(row["by_status"].values())
-        done = sum(row["by_status"].get(st, 0.0) for st in done_statuses)
         out = {ROW_COL: name}
         out.update({heads[st]: row["by_status"].get(st, 0.0) for st in statuses})
         out.update({REJECTED_COL: row["rejected"], TOTAL_NET_COL: net,
-                    completed_col: (done / net if net > 0 and done_statuses else None), PROGRESS_COL: (row["credited"] / net if net > 0 else None)})
+                    completed_col: (row["done"] / net if net > 0 and (done_statuses or has_manual) else None), PROGRESS_COL: (row["credited"] / net if net > 0 else None)})
         return out
 
     rows = [build(name, cells[name]) for name in sorted(cells, key=A.natural_key)]
     if rows:
         merged = {"by_status": {st: sum(c["by_status"].get(st, 0.0) for c in cells.values()) for st in statuses}, "rejected": sum(c["rejected"] for c in cells.values()),
-                  "credited": sum(c["credited"] for c in cells.values())}
+                  "credited": sum(c["credited"] for c in cells.values()), "done": sum(c["done"] for c in cells.values())}
         rows.append(build(SUM_LABEL, merged))
     return rows, [heads[st] for st in statuses], completed_col
 

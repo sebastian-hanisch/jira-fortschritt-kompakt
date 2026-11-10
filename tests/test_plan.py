@@ -167,11 +167,11 @@ def test_people_releases_areas_priorities_labels_and_components_are_not_read_at_
     """Die Spalten stehen in der Datei (mit Namen und Werten), landen aber in keinem Ticket und nicht im Erkennungsbericht."""
     issues, report = J.read_plan(_csv(EPIC, STORY_A, STORY_B))
     assert not any(hasattr(i, name) for i in issues for name in ("assignee", "versions", "area", "priority", "labels", "components"))
-    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team"]
+    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team", "Prozent erledigt (manuell)"]
     assert "Person A" not in repr(issues) and "ux" not in repr(issues)
 
 
-SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")]
+SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")] + ["Prozent erledigt (manuell)"]
 
 
 def test_export_header_with_story_points_as_the_estimate_unit_finds_all_fields():
@@ -245,6 +245,27 @@ def test_jiras_own_progress_columns_are_not_read():
     issues, report = J.read_plan(_sp_csv(dict(zip(SP_HEADER, SP_HEADER, strict=True)), cells))
     assert not any(hasattr(i, name) for i in issues for name in ("jira_progress", "jira_done", "jira_left"))
     assert not any("Jira" in row["Feld"] for row in report.columns) and not hasattr(J, "parse_percent")
+
+
+def test_parse_manual_percent_takes_percent_from_0_to_100_with_or_without_the_sign():
+    p = J.parse_manual_percent
+    assert p("50") == 50.0 and p(" 75 % ") == 75.0 and p("12,5") == 12.5 and p("12.5%") == 12.5 and p("0") == 0.0 and p("100") == 100.0 and p(40) == 40.0
+    assert p("0,5") == 0.5                                                                   # Prozent, kein Anteil: 0,5 sind 0,5 %
+    assert p("") is None and p(None) is None and p("abc") is None and p("101") is None and p("-1") is None and p("nan") is None and p("inf") is None and p(True) is None
+
+
+MANUAL_HEAD = "Hierarchie;Titel;Story Points;Übergeordnetes Element;Vorgangsschlüssel;Vorgangsstatus;Prozent erledigt (manuell)\n"
+
+
+def test_the_manual_percent_column_is_read_and_unusable_values_are_reported():
+    rows = ["Epic;E;;;E-1;In Arbeit;90", "Story;A;3;E-1;A-1;To Do;50", "Story;B;2;E-1;A-2;Done;75 %", "Story;C;1;E-1;A-3;Done;", "Story;D;1;E-1;A-4;Done;150", "Story;E;1;E-1;A-5;Done;fast fertig"]
+    issues, report = J.read_plan((MANUAL_HEAD + "\n".join(rows) + "\n").encode("utf-8"))
+    assert {i.key: i.manual_pct for i in issues} == {"E-1": 90.0, "A-1": 50.0, "A-2": 75.0, "A-3": None, "A-4": None, "A-5": None}
+    assert any("Prozent erledigt (manuell)" in n and ": 2." in n and "nutzen ihren Status" in n for n in report.notes)
+    by_field = {row["Feld"]: row for row in report.columns}
+    assert by_field["Prozent erledigt (manuell)"]["Gefunden in"] == "Prozent erledigt (manuell)" and by_field["Prozent erledigt (manuell)"]["Tickets mit Wert"] == 3
+    plain, report = J.read_plan(b"Vorgangsschl\xc3\xbcssel;Vorgangsstatus\nA-1;Done\n")
+    assert plain[0].manual_pct is None and not any("manuell" in n for n in report.notes)          # die Spalte ist freiwillig und ohne sie gibt es keinen Hinweis
 
 
 # ---------------------------------------------------------------- Kodierung, Trennzeichen und CSV-Fehler

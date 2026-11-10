@@ -221,6 +221,15 @@ def test_both_charts_report_clicks_as_a_selection():
     assert not any(isinstance(n, ast.Name) and n.id == "child_pick" for n in ast.walk(tree)) and "Darunter öffnen" not in open(APP_PATH, encoding="utf-8").read()
 
 
+def test_a_manual_percent_replaces_the_status_and_is_announced():
+    data = ("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points;Prozent erledigt (manuell)\nE-1;In Arbeit;Epic;;;\nS-1;To Do;Story;E-1;4;50\nS-2;Done;Story;E-1;6;\n").encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    assert at.metric[0].value == "80.0 %" and at.metric[1].value == "60.0 %"                    # (4 · 0.5 + 6) / 10; nur Done: S-2 (6 von 10)
+    assert any("Bei einem zählenden Ticket gilt „Prozent erledigt (manuell)“" in c.value for c in at.caption)
+    assert not any("Bei" in c.value and "Prozent erledigt (manuell)" in c.value for c in _open(plan_csv(make_mini())).caption)
+
+
 def test_story_points_in_quarters_are_shown_with_two_decimals():
     at = _open("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;Epic;;\nS-1;To Do;Story;E-1;0,25\nS-2;To Do;Story;E-1;0,5\n".encode("utf-8"))
     _ok(at)

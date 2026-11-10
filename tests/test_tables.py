@@ -1,6 +1,8 @@
 """Tabellen von Hand: Status-Matrix je Ticket unter der Wurzel, Wirkung der Regeln und die Ausgabe als CSV, Wiki-Markup und HTML für Jira und Confluence."""
 
 
+import dataclasses
+
 import pytest
 
 import jira_constants as C
@@ -188,6 +190,18 @@ def test_the_rows_are_the_tickets_directly_below_the_root_with_everything_below_
     by = {r[T.ROW_COL]: r for r in rows}
     assert list(by) == ["S1", "S2", T.SUM_LABEL]                                                      # eine Stufe tiefer: die Kinder von E1
     assert by["S1"]["Done (1.0)"] == 3.0 and by["S2"]["In Progress"] == 5.0 and by["S2"]["Done (1.0)"] == 0.0
+
+
+def test_the_status_matrix_counts_a_manual_percent_in_progress_and_completed_by_hand(mini):
+    issues = tuple(dataclasses.replace(t, manual_pct={"S1": 50.0, "S3": 100.0}[t.key]) if t.key in ("S1", "S3") else t for t in mini)
+    rows, status_cols, completed = T.status_matrix(issues, ev.analyse(issues))
+    assert completed == "Completed (Done+manuell ab 90 %)/(Total−Rejected)" and status_cols == ["To Do", "In Progress", "In Review (0.8)", "Done (1.0)"]
+    by = {r[T.ROW_COL]: r for r in rows}
+    e1, e2, b1, total = by["E1: Epic A"], by["E2: Epic B"], by["B1"], by[T.SUM_LABEL]
+    assert (e1["Done (1.0)"], e1["In Progress"], e1[T.TOTAL_NET_COL]) == (3.0, 5.0, 8.0)                  # die Spalten zeigen weiter das Gewicht je Status
+    assert e1[completed] == 0.0 and e1[T.PROGRESS_COL] == pytest.approx((3 * 0.5) / 8)                    # S1 steht auf Done, ist aber nur zu 50 % fertig
+    assert e2["To Do"] == 2.0 and e2[completed] == pytest.approx(2 / 5) and e2[T.PROGRESS_COL] == pytest.approx((2 + 3 * 0.8) / 5)          # S3 steht auf To Do, ist aber zu 100 % fertig
+    assert b1[completed] == 1.0 and total[completed] == pytest.approx(3 / 14) and total[T.PROGRESS_COL] == pytest.approx((1.5 + 2 + 2.4 + 1) / 14)
 
 
 def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():

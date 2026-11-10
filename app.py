@@ -262,14 +262,17 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     if a.n_excluded:
         bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
         st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
+    if a.n_manual:
+        st.caption(("Bei einem zählenden Ticket gilt" if a.n_manual == 1 else f"Bei {a.n_manual} zählenden Tickets gilt") + " „Prozent erledigt (manuell)“ statt der Gutschrift des Status.")
     m1, m2, m3 = st.columns(3)
     credit = {name: round(100 * value) for name, value in C.STATUS_CLASS_CREDIT.items()}
     m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct), help=(
         "Summe aus Story Points mal Gutschrift des Status, geteilt durch die Summe der Story Points aller zählenden Tickets. Gutschrift nach dem Statusnamen: "
-        f"fertig {credit['done']} %, Test {credit['test']} %, Merged oder Review {credit['merged']} %, alles andere 0 % (änderbar in der Tabelle „Gewichte der Status“)."))
+        f"fertig {credit['done']} %, Test {credit['test']} %, Merged oder Review {credit['merged']} %, alles andere 0 % (änderbar in der Tabelle „Gewichte der Status“). "
+        "Hat ein Ticket einen Wert in „Prozent erledigt (manuell)“, gilt dieser statt der Gutschrift."))
     # Delta immer als „mein Wert minus Referenz“ (Referenz: der gewichtete Fortschritt); die Farbe bleibt neutral, weil kleiner nicht schlechter heißt.
     m2.metric("Nur Done, nach Gewicht", or_dash(a.progress_done, pct), delta=delta_points(a.progress_done, a.progress), delta_color="off", help=(
-        "Anteil des Gewichts, dessen Ticket in einem Status steht, der als fertig gilt, ohne Teilgutschriften für Test, Merged oder Review. Die Zahl darunter ist der Abstand zum gewichteten Fortschritt "
+        "Anteil des Gewichts, dessen Ticket in einem Status steht, der als fertig gilt (oder manuell auf 100 % steht), ohne Teilgutschriften für Test, Merged oder Review. Die Zahl darunter ist der Abstand zum gewichteten Fortschritt "
         "links (Prozentpunkte)."))
     m3.metric(f"Offenes Gewicht ({C.UNIT}, gesamt {de(a.weight, 2)})", de(0.0 if np.isnan(a.progress) else a.weight * (1 - a.progress), 2), help=(
         f"Was nach der gewichteten Rechnung noch zu tun ist: Gesamtgewicht mal (1 minus Fortschritt), in {C.UNIT}. Das Gesamtgewicht ist die Summe der Story Points aller zählenden Tickets, "
@@ -286,7 +289,7 @@ def render_charts(a, root):
     unit = C.UNIT
     st.markdown("### Fortschritt je Ticket direkt unter " + _below(root))
     st.plotly_chart(build_progress_bars(a.stats, unit), width="stretch", key="chart_bars")
-    st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch den Status angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
+    st.caption(f"Balkenlänge = Gewicht der Gruppe. Dunkel: erledigt; hell: durch Status oder manuellen Prozentwert angerechnet (z. B. 80 % für ein Ticket in Review); grau: offen. Rechts: Fortschritt und Gewicht in {unit}."
                + (f" Gezeigt werden die {MAX_BARS} gewichtsstärksten von {len(a.stats.labels)} Gruppen; die Tabelle unten enthält alle." if len(a.stats.labels) > MAX_BARS else ""))
 
     st.markdown("### 🗺️ Kachelansicht")

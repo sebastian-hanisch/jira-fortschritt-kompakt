@@ -37,6 +37,7 @@ class Analysis:
     plan: tuple                 # der ganze Plan, auf den sich die Mediane „im ganzen Plan“ beziehen (ohne Angabe die Tickets der Auswertung selbst)
     ctx: dict = field(default_factory=dict, compare=False, repr=False)      # Zwischenergebnisse zu diesen Tickets (siehe `A.cached`); die Tabellen und Regelvergleiche zu dieser Auswertung nutzen sie mit
     plan_ctx: dict | None = field(default=None, compare=False, repr=False)      # Zwischenergebnisse, die nur vom ganzen Plan abhängen (Baumreihenfolge, Tiefen)
+    n_manual: int = 0           # zählende Tickets, bei denen „Prozent erledigt (manuell)“ statt des Status gilt
 
     @property
     def level(self) -> int:
@@ -115,8 +116,9 @@ def _count(issues, settings: Settings, plan, ctx: dict | None = None, plan_ctx: 
     plan = A.cached(ctx, "plan", lambda: tuple(issues) if plan is None else tuple(plan))
     w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, ctx=ctx, subtasks_out=True, plan_ctx=plan_ctx)
     c, done, unest = A.cached(ctx, ("atom_arrays", settings.overrides), lambda: (
-        np.array([credit_of[issues[i].status] for i in atoms], dtype=float), np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool),
-        np.array([issues[i].points is None for i in atoms], dtype=bool)))
+        np.array([credit_of[issues[i].status] if issues[i].manual_pct is None else issues[i].manual_pct / 100 for i in atoms], dtype=float),
+        np.array([A.is_done_status(issues[i].status) if issues[i].manual_pct is None else issues[i].manual_pct >= 100 for i in atoms], dtype=bool),
+        np.array([issues[i].points is None for i in atoms], dtype=bool)))          # ein manueller Prozentwert ersetzt die Gutschrift des Status; „erledigt“ ist er nur bei 100
     return _Counted(credit_of, rejected, atoms, rejected_atoms, plan, w, c, done, unest, A.overall(w, c, done))
 
 
@@ -130,7 +132,7 @@ def analyse(issues, settings: Settings | None = None, plan=None, ctx: dict | Non
     first = A.assign_groups(issues, n.atoms, level_of(settings), ctx)
     stats = A.aggregate(first, n.w, n.c, n.done, n.unest)
     tree = A.tree_graph(issues, n.atoms, n.w, n.c, n.credit_of, settings.root, excluded=n.rejected, ctx=ctx)
-    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan, ctx, plan_ctx)
+    return Analysis(settings, n.credit_of, len(n.atoms), float(n.w.sum()), *n.overall, int(n.unest.sum()), stats, tree, tuple(n.atoms), n.rejected_atoms, n.w, n.c, n.done, first, n.plan, ctx, plan_ctx, sum(issues[i].manual_pct is not None for i in n.atoms))
 
 
 def headline(issues, settings: Settings, plan=None, ctx: dict | None = None, plan_ctx: dict | None = None) -> tuple[float, float, int, int]:
