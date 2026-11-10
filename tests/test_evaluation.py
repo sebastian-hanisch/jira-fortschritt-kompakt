@@ -58,6 +58,15 @@ def test_a_manual_percent_replaces_the_credit_of_the_status_by_hand(mini):
     assert ev.check_consistency(a) == [] and ev.analyse(mini).n_manual == 0
 
 
+def test_manual_percents_that_contradict_the_status_about_done_are_listed(mini):
+    issues = _with_manual(mini, S1=50.0, S2=60.0, S3=100.0, S4=0.0, B1=100.0)
+    # S1: Status Done, aber 50 %; S3: To Do, aber 100 %; S2 (In Progress, 60), S4 (In Review, 0) und B1 (Done, 100) widersprechen sich nicht
+    assert ev.manual_conflicts(issues, ev.analyse(issues)) == [("S1", "Done", 50.0), ("S3", "To Do", 100.0)]
+    assert ev.manual_conflicts(mini, ev.analyse(mini)) == []
+    rejected = (Issue(key="A", status="Rejected", points=1.0, manual_pct=100.0), Issue(key="B", status="Done", points=1.0))
+    assert ev.manual_conflicts(rejected, ev.analyse(rejected)) == []                  # ein zurückgewiesenes Ticket zählt nicht: kein Widerspruch
+
+
 def test_a_manual_percent_of_zero_overrides_a_done_status_and_a_rejected_status_still_wins():
     items = (Issue(key="A", status="Done", points=4.0, manual_pct=0.0), Issue(key="B", status="Rejected", points=6.0, manual_pct=100.0), Issue(key="C", status="To Do", points=2.0))
     a = ev.analyse(items)

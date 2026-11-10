@@ -24,6 +24,7 @@ NO_SPRINT = "(ohne Sprint)"      # Gruppe der Tickets, die weder selbst noch üb
 
 ROOT_ALL = ""              # Wurzel der Auswertung: leer = ganzes Projekt
 TREE_LEVEL_LIMITS = (60, 200)      # Teilprojektbaum und Kacheln zeigen zwei Ebenen unter der Wurzel mit höchstens so vielen Einträgen je Ebene; gezeichnet werden die schwersten, die leichteren Kinder eines Knotens stehen im Sammelknoten „Rest“
+TREE_MIN_PER_PARENT = 3      # im Teilprojektbaum und in den Kacheln stehen von jedem Knoten mindestens so viele der schwersten Kinder einzeln da (soweit die Grenze der Ebene reicht), damit ein riesiger Nachbar kleine Knoten nicht verdrängt
 GRAPH_LABEL_MAX = 60       # bis zu dieser Knotenzahl trägt jeder Knoten seinen Schlüssel, darüber nur die Knoten mit Kindern
 
 COLOR_DONE = "#2F6B65"

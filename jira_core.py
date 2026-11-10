@@ -590,9 +590,10 @@ def _layout_rows(keep: list[int], parent: np.ndarray) -> tuple[dict[int, float],
     return y, kept_kids
 
 
-def heaviest_by_level(parent, weight, limits) -> tuple[list[int], dict[int, list[int]]]:
-    """Welche Knoten eines Baums gezeichnet werden: die Wurzel (Eintrag 0) und darunter eine Ebene je Grenze in `limits`, jede mit höchstens so vielen Einträgen. Je Ebene wird immer der schwerste noch
-    nicht gewählte Knoten gewählt, solange er noch hineinpasst: Hat ein gewählter Knoten Kinder, die nicht alle gewählt sind, braucht er in der Ebene darunter einen Sammelknoten „Rest“, und der zählt ebenfalls
+def heaviest_by_level(parent, weight, limits, floor: int = 0) -> tuple[list[int], dict[int, list[int]]]:
+    """Welche Knoten eines Baums gezeichnet werden: die Wurzel (Eintrag 0) und darunter eine Ebene je Grenze in `limits`, jede mit höchstens so vielen Einträgen. Je Ebene kommen zuerst bis zu `floor`
+    der schwersten Kinder jedes Knotens an die Reihe (die Knoten der Ebene davor nach ihrem Gewicht, der schwerste zuerst), damit ein riesiger Nachbar kleine Knoten nicht verdrängt; danach wird immer der
+    schwerste noch nicht gewählte Knoten gewählt, solange er noch hineinpasst: Hat ein gewählter Knoten Kinder, die nicht alle gewählt sind, braucht er in der Ebene darunter einen Sammelknoten „Rest“, und der zählt ebenfalls
     zur Grenze; ein Knoten, der nicht mehr hineinpasst, bleibt draußen, leichtere können noch folgen. Gibt es weniger Knoten als Plätze, werden alle gezeichnet, auch kleine.
     Rückgabe: die gewählten Knoten in Tiefensuche-Reihenfolge und je gewähltem Knoten die ausgelassenen Kinder (nur nicht leere Einträge)."""
     n = len(parent)
@@ -606,14 +607,19 @@ def heaviest_by_level(parent, weight, limits) -> tuple[list[int], dict[int, list
     for limit in limits:
         open_kids = {p: len(children[p]) for p in level if children[p]}
         total = len(open_kids)                  # je Elternknoten ein Platz für seinen Sammelknoten, bis alle seine Kinder gewählt sind
+        chosen: set[int] = set()
+        candidates: list[int] = []
+        if floor > 0:
+            for p in sorted(open_kids, key=lambda q: (-float(weight[q]), q)):
+                candidates.extend(sorted(children[p], key=lambda k: (-float(weight[k]), k))[:floor])
         heap = [(-float(weight[c]), c) for p in open_kids for c in children[p]]
         heapq.heapify(heap)
-        chosen: set[int] = set()
         while heap:
-            _, c = heapq.heappop(heap)
+            candidates.append(heapq.heappop(heap)[1])
+        for c in candidates:
             p = int(parent[c])
             new_total = total + 1 - (1 if open_kids[p] == 1 else 0)
-            if new_total > max(limit, 1):
+            if c in chosen or new_total > max(limit, 1):
                 continue
             chosen.add(c)
             open_kids[p] -= 1
@@ -633,7 +639,7 @@ def heaviest_by_level(parent, weight, limits) -> tuple[list[int], dict[int, list
 
 
 def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str, float], root: str = C.ROOT_ALL, limits: tuple[int, ...] = C.TREE_LEVEL_LIMITS,
-               excluded: frozenset[int] = frozenset(), ctx: dict | None = None) -> TreeGraph:
+               excluded: frozenset[int] = frozenset(), ctx: dict | None = None, floor: int = C.TREE_MIN_PER_PARENT) -> TreeGraph:
     """Gewicht und Fortschritt je Knoten des Hierarchiebaums. Ein Knoten trägt die Summe seiner Atome (er selbst, falls er eins ist, und alle darunter), der Fortschritt ist
     die gewichtete Gutschrift dieser Summe. Ein Blatt ohne Gewicht zeigt die Gutschrift seines Status oder seinen manuellen Prozentwert; alles andere ohne Gewicht bleibt leer. Ohne `root` steht
     ein Knoten „Projekt“ über allen Wurzeln. Gezeichnet werden nur so viele Ebenen unter der Wurzel, wie `limits` Grenzen hat, je Ebene die schwersten Knoten (siehe `heaviest_by_level`); die ausgelassenen Kinder eines Knotens stehen zusammen
@@ -671,7 +677,7 @@ def tree_graph(issues, atoms, w: np.ndarray, c: np.ndarray, credit_of: dict[str,
         wsum[parent[p]] += wsum[p]
         csum[parent[p]] += csum[p]
         size[parent[p]] += size[p]
-    kept, omitted = heaviest_by_level(parent, wsum, limits)
+    kept, omitted = heaviest_by_level(parent, wsum, limits, floor)
     # Einträge in Tiefensuche-Reihenfolge: ein gewählter Knoten, danach seine gewählten Kinder, zuletzt sein Sammelknoten
     entries: list[tuple[str, int]] = []
     stack: list[tuple[str, int]] = [("n", kept[0])]

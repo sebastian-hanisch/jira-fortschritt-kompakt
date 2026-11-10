@@ -276,6 +276,14 @@ def test_the_resolution_column_is_read_under_its_german_and_english_name():
         assert row["Gefunden in"] == name and row["Tickets mit Wert"] == 1
 
 
+def test_the_resolutions_in_the_data_are_listed_with_their_effect():
+    issues = tuple(J.Issue(key=f"A-{n}", resolution=r) for n, r in enumerate(["Fertig", "Abgelehnt", "Abgelehnt", "Duplikat", "", "Won't do"]))
+    assert J.resolution_rows(issues) == [
+        {"Lösung": "Abgelehnt", "Tickets": 2, "Wirkung": "zurückgewiesen: zählt nicht"}, {"Lösung": "Duplikat", "Tickets": 1, "Wirkung": "zurückgewiesen: zählt nicht"},
+        {"Lösung": "Fertig", "Tickets": 1, "Wirkung": "keine"}, {"Lösung": "Won't do", "Tickets": 1, "Wirkung": "zurückgewiesen: zählt nicht"}]
+    assert J.resolution_rows((J.Issue(key="A"),)) == []
+
+
 # ---------------------------------------------------------------- Kodierung, Trennzeichen und CSV-Fehler
 
 CSV_TEXT = "Vorgangsschlüssel;Vorgangsstatus;Titel;Story Points\nA-1;Done;Über 100 %;3\n"

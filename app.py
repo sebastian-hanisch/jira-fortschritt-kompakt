@@ -23,6 +23,7 @@ from jira_evaluation import (
     check_consistency,
     de,
     delta_points,
+    manual_conflicts,
     md_escape,
     or_dash,
     pct,
@@ -186,6 +187,11 @@ def render_loaded(file_name, issues_all, report):
     with st.expander(f"🔎 Was wurde erkannt? ({len(issues_all)} Tickets)"):
         st.caption("Welche Spalte wofür gelesen wurde und bei wie vielen Tickets ein Wert steht. Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden nicht gelesen, ebenso alle weiteren Spalten des Exports.")
         st.dataframe(report.columns, hide_index=True, width="stretch")
+        resolutions = J.resolution_rows(issues_all)
+        if resolutions:
+            st.caption("Lösungen („Resolution“) in der Datei und was sie bewirken: Eine zurückweisende Lösung (z. B. Abgelehnt, Duplikat, Won't do) nimmt das Ticket aus der Rechnung, auch bei Status „Done“. "
+                       "Fehlt hier eine Lösung, die ebenfalls nicht zählen soll, bitte melden.")
+            st.dataframe(resolutions, hide_index=True, width="stretch")
 
 
 # --- Auswahl (Seitenleiste) ---------------------------------------------------------------------------------------------------------------------
@@ -264,6 +270,10 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
         st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
     if a.n_manual:
         st.caption(("Bei einem zählenden Ticket gilt" if a.n_manual == 1 else f"Bei {a.n_manual} zählenden Tickets gilt") + " „Prozent erledigt (manuell)“ statt der Gutschrift des Status.")
+    conflicts = manual_conflicts(issues, a)
+    if conflicts:
+        shown = ", ".join(f"{md_escape(key)} ({md_escape(status)}, {pct:g} %)" for key, status, pct in conflicts[:5]) + (f" und {len(conflicts) - 5} weitere" if len(conflicts) > 5 else "")
+        st.warning(f"Bei {len(conflicts)} Tickets widerspricht „Prozent erledigt (manuell)“ dem Status (fertig nur bei einem von beiden): {shown}. Es gilt der manuelle Wert; bitte prüfen, ob er stimmt.")
     m1, m2, m3 = st.columns(3)
     credit = {name: round(100 * value) for name, value in C.STATUS_CLASS_CREDIT.items()}
     m1.metric("Fortschritt (nach Status gewichtet)", or_dash(a.progress, pct), help=(
@@ -308,7 +318,7 @@ def render_charts(a, root):
     st.caption(f"Von links nach rechts: {'das gewählte Teilprojekt' if root != C.ROOT_ALL else 'Plan'} → Ebenen darunter → Tickets. Größe = Gewicht aller zählenden Tickets darunter, Farbe = Fortschritt, "
                "Quadrat = fasst Tickets zusammen, Kreis = Ticket ohne Kinder, Raute = „Rest“ (die leichtesten Tickets einer Ebene, nicht einzeln gezeichnet), grau = nichts messbar. Alle Angaben stehen im Hover. **Ein Klick auf einen Knoten mit Kindern öffnet ihn als Teilprojekt** (ein Blatt reagiert nicht)."
                f" Gezeigt werden zwei Ebenen unter {_below(root)} (darunter liegen insgesamt {g.n_total - 1} Tickets); was tiefer liegt, zeigt ein Klick auf den Knoten."
-               + (f" Je Ebene stehen die schwersten Tickets einzeln (höchstens {C.TREE_LEVEL_LIMITS[0]} in der ersten, {C.TREE_LEVEL_LIMITS[1]} in der zweiten), die übrigen eines Knotens zusammen im „Rest“." if g.is_rest.any() else ""))
+               + (f" Je Ebene stehen die schwersten Tickets einzeln (höchstens {C.TREE_LEVEL_LIMITS[0]} in der ersten, {C.TREE_LEVEL_LIMITS[1]} in der zweiten, von jedem Knoten mindestens die {C.TREE_MIN_PER_PARENT} schwersten Kinder), die übrigen eines Knotens zusammen im „Rest“." if g.is_rest.any() else ""))
 
 
 def render_matrix(issues, a, root):

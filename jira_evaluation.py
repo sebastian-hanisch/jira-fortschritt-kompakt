@@ -148,6 +148,17 @@ def sprint_stats(issues, a: Analysis) -> A.GroupStats:
     return A.aggregate(first, a.w, a.c, a.done, np.array([issues[i].points is None for i in a.atoms], dtype=bool))
 
 
+def manual_conflicts(issues, a: Analysis) -> list[tuple[str, str, float]]:
+    """Zählende Tickets, deren „Prozent erledigt (manuell)“ dem Status widerspricht, weil nur eines von beiden fertig sagt: Status fertig, aber unter 100 %, oder 100 %, aber ein Status, der nicht fertig heißt.
+    Rückgabe: (Schlüssel, Status, Prozent). Es gilt der Wert; die Liste soll Tippfehler in der Spalte auffallen lassen."""
+    out = []
+    for i in a.atoms:
+        t = issues[i]
+        if t.manual_pct is not None and A.is_done_status(t.status) != (t.manual_pct >= 100):
+            out.append((t.key, t.status, t.manual_pct))
+    return out
+
+
 def unrecognized_statuses(issues, a: Analysis) -> list[tuple[str, int, float]]:
     """Status der zählenden Tickets, deren Name keine erkannte Bedeutung hat (siehe `A.status_recognized`) und deren Gewicht in der Tabelle nicht geändert wurde: (Status, Zahl der Tickets, Gewicht),
     das schwerste zuerst. Diese Tickets zählen 0 %, nur weil keine Regel den Namen kennt."""

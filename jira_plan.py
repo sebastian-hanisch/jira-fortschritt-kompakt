@@ -13,7 +13,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 import jira_constants as C
-from jira_core import Issue, cycle_members
+from jira_core import Issue, cycle_members, is_rejected_status
 
 
 class PlanImportError(Exception):
@@ -118,6 +118,12 @@ def field_counts(issues) -> dict[str, int]:
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
         "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "manual": sum(i.manual_pct is not None for i in issues), "resolution": sum(bool(i.resolution) for i in issues)}
+
+
+def resolution_rows(issues) -> list[dict]:
+    """Welche Lösungen („Resolution“) in den Daten vorkommen: Wert, Zahl der Tickets und ob er das Ticket aus der Rechnung nimmt (siehe `rejected_reason`). Häufigste zuerst; ohne Lösungen leer."""
+    counts = Counter(i.resolution for i in issues if i.resolution)
+    return [{"Lösung": value, "Tickets": n, "Wirkung": "zurückgewiesen: zählt nicht" if is_rejected_status(value) else "keine"} for value, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0].lower()))]
 
 
 def coverage_rows(issues, found_in: dict[str, str]) -> list[dict]:

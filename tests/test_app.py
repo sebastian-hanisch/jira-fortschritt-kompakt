@@ -230,12 +230,25 @@ def test_a_manual_percent_replaces_the_status_and_is_announced():
     assert not any("Bei" in c.value and "Prozent erledigt (manuell)" in c.value for c in _open(plan_csv(make_mini())).caption)
 
 
+def test_a_manual_percent_that_contradicts_the_status_is_warned_about():
+    data = ("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points;Prozent erledigt (manuell)\nE-1;In Arbeit;Epic;;;\nS-1;Done;Story;E-1;4;50\nS-2;To Do;Story;E-1;6;100\nS-3;Done;Story;E-1;2;\n").encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    warnings = [w.value for w in at.warning if "widerspricht" in w.value]
+    assert len(warnings) == 1 and "Bei 2 Tickets" in warnings[0] and "S-1 (Done, 50 %)" in warnings[0] and "S-2 (To Do, 100 %)" in warnings[0]
+    clean = _open(("Vorgangsschlüssel;Vorgangsstatus;Story Points;Prozent erledigt (manuell)\nA-1;To Do;4;50\nA-2;Done;6;\n").encode("utf-8"))
+    _ok(clean)
+    assert not [w for w in clean.warning if "widerspricht" in w.value]
+
+
 def test_a_done_ticket_with_a_rejecting_resolution_does_not_count_and_is_named():
     data = ("Vorgangsschlüssel;Vorgangsstatus;Lösung;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;;Epic;;\nS-1;Done;Fertig;Story;E-1;4\nS-2;Done;Abgelehnt;Story;E-1;6\nS-3;To Do;;Story;E-1;4\n").encode("utf-8")
     at = _open(data)
     _ok(at)
     assert at.metric[0].value == "50.0 %" and at.metric[2].label == "Offenes Gewicht (SP, gesamt 8.00)"                    # S-2 (6) fällt heraus: 4 von 8
     assert any("1 zurückgewiesene Tickets" in c.value and "Lösung: Abgelehnt" in c.value for c in at.caption)
+    table = next(t.value for t in at.dataframe if "Wirkung" in t.value.columns and "Lösung" in t.value.columns)                  # die Übersicht der Lösungen im Erkennungsbericht
+    assert dict(zip(table["Lösung"], table["Wirkung"], strict=True)) == {"Fertig": "keine", "Abgelehnt": "zurückgewiesen: zählt nicht"} and table["Tickets"].tolist() == [1, 1]
 
 
 def test_story_points_in_quarters_are_shown_with_two_decimals():

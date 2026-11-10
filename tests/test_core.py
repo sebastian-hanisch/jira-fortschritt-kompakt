@@ -104,6 +104,17 @@ def test_subtree_survives_a_cycle():
     assert A.subtree_keys(loop, "A") == {"A", "B", "C"}
 
 
+def test_the_floor_keeps_the_heaviest_children_of_a_small_node_next_to_a_huge_one():
+    parent = [-1, 0, 0] + [1] * 10 + [2] * 3                  # Wurzel 0; Knoten 1 mit zehn schweren Kindern (3 bis 12), Knoten 2 mit drei leichten (13 bis 15)
+    weight = [0.0, 1000.0, 3.0] + [100.0] * 10 + [1.0] * 3
+    kept, omitted = A.heaviest_by_level(parent, weight, (10, 10))
+    assert sorted(kept) == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] and omitted == {1: [11, 12], 2: [13, 14, 15]}          # ohne Mindestplatz füllt der große Nachbar die Ebene allein
+    kept, omitted = A.heaviest_by_level(parent, weight, (10, 10), floor=3)
+    assert {13, 14, 15} <= set(kept) and omitted == {1: [9, 10, 11, 12]} and sum(k > 2 for k in kept) + 1 <= 10          # alle drei Kinder von Knoten 2 stehen da; der Rest des großen Knotens wird kleiner
+    kept, omitted = A.heaviest_by_level(parent, weight, (6, 6), floor=3)
+    assert len([k for k in kept if parent[k] == 1]) == 3 and 13 in kept and 2 in omitted          # reicht die Grenze nicht, hat der schwerere Knoten Vorrang und der leichtere behält, was noch passt
+
+
 def test_root_choices_are_containers_in_tree_order_with_their_depth(mini):
     assert A.root_choices(mini) == [("E1", 0), ("E2", 0)]                      # S2 hat nur Sub-Tasks darunter, und die zählen nicht: keine Wurzel
 
