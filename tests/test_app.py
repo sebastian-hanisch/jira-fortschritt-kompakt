@@ -230,6 +230,14 @@ def test_a_manual_percent_replaces_the_status_and_is_announced():
     assert not any("Bei" in c.value and "Prozent erledigt (manuell)" in c.value for c in _open(plan_csv(make_mini())).caption)
 
 
+def test_a_done_ticket_with_a_rejecting_resolution_does_not_count_and_is_named():
+    data = ("Vorgangsschlüssel;Vorgangsstatus;Lösung;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;;Epic;;\nS-1;Done;Fertig;Story;E-1;4\nS-2;Done;Abgelehnt;Story;E-1;6\nS-3;To Do;;Story;E-1;4\n").encode("utf-8")
+    at = _open(data)
+    _ok(at)
+    assert at.metric[0].value == "50.0 %" and at.metric[2].label == "Offenes Gewicht (SP, gesamt 8.00)"                    # S-2 (6) fällt heraus: 4 von 8
+    assert any("1 zurückgewiesene Tickets" in c.value and "Lösung: Abgelehnt" in c.value for c in at.caption)
+
+
 def test_story_points_in_quarters_are_shown_with_two_decimals():
     at = _open("Vorgangsschlüssel;Vorgangsstatus;Hierarchie;Übergeordnetes Element;Story Points\nE-1;In Arbeit;Epic;;\nS-1;To Do;Story;E-1;0,25\nS-2;To Do;Story;E-1;0,5\n".encode("utf-8"))
     _ok(at)

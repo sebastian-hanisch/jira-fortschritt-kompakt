@@ -260,7 +260,7 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     if root != C.ROOT_ALL:
         st.info(f"Die Auswertung ist auf **{md_escape(root_label(root).lstrip('↳ '))}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
     if a.n_excluded:
-        bad = sorted({issues[i].status for i in a.rejected_atoms if A.is_rejected_status(issues[i].status)})
+        bad = sorted({A.rejected_reason(issues[i]) for i in a.rejected_atoms} - {""})
         st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
     if a.n_manual:
         st.caption(("Bei einem zählenden Ticket gilt" if a.n_manual == 1 else f"Bei {a.n_manual} zählenden Tickets gilt") + " „Prozent erledigt (manuell)“ statt der Gutschrift des Status.")

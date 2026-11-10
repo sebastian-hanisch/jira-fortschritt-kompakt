@@ -1,7 +1,7 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
-Story Points, Sprint, Team und „Prozent erledigt (manuell)“. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
+Story Points, Sprint, Team, Lösung und „Prozent erledigt (manuell)“. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
 Schätzungsspalten) werden bewusst nicht gelesen: Atlassian nennt keine Formel, und die Werte beziehen auch im Plan ausgeblendete Vorgänge und alle Hierarchieebenen ein. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
 
@@ -31,7 +31,7 @@ class ImportReport:
 
 FIELD_LABELS = (
     ("key", "Ticket-Schlüssel"), ("summary", "Titel"), ("type", "Ticket-Typ"), ("status", "Status"), ("points", "Story Points"), ("parent", "Übergeordnetes Ticket"),
-    ("sprint", "Sprint"), ("team", "Team"), ("manual", "Prozent erledigt (manuell)"))
+    ("sprint", "Sprint"), ("team", "Team"), ("manual", "Prozent erledigt (manuell)"), ("resolution", "Lösung"))
 NOT_FOUND = "nicht gefunden"
 
 _ALIASES = {
@@ -44,6 +44,7 @@ _ALIASES = {
     "sprint": ("sprint",),
     "team": ("team",),
     "manual": ("prozent erledigt (manuell)",),
+    "resolution": ("lösung", "loesung", "resolution"),
 }
 DAY_ESTIMATE_HEADERS = ("schätzung (t)", "schätzung (tage)", "schaetzung (t)")      # die Schätzung in Tagen des Plan-Exports: wird nicht gelesen, nur gemeldet
 _SUBTASK_NAMES = {"sub-task", "subtask", "sub task", "teilaufgabe", "unteraufgabe", "untervorgang"}
@@ -116,7 +117,7 @@ def field_counts(issues) -> dict[str, int]:
     return {
         "key": sum(bool(i.key) for i in issues), "summary": sum(bool(i.summary) for i in issues), "type": sum(bool(i.type) for i in issues),
         "status": sum(bool(i.status) for i in issues), "points": sum(i.points is not None for i in issues), "parent": sum(bool(i.parent) for i in issues),
-        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "manual": sum(i.manual_pct is not None for i in issues)}
+        "sprint": sum(bool(i.sprints) for i in issues), "team": sum(bool(i.team) for i in issues), "manual": sum(i.manual_pct is not None for i in issues), "resolution": sum(bool(i.resolution) for i in issues)}
 
 
 def coverage_rows(issues, found_in: dict[str, str]) -> list[dict]:
@@ -174,7 +175,7 @@ def _issue_from_row(row: list[str], cols: dict[str, list[int]]) -> tuple[Issue, 
     manual = parse_manual_percent(raw_manual)
     issue = Issue(
         key=_cell(row, cols, "key"), summary=_cell(row, cols, "summary"), type=type_name, is_subtask=_norm(type_name) in _SUBTASK_NAMES, status=_cell(row, cols, "status"), points=points,
-        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"), manual_pct=manual)
+        parent=_cell(row, cols, "parent"), sprints=_listed(row, cols, "sprint"), team=_cell(row, cols, "team"), resolution=_cell(row, cols, "resolution"), manual_pct=manual)
     return issue, bool(raw_points) and points is None, bool(raw_manual) and manual is None
 
 

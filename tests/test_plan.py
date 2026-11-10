@@ -167,11 +167,11 @@ def test_people_releases_areas_priorities_labels_and_components_are_not_read_at_
     """Die Spalten stehen in der Datei (mit Namen und Werten), landen aber in keinem Ticket und nicht im Erkennungsbericht."""
     issues, report = J.read_plan(_csv(EPIC, STORY_A, STORY_B))
     assert not any(hasattr(i, name) for i in issues for name in ("assignee", "versions", "area", "priority", "labels", "components"))
-    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team", "Prozent erledigt (manuell)"]
+    assert [row["Feld"] for row in report.columns] == ["Ticket-Schlüssel", "Titel", "Ticket-Typ", "Status", "Story Points", "Übergeordnetes Ticket", "Sprint", "Team", "Prozent erledigt (manuell)", "Lösung"]
     assert "Person A" not in repr(issues) and "ux" not in repr(issues)
 
 
-SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")] + ["Prozent erledigt (manuell)"]
+SP_HEADER = [h.replace("Schätzung (T)", "Story Points").replace("(T)", "(SP)") for h in REAL_HEADER if not h.startswith("Schätzung (T)")] + ["Prozent erledigt (manuell)", "Lösung"]
 
 
 def test_export_header_with_story_points_as_the_estimate_unit_finds_all_fields():
@@ -266,6 +266,14 @@ def test_the_manual_percent_column_is_read_and_unusable_values_are_reported():
     assert by_field["Prozent erledigt (manuell)"]["Gefunden in"] == "Prozent erledigt (manuell)" and by_field["Prozent erledigt (manuell)"]["Tickets mit Wert"] == 3
     plain, report = J.read_plan(b"Vorgangsschl\xc3\xbcssel;Vorgangsstatus\nA-1;Done\n")
     assert plain[0].manual_pct is None and not any("manuell" in n for n in report.notes)          # die Spalte ist freiwillig und ohne sie gibt es keinen Hinweis
+
+
+def test_the_resolution_column_is_read_under_its_german_and_english_name():
+    for name in ("Lösung", "Resolution"):
+        issues, report = J.read_plan(f"Vorgangsschlüssel;Vorgangsstatus;{name}\nA-1;Done;Abgelehnt\nA-2;Done;\n".encode("utf-8"))
+        assert [i.resolution for i in issues] == ["Abgelehnt", ""]
+        row = next(r for r in report.columns if r["Feld"] == "Lösung")
+        assert row["Gefunden in"] == name and row["Tickets mit Wert"] == 1
 
 
 # ---------------------------------------------------------------- Kodierung, Trennzeichen und CSV-Fehler

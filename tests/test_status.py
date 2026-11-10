@@ -67,6 +67,18 @@ def test_rejected_indices_include_what_hangs_below_a_rejected_ticket():
     assert sorted(TREE[i].key for i in A.rejected_indices(TREE)) == ["E2", "S2", "S3a", "S4", "S4a"]
 
 
+def test_a_rejecting_resolution_takes_a_done_ticket_out_like_a_rejected_status():
+    def keys(*items):
+        return sorted(items[i].key for i in A.rejected_indices(items))
+    for resolution in ("Abgelehnt", "Done abgelehnt", "Done rejected", "Duplikat", "Duplicate", "Won't do", "Won't Do", "Declined"):
+        assert keys(Issue(key="A", status="Done", resolution=resolution), Issue(key="B", status="Done")) == ["A"], resolution
+    assert keys(Issue(key="A", status="Done", resolution="Done"), Issue(key="B", status="Done", resolution="Fertig"), Issue(key="C", status="Done", resolution="Unresolved")) == []
+    epic = (Issue(key="E", type="Epic", status="In Arbeit", resolution="Duplikat"), Issue(key="S", status="To Do", parent="E"), Issue(key="X", status="To Do"))
+    assert keys(*epic) == ["E", "S"]                                                                   # alles unter einem zurückweisend gelösten Epic fällt mit heraus
+    assert A.rejected_reason(Issue(key="A", status="Done", resolution="Duplikat")) == "Lösung: Duplikat" and A.rejected_reason(Issue(key="A", status="Abgelehnt", resolution="Duplikat")) == "Abgelehnt"
+    assert A.rejected_reason(Issue(key="A", status="Done")) == ""
+
+
 def test_rejected_indices_survive_a_cycle():
     loop = (Issue(key="A", parent="B", status="Rejected"), Issue(key="B", parent="A"), Issue(key="C", parent="B"))
     assert A.rejected_indices(loop) == frozenset({0, 1, 2})

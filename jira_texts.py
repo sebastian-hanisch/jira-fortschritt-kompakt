@@ -7,7 +7,7 @@ UPLOAD_NOTICE = f"""
 **Bitte vor dem Hochladen lesen.** Die Datei geht zur Berechnung an den Server, auf dem diese App läuft (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA), und liegt dort nur für Ihre
 Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
 ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
-und Story Points (optional Titel, Sprint, Team und Prozent erledigt (manuell)). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
+und Story Points (optional Titel, Sprint, Team, Lösung und Prozent erledigt (manuell)). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
 den Server aber mit der Datei. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
 """
 
@@ -21,7 +21,7 @@ Story Points tragen; Tickets ohne Story Points behandelt die Auswahl „Tickets 
 
 **2. Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** des Plans sichtbar ist. Deshalb zuerst die Filter so setzen, dass genau der Teil des Plans erscheint, der
 ausgewertet werden soll (die Hierarchie darüber, z. B. Initiativen, gehört dazu, wenn sie als Wurzel wählbar sein soll), und über **Add fields** die Spalten einblenden: mindestens Vorgangsschlüssel und
-Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint, Team und Prozent erledigt (manuell). Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
+Status, außerdem **Story Points** (Gewicht), Hierarchie und Übergeordnetes Element (Aufbau des Baums) und, wenn gewünscht, Titel, Sprint, Team, Lösung (damit „Done“ mit der Lösung „Abgelehnt“ als zurückgewiesen zählt) und Prozent erledigt (manuell). Welche Spalten der Export genau liefert, listet Atlassian nicht auf; die genannten sind die, die dieses Werkzeug aus echten Exporten kennt.
 
 **3. Exportieren.** In der Timeline-Ansicht: **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 Die erzeugte CSV-Datei hier hochladen; vorher Spalten wie Beschreibung und Kommentare, falls vorhanden, löschen.
@@ -36,7 +36,7 @@ Die deutsche Oberfläche und neuere Versionen können anders heißen; an einer e
 
 DATA_SOURCE_MARKDOWN = """
 **Plan-Export.** Wie man ihn erzeugt, steht oben unter „So kommt die Datei zustande“. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
-Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Team* und *Prozent erledigt (manuell)*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
+Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Team*, *Lösung* (*Resolution*) und *Prozent erledigt (manuell)*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
 übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten, darunter Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten: Sie werden nicht einmal eingelesen. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt dem Statusnamen oder, wenn eines eingetragen ist, dem Wert aus *Prozent erledigt (manuell)*.
 
 **Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum
@@ -52,7 +52,7 @@ Themen) gehen nicht ein; ein Epic auf „Done“ mit offenen Kindern bringt also
 
 Wo ein Zwischenticket doch eine Rolle spielt:
 
-- **Zurückgewiesen.** Ein Ticket mit Status wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled oder Duplicate und alles unter ihm fällt ganz heraus, aus Gewicht und Anzahl. Ist ein Zwischenticket
+- **Zurückgewiesen.** Ein Ticket mit Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled oder Duplicate (auch „Done“ mit der Lösung „Abgelehnt“ oder „Duplikat“) und alles unter ihm fällt ganz heraus, aus Gewicht und Anzahl. Ist ein Zwischenticket
   zurückgewiesen, zählt sein Status also doch: Er nimmt alle Blätter darunter mit.
 - **Sub-Tasks einer Story.** Die Story zählt selbst mit ihren Story Points und ihrem Status, und ihre Sub-Tasks bleiben außen vor.
 - **Alle Kinder zurückgewiesen.** Eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt und zählt mit ihren eigenen Story Points und ihrem Status.
@@ -83,7 +83,7 @@ def status_rules_markdown() -> str:
 **Regeln.** Verglichen wird der Name des Status ohne Groß- und Kleinschreibung, Akzente, Umlaut-Punkte und Satzzeichen. Die Regeln werden in dieser Reihenfolge geprüft, der erste Treffer gilt
 („Test Review“ zählt also als Test, nicht als Review):
 
-1. **Zurückgewiesen → zählt nicht.** Der Name enthält Rejected, Declined, Zurückgewiesen, Abgelehnt, Won't do, Will not do, Wontfix, Cancel…, Abgebrochen, Verworfen, Storniert, Abandon…, Duplicate, Duplikat,
+1. **Zurückgewiesen → zählt nicht.** Der Name des Status (oder, wenn die Datei eine Spalte „Lösung“ oder „Resolution“ hat, der Wert dieser Lösung, auch bei Status „Done“) enthält Rejected, Declined, Zurückgewiesen, Abgelehnt, Won't do, Will not do, Wontfix, Cancel…, Abgebrochen, Verworfen, Storniert, Abandon…, Duplicate, Duplikat,
    Obsolete, Invalid, Ungültig, Nicht umgesetzt oder Won't implement. Das Ticket und alles unter ihm fällt aus Gewicht und Anzahl.
 2. **Verneinung → 0 %.** Not done, Nicht fertig, Unfertig, Nicht erledigt, Unresolved, Unreleased, Not closed, Nicht abgeschlossen, Incomplete, Unvollständig, Unfinished, Not merged, Untested, Ungetestet,
    Unreviewed, Ungeprüft, Nicht überprüft, Not reviewed, Not tested, Not resolved, Not finished, Unmerged, Nicht geschlossen, Unabgeschlossen u. ä.
@@ -149,7 +149,7 @@ ASSUMPTIONS_MARKDOWN = """
 - **Nur ein Stichtag.** Der Plan-Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
 - **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
-- **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
+- **Zurückgewiesen wird am Statusnamen und an der Lösung erkannt.** Die Lösung („Resolution“) wird nur gelesen, wenn der Export eine Spalte „Lösung“ oder „Resolution“ enthält; ob der Export aus Jira Plans sie liefert, ist an einer eigenen Jira-Instanz nicht geprüft. Steht ein Status wie „Done“ mit einer Lösung wie „Abgelehnt“ oder „Duplikat“, fehlt die Spalte der Datei und das Ticket zählt als fertig. Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
 - **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum und in den Kacheln zwei Ebenen unter der Wurzel mit höchstens 60 Einträgen in der ersten und 200 in der zweiten (die schwersten; die leichtesten Kinder eines Knotens stehen zusammen in einem Eintrag „Rest“, und wo es wenige sind, auch kleine einzeln; was tiefer liegt, öffnet ein Klick), höchstens 20000 Tickets und 50 MB je Datei.
 - **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.

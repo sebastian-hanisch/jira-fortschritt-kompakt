@@ -25,6 +25,7 @@ CSV-Export aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma
 | Eltern | Übergeordnetes Element (als Schlüssel, Schlüssel mit Titel oder eindeutiger Titel) |
 | Gewicht | Story Points (die Schätzung in Tagen, „Schätzung (T)“, wird nicht gelesen; unlesbare, unendliche und negative Werte gelten als nicht geschätzt) |
 | Fortschritt von Hand (optional) | Prozent erledigt (manuell): eine Zahl von 0 bis 100, mit oder ohne %-Zeichen; ist sie gefüllt, gilt sie bei einem zählenden Ticket statt der Gutschrift des Status, sonst der Status |
+| Lösung (optional) | Lösung oder Resolution: ein Wert wie Abgelehnt, Duplikat, Won't do oder Rejected nimmt das Ticket aus der Rechnung, auch bei Status „Done“ |
 | weitere | Titel, Sprint, Team (alle anderen Spalten, auch Personen, werden nicht gelesen) |
 
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
@@ -39,7 +40,7 @@ Instanz geprüft ist das nicht.
    hinzufügen. Laut Atlassian sind Story Points nur wählbar, wenn alle Teams im Plan Scrum-Teams sind (bei einem Kanban-Team fehlt die Option), Story Points und Zeitschätzungen (Tage, Stunden) sind nicht
    austauschbar, und beim Wechsel gehen nicht gespeicherte Schätzungen verloren. Steht der Plan auf Tagen, heißt die Spalte „Schätzung (T)“, und die liest dieses Werkzeug nicht. Die Tickets selbst müssen Story Points tragen.
 2. **Festlegen, was der Export enthält.** Der Export enthält nur, was in der **Timeline-Ansicht** sichtbar ist: Filter auf den auszuwertenden Teil des Plans setzen (inklusive der Ebenen darüber, wenn sie als Wurzel
-   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint, Team und Prozent erledigt (manuell).
+   wählbar sein sollen) und über **Add fields** mindestens Vorgangsschlüssel, Status, **Story Points**, Hierarchie und Übergeordnetes Element einblenden, optional Titel, Sprint, Team, Lösung und Prozent erledigt (manuell).
 3. **Exportieren:** in der Timeline-Ansicht **Share** → **Export** → **Export data (.csv)** → **Export**. Gebraucht werden die Rolle Plans administrator oder Plan user und Jira Cloud Premium oder Enterprise.
 4. **Prüfen:** Unter „Was wurde erkannt?“ zeigt die App, bei wie vielen Tickets Story Points stehen; fehlt die Spalte, warnt sie.
 
@@ -53,7 +54,7 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 * **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Steht in der Spalte „Prozent erledigt (manuell)“ ein Wert, gilt er statt dieser Gutschrift.
-* **Zurückgewiesen** (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate …): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
+* **Zurückgewiesen** (Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate, Duplikat …, auch bei Status „Done“): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
 * **Fortschritt** einer Gruppe: Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte.
 
 Die Regeln stehen auch in der App (Ausklapper „Welche Status zählen wie viel?“). Reihenfolge der Prüfung, der erste Treffer gilt: zurückgewiesen (zählt nicht), Verneinung (0 %), fertig (100 %), Merged (80 %),
@@ -119,7 +120,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 - **Nur ein Stichtag.** Der Plan-Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
 - **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
-- **Zurückgewiesen wird am Statusnamen erkannt.** Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
+- **Zurückgewiesen wird am Statusnamen und an der Lösung erkannt.** Die Lösung („Resolution“) wird nur gelesen, wenn der Export eine Spalte „Lösung“ oder „Resolution“ enthält; ob der Export aus Jira Plans sie liefert, ist an einer eigenen Jira-Instanz nicht geprüft. Steht ein Status wie „Done“ mit einer Lösung wie „Abgelehnt“ oder „Duplikat“, fehlt die Spalte der Datei und das Ticket zählt als fertig. Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
 - **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum und in den Kacheln zwei Ebenen unter der Wurzel mit höchstens 60 Einträgen in der ersten und 200 in der zweiten (die schwersten; die leichtesten Kinder eines Knotens stehen zusammen in einem Eintrag „Rest“, und wo es wenige sind, auch kleine einzeln; was tiefer liegt, öffnet ein Klick), höchstens 20000 Tickets und 50 MB je Datei.
 - **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.

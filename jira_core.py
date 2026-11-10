@@ -31,6 +31,7 @@ class Issue:
     parent: str = ""                 # Schlüssel des übergeordneten Tickets, leer ohne Eltern
     sprints: tuple[str, ...] = ()    # in Jira-Reihenfolge; der letzte ist der aktuelle
     team: str = ""
+    resolution: str = ""             # Lösung („Resolution“), z. B. „Duplikat“ oder „Abgelehnt“: eine zurückweisende Lösung nimmt das Ticket aus der Rechnung, auch bei Status „Done“
     manual_pct: float | None = None  # „Prozent erledigt (manuell)“ (0 bis 100); ist es gesetzt, gilt es bei einem zählenden Ticket statt der Gutschrift des Status
 
     @property
@@ -107,16 +108,23 @@ def is_rejected_status(name: str) -> bool:
     return status_class(name) == "rejected"
 
 
+def rejected_reason(issue) -> str:
+    """Warum ein Ticket selbst zurückgewiesen ist: sein Status oder seine Lösung (Duplikat, Abgelehnt, Won't do …), sonst leer. Der Status geht vor."""
+    if is_rejected_status(issue.status):
+        return issue.status
+    return f"Lösung: {issue.resolution}" if issue.resolution and is_rejected_status(issue.resolution) else ""
+
+
 def rejected_indices(issues) -> frozenset[int]:
-    """Indizes der Tickets, die selbst oder über ein übergeordnetes Ticket zurückgewiesen sind (die Tickets unter einem zurückgewiesenen Epic zählen auch nicht)."""
+    """Indizes der Tickets, die selbst (Status oder Lösung) oder über ein übergeordnetes Ticket zurückgewiesen sind (die Tickets unter einem zurückgewiesenen Epic zählen auch nicht)."""
     by_key = {t.key: t for t in issues}
-    out = {i for i, t in enumerate(issues) if is_rejected_status(t.status)}
+    out = {i for i, t in enumerate(issues) if rejected_reason(t)}
     for i, t in enumerate(issues):
         current = by_key.get(t.parent)
         for _ in range(20):               # höchstens 20 Ebenen hoch; ein Zyklus in den Eltern-Verweisen endet damit
             if current is None:
                 break
-            if is_rejected_status(current.status):
+            if rejected_reason(current):
                 out.add(i)
                 break
             current = by_key.get(current.parent)
