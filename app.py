@@ -227,10 +227,10 @@ def render_sidebar(issues_all, root_label, ctx):
             "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
             help="Was ein Ticket ohne Story Points wiegt: ein Median geschätzter Tickets (Stufe, Typ, Geschwister, Team oder eine Kette davon), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Buchstaben gehören zu den Varianten im Ausklapper „Berechnungsmöglichkeiten“ oben, dort stehen Vor- und Nachteile.")
         sub_rule = st.selectbox(
-            "Sub-Tasks einer Story", C.SUB_RULES, key="sub_rule",
+            "Sub-Tasks einer Story", C.SUB_RULES, index=C.SUB_RULES.index(C.DEFAULT_SUB), key="sub_rule",
             help="Zählende Tickets sind die Blätter des Baums, bei einer Story also ihre Sub-Tasks. a: Sub-Tasks ohne Story Points bekommen das Gewicht nach der Regel oben, die Story Points der Story fallen weg. "
                  "b: Hat keine Sub-Task eigene Story Points, teilen sie sich die Story Points der Story gleichmäßig. c: Die Story zählt selbst mit ihren Story Points und ihrem Status, die Sub-Tasks bleiben außen vor. "
-                 "Vor- und Nachteile stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
+                 "Voreinstellung ist c. Vor- und Nachteile stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
     return root, issues, unest_rule, sub_rule
 
 

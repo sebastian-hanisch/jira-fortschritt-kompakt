@@ -46,9 +46,9 @@ die Datei es nicht.
 """
 
 HOW_IT_WORKS_BEFORE_FORMULA = """
-**Was in den Fortschritt eingeht.** Nur die **Blätter** des Ticket-Baums, also Tickets ohne Kinder: Story Points (Gewicht) und Status kommen allein von ihnen. Alles darüber wird nur aufsummiert: Der Fortschritt eines
+**Was in den Fortschritt eingeht.** Die **Blätter** des Ticket-Baums, also Tickets ohne Kinder, und in der Voreinstellung auch eine Story mit Sub-Tasks (Auswahl „Sub-Tasks einer Story“, Variante c; ihre Sub-Tasks bleiben dann außen vor): Story Points (Gewicht) und Status kommen allein von ihnen. Alles darüber wird nur aufsummiert: Der Fortschritt eines
 Tickets, eines Epics oder der Wurzel ist die Summe aus Story Points mal Status-Gewicht aller Blätter darunter, geteilt durch die Summe ihrer Story Points. Story Points und Status der **Zwischentickets** (Epics, Initiativen,
-Themen, Stories mit Sub-Tasks) gehen nicht ein; ein Epic auf „Done“ mit offenen Kindern bringt also nichts. Auch die Mediane für Tickets ohne Story Points nehmen nur geschätzte Blätter.
+Themen, bei a und b auch Stories mit Sub-Tasks) gehen nicht ein; ein Epic auf „Done“ mit offenen Kindern bringt also nichts. Auch die Mediane für Tickets ohne Story Points nehmen nur geschätzte Blätter.
 
 Wo ein Zwischenticket doch eine Rolle spielt:
 
@@ -132,13 +132,13 @@ eingebaut. Vor- und Nachteile sind Überlegungen zur Methode, keine Messungen an
 
 ### Teil 2: Sub-Tasks ohne Story Points
 
-Seit nur Blätter zählen, zählt eine Story mit Sub-Tasks durch ihre Sub-Tasks. Haben diese keine Story Points, gilt für sie die Regel aus Teil 1; die Story Points der Story selbst fallen weg.
+In der Voreinstellung (c) zählt die Story selbst und ihre Sub-Tasks bleiben außen vor. Zählen die Sub-Tasks durch die Wahl von a einzeln und haben keine Story Points, gilt für sie die Regel aus Teil 1; die Story Points der Story selbst fallen dann weg.
 
 | Variante | Vorteile | Nachteile | Stand |
 |---|---|---|---|
-| **a. Sub-Tasks wie ungeschätzte Tickets** | Einheitliche Regel für alle Blätter | Die Story Points der Story fallen weg; die Summe der Sub-Tasks weicht von der Story ab; eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen | wählbar, Voreinstellung |
+| **a. Sub-Tasks wie ungeschätzte Tickets** | Einheitliche Regel für alle Blätter | Die Story Points der Story fallen weg; die Summe der Sub-Tasks weicht von der Story ab; eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen | wählbar |
 | **b. Story Points der Story gleichmäßig auf die Sub-Tasks verteilen** (nur wenn keine Sub-Task eigene Story Points hat) | Das Gewicht der Story bleibt erhalten, „Epic vs. Total“ in der Status-Matrix stimmt, keine erfundenen Zahlen | Annahme gleich großer Sub-Tasks; setzt eine geschätzte Story voraus; Mischformen (einige Sub-Tasks geschätzt, andere nicht) brauchen eine Zusatzregel | wählbar |
-| **c. Story zählt selbst, Sub-Tasks bleiben außen vor** (frühere Fassung) | Die Story Points der Planung bleiben das Gewicht | Der Fortschritt der Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt | wählbar |
+| **c. Story zählt selbst, Sub-Tasks bleiben außen vor** | Die Story Points der Planung bleiben das Gewicht | Der Fortschritt der Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt | wählbar, Voreinstellung |
 
 ### Einschätzung
 
@@ -169,8 +169,8 @@ ASSUMPTIONS_MARKDOWN = """
 ### Bekannte Probleme und Unsicherheiten
 
 - **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
-- **Sub-Tasks ohne Story Points** bekommen in der Voreinstellung (a) Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Die Varianten b und c ändern das, haben aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
-- **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden.
+- **Sub-Tasks** bleiben in der Voreinstellung (c) außen vor: Die Story zählt selbst mit ihren Story Points und ihrem Status, der Fortschritt ihrer Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt. Zählen die Sub-Tasks einzeln (a), bekommen die ohne Story Points Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Variante b verteilt die Story Points der Story, hat aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
+- **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden (Variante a).
 - **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Jiras eigener Fortschritt wird nicht verwendet.** Die Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ des Exports liest das Werkzeug nicht. Laut [Atlassian](https://support.atlassian.com/jira-software-cloud/docs/track-progress-using-estimates-in-advanced-roadmaps/) bezieht Jiras Fortschritt die Schätzungen aller Hierarchieebenen und auch im Plan ausgeblendete Vorgänge ein, die Seite nennt keine Formel, und die Roll-up-Schätzung eines Elternvorgangs kann vom Fortschrittsbalken abweichen. In einem Export aus der eigenen Jira-Instanz stimmten die drei Spalten untereinander nicht überein (bis zu 0 % gegen 100 % von der Formel abgeschlossen ÷ (abgeschlossen + verbleibend)). Ein Vergleich mit der Zahl dieses Werkzeugs wäre deshalb nicht aussagekräftig. Was der Export nicht liefert, zeigt das Werkzeug nicht: Der Fortschritt hier folgt allein Status und Story Points der zählenden Tickets.
 - **Zahlenformat der Story Points.** Ein Komma gilt als Dezimaltrenner: „1,000“ liest das Werkzeug als 1, nicht als tausend. Werte, die keine Zahl sind, nicht endlich (nan, inf) oder negativ sind, zählen als nicht geschätzt, und die App meldet ihre Zahl.

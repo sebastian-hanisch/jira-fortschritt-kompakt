@@ -7,6 +7,7 @@ import jira_constants as C
 import jira_evaluation as ev
 import jira_tables as T
 import jira_texts as texts
+from conftest import analyse_with_sub_tasks_counted as analyse_a
 from jira_core import Issue, scope_issues
 
 
@@ -28,7 +29,7 @@ COMPLETED = "Completed (Ready4Test+Ready4Prod)/(Total−Rejected)"
 
 
 def _matrix(**kw):
-    a = ev.analyse(ITEMS, ev.Settings(**kw))
+    a = analyse_a(ITEMS, ev.Settings(**kw))
     rows, status_cols, completed = T.status_matrix(ITEMS, a)
     return {r[T.ROW_COL]: r for r in rows}, status_cols, completed, a
 
@@ -78,33 +79,33 @@ def test_sum_row_adds_everything_and_compares_nothing():
 
 def test_the_matrix_follows_root_and_changed_weights():
     sub = scope_issues(ITEMS, "E2")
-    sub_rows = T.status_matrix(sub, ev.analyse(sub, ev.Settings(root="E2")))[0]
+    sub_rows = T.status_matrix(sub, analyse_a(sub, ev.Settings(root="E2")))[0]
     assert [r[T.ROW_COL] for r in sub_rows] == ["S9", "S10", "S12", T.SUM_LABEL]                              # eine Zeile je Ticket unter der Wurzel E2
-    changed = ev.analyse(ITEMS, ev.Settings(overrides=(("In Review", 0.0), ("Merged", 0.9))))
+    changed = analyse_a(ITEMS, ev.Settings(overrides=(("In Review", 0.0), ("Merged", 0.9))))
     rows, status_cols, completed = T.status_matrix(ITEMS, changed)
     assert "In Review" in status_cols and "Merged (0.9)" in status_cols and completed.startswith("Completed (Merged+Ready4Test+Ready4Prod)")
 
 
 def test_no_status_at_90_percent_gives_a_named_empty_completed_column():
     items = (Issue(key="E", type="Epic"), _story("A", "In Progress", 4.0, "E"), _story("B", "To Do", 2.0, "E"))
-    rows, _, completed = T.status_matrix(items, ev.analyse(items))
+    rows, _, completed = T.status_matrix(items, analyse_a(items))
     assert completed == "Completed (kein Status ab 90 %)" and all(r[completed] is None for r in rows)
 
 
 def test_a_plan_without_countable_tickets_gives_no_rows():
     only_epic = (Issue(key="E", type="Epic"),)
-    assert T.status_matrix(only_epic, ev.analyse(only_epic))[0] == []
+    assert T.status_matrix(only_epic, analyse_a(only_epic))[0] == []
 
 
 def test_tickets_without_a_parent_are_their_own_rows_in_natural_order():
     items = (Issue(key="E2", type="Epic", summary="B"), Issue(key="E10", type="Epic", summary="A"), _story("X", "Done", 1.0, "E10"), _story("Y", "Done", 1.0, "E2"), _story("Z", "Done", 1.0, ""))
-    rows, _, _ = T.status_matrix(items, ev.analyse(items))
+    rows, _, _ = T.status_matrix(items, analyse_a(items))
     assert [r[T.ROW_COL] for r in rows] == ["E2: B", "E10: A", "Z", T.SUM_LABEL]
 
 
 def test_fractional_totals_below_one_still_give_the_shares():
     items = (Issue(key="E", type="Epic"), _story("A", "Ready4Prod", 0.5, "E"), _story("B", "Backlog", 0.25, "E"))
-    rows, _, completed = T.status_matrix(items, ev.analyse(items))
+    rows, _, completed = T.status_matrix(items, analyse_a(items))
     assert rows[0][T.TOTAL_NET_COL] == 0.75 and rows[0][completed] == pytest.approx(0.5 / 0.75) and rows[0][T.PROGRESS_COL] == pytest.approx(0.5 / 0.75)
 
 
@@ -149,7 +150,7 @@ def test_status_rules_text_lists_the_credits_and_the_examples():
 
 
 def test_rule_comparison_by_hand(mini):
-    rows = T.unestimated_rule_comparison(mini, ev.analyse(mini))
+    rows = T.unestimated_rule_comparison(mini, analyse_a(mini))
     assert [r["Regel"] for r in rows] == list(C.UNEST_RULES) and len(rows) == 8
     assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 7 / 10.5, 7 / 10.5, 6.6 / 10, 7.6 / 12, 7.6 / 12, 5.8 / 9, 4 / 6])
     assert [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 10.5, 10.5, 10.0, 12.0, 12.0, 9.0, 6.0]) and [r["Tickets ohne Story Points"] for r in rows] == [3] * 8
@@ -158,12 +159,12 @@ def test_rule_comparison_by_hand(mini):
 def test_rule_comparison_keeps_root_and_status_weights_and_handles_no_weight():
     from jira_core import scope_issues
     sub = scope_issues(ITEMS, "E2")
-    rows = T.unestimated_rule_comparison(sub, ev.analyse(sub, ev.Settings(root="E2")))
+    rows = T.unestimated_rule_comparison(sub, analyse_a(sub, ev.Settings(root="E2")))
     assert rows[0]["Gewicht gesamt"] == 15.0 and rows[-1]["Gewicht gesamt"] == 10.0          # Median 5 für S12 gegen „nicht zählen“
     none = (Issue(key="A", status="Done"),)
-    assert [r["Fortschritt"] for r in T.unestimated_rule_comparison(none, ev.analyse(none))] == [pytest.approx(1.0)] * 7 + [None]
-    changed = ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),)))
-    assert T.unestimated_rule_comparison(ITEMS, changed)[0]["Fortschritt"] == ev.analyse(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),))).progress
+    assert [r["Fortschritt"] for r in T.unestimated_rule_comparison(none, analyse_a(none))] == [pytest.approx(1.0)] * 7 + [None]
+    changed = analyse_a(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),)))
+    assert T.unestimated_rule_comparison(ITEMS, changed)[0]["Fortschritt"] == analyse_a(ITEMS, ev.Settings(overrides=(("Backlog", 0.5),))).progress
 
 
 def test_the_options_text_names_every_variant_with_pros_and_cons_and_its_status():
@@ -176,16 +177,16 @@ def test_the_options_text_names_every_variant_with_pros_and_cons_and_its_status(
 
 
 def test_sub_task_rule_comparison_by_hand(mini):
-    rows = T.subtask_rule_comparison(mini, ev.analyse(mini))
+    rows = T.subtask_rule_comparison(mini, analyse_a(mini))
     assert [r["Regel"] for r in rows] == list(C.SUB_RULES)
     assert [r["Fortschritt"] for r in rows] == pytest.approx([7 / 10.5, 8.5 / 13.5, 6.4 / 14]) and [r["Gewicht gesamt"] for r in rows] == pytest.approx([10.5, 13.5, 14.0])
     assert [r["Zählende Tickets"] for r in rows] == [6, 6, 5]
-    other = T.subtask_rule_comparison(mini, ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_ONE)))
+    other = T.subtask_rule_comparison(mini, analyse_a(mini, ev.Settings(unest_rule=C.UNEST_ONE)))
     assert other[0]["Gewicht gesamt"] == pytest.approx(9.0)                                       # die gewählte Regel für Tickets ohne Story Points gilt mit
 
 
 def test_the_rows_are_the_tickets_directly_below_the_root_with_everything_below_them(mini):
-    rows, status_cols, completed = T.status_matrix(mini, ev.analyse(mini))
+    rows, status_cols, completed = T.status_matrix(mini, analyse_a(mini))
     assert status_cols == ["To Do", "In Review (0.8)", "Done (1.0)"] and completed == "Completed (Done)/(Total−Rejected)"
     by = {r[T.ROW_COL]: r for r in rows}
     assert list(by) == ["B1", "E1: Epic A", "E2: Epic B", T.SUM_LABEL]
@@ -195,7 +196,7 @@ def test_the_rows_are_the_tickets_directly_below_the_root_with_everything_below_
     assert (e2["To Do"], e2["In Review (0.8)"]) == (2.0, 2.5) and e2[T.PROGRESS_COL] == pytest.approx(2 / 4.5)
     assert b1["Done (1.0)"] == 1.0
     below = scope_issues(mini, "E1")
-    rows, _, _ = T.status_matrix(below, ev.analyse(below, ev.Settings(root="E1")))
+    rows, _, _ = T.status_matrix(below, analyse_a(below, ev.Settings(root="E1")))
     by = {r[T.ROW_COL]: r for r in rows}
     assert list(by) == ["S1", "S2", T.SUM_LABEL]                                                      # eine Stufe tiefer: die Kinder von E1; T1 und T2 stehen in der Zeile von S2
     assert by["S1"]["Done (1.0)"] == 3.0 and by["S2"]["Done (1.0)"] == 1.0 and by["S2"]["To Do"] == 1.0
@@ -203,7 +204,7 @@ def test_the_rows_are_the_tickets_directly_below_the_root_with_everything_below_
 
 def test_matrix_weights_are_written_with_two_decimals_for_jira_and_confluence():
     items = (Issue(key="E", type="Epic"), _story("A", "Done", 0.25, "E"), _story("B", "To Do", 38.0, "E"))
-    rows, status_cols, completed = T.status_matrix(items, ev.analyse(items))
+    rows, status_cols, completed = T.status_matrix(items, analyse_a(items))
     formats = {name: "%.2f" for name in (*status_cols, T.REJECTED_COL, T.TOTAL_NET_COL)}
     assert rows[0][T.TOTAL_NET_COL] == 38.25
     assert "38.25" in T.rows_to_html(rows, formats) and "38.3" not in T.rows_to_html(rows, formats)
@@ -221,7 +222,7 @@ def test_assumptions_text_has_the_three_parts_and_matches_the_readme():
 def test_sprint_rows_put_every_counting_ticket_into_its_last_sprint_by_hand():
     from conftest import make_mini
     mini = make_mini()
-    a = ev.analyse(mini)
+    a = analyse_a(mini)
     rows = {r[T.SPRINT_COL]: r for r in T.sprint_rows(mini, a)}
     assert list(rows) == ["Sprint 1", "Sprint 2", C.NO_SPRINT, T.SUM_LABEL]
     one, two, none, total = rows["Sprint 1"], rows["Sprint 2"], rows[C.NO_SPRINT], rows[T.SUM_LABEL]
@@ -236,15 +237,15 @@ def test_sprint_rows_put_every_counting_ticket_into_its_last_sprint_by_hand():
 
 def test_sprint_rows_without_weight_have_no_progress_and_without_tickets_no_rows():
     items = (Issue(key="A", status="Done", sprints=("Sprint 1",)),)
-    a = ev.analyse(items, ev.Settings(unest_rule=C.UNEST_IGNORE))
+    a = analyse_a(items, ev.Settings(unest_rule=C.UNEST_IGNORE))
     assert [r[T.PROGRESS_COL] for r in T.sprint_rows(items, a)] == [None, None]
-    assert T.sprint_rows((), ev.analyse(())) == [] and not T.has_sprints(ITEMS) and T.has_sprints(items)
+    assert T.sprint_rows((), analyse_a(())) == [] and not T.has_sprints(ITEMS) and T.has_sprints(items)
 
 
 def test_sprint_statistics_for_the_chart_match_the_table():
     from conftest import make_mini
     mini = make_mini()
-    a = ev.analyse(mini)
+    a = analyse_a(mini)
     stats = ev.sprint_stats(mini, a)
     assert stats.labels == ("Sprint 1", "Sprint 2", C.NO_SPRINT) and stats.weight.tolist() == [3.0, 5.5, 2.0] and stats.count.tolist() == [1.0, 4.0, 1.0]
     assert stats.progress.tolist() == pytest.approx([1.0, 4 / 5.5, 0.0]) and stats.unestimated.tolist() == [0.0, 3.0, 0.0]          # S4, T1 und T2 haben keine eigenen Story Points

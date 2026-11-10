@@ -22,6 +22,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from jira_core import Issue  # noqa: E402
 
 
+def analyse_with_sub_tasks_counted(issues, settings=None, *args, **kw):
+    """`jira_evaluation.analyse` mit der Regel a für Sub-Tasks (sie zählen einzeln): Die Zahlen von Hand an der Mini-Instanz sind für sie gerechnet; die Voreinstellung der App ist c."""
+    import dataclasses
+
+    import jira_constants as C
+    import jira_evaluation as ev
+    return ev.analyse(issues, dataclasses.replace(settings or ev.Settings(), sub_rule=C.SUB_RULE), *args, **kw)
+
+
 def make_mini() -> tuple[Issue, ...]:
     return (
         Issue(key="E1", summary="Epic A", type="Epic", status="In Progress"),

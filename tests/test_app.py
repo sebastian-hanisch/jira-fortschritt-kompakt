@@ -13,11 +13,14 @@ APP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 TIMEOUT = int(os.environ.get("APPTEST_TIMEOUT", "300"))      # unter Last (parallele Läufe) reichen 180 s nicht immer; Umgebungsvariable zum Anpassen
 
 
-def _open(data=None, name="plan.csv"):
+def _open(data=None, name="plan.csv", sub_rule=C.SUB_RULE):
+    """App mit Datei; die Zahlen von Hand an der Mini-Instanz gelten für die Regel a der Sub-Tasks (die Voreinstellung der App ist c: `sub_rule=None` lässt sie stehen)."""
     at = AppTest.from_file(APP_PATH, default_timeout=TIMEOUT)
     at.run(timeout=TIMEOUT)
     if data is not None:
         at.file_uploader(key="upload_0").set_value((name, data, "text/csv")).run(timeout=TIMEOUT)
+        if sub_rule is not None and any(box.key == "sub_rule" for box in at.sidebar.selectbox):
+            at.sidebar.selectbox(key="sub_rule").set_value(sub_rule).run(timeout=TIMEOUT)
     return at
 
 
@@ -212,9 +215,9 @@ def test_both_charts_report_clicks_as_a_selection():
 
 
 def test_the_sub_task_rule_is_selectable_and_changes_the_numbers():
-    at = _open(plan_csv(make_mini()))
+    at = _open(plan_csv(make_mini()), sub_rule=None)
     pick = at.sidebar.selectbox(key="sub_rule")
-    assert pick.value == C.SUB_RULE and pick.options == list(C.SUB_RULES)
+    assert pick.value == C.SUB_SELF == C.DEFAULT_SUB and pick.options == list(C.SUB_RULES)
     expected = {C.SUB_RULE: ("66.7 %", "10.50"), C.SUB_SHARE: ("63.0 %", "13.50"), C.SUB_SELF: ("45.7 %", "14.00")}          # 7 / 10.5; 8.5 / 13.5; 6.4 / 14
     for rule, (value, weight) in expected.items():
         at.sidebar.selectbox(key="sub_rule").set_value(rule).run(timeout=TIMEOUT)
@@ -235,7 +238,7 @@ def test_the_explanation_says_that_only_leaves_count_and_names_the_exceptions():
     at = _open(plan_csv(make_mini()))
     box = next(e for e in at.expander if e.label == "📐 So wird gerechnet")
     text = " ".join(m.value for m in box.markdown)
-    for part in ("Nur die **Blätter**", "Zwischentickets", "gehen nicht ein", "ein Epic auf „Done“ mit offenen Kindern bringt also nichts", "Zurückgewiesen.", "nimmt alle Blätter darunter mit",
+    for part in ("Die **Blätter** des Ticket-Baums", "Zwischentickets", "gehen nicht ein", "ein Epic auf „Done“ mit offenen Kindern bringt also nichts", "Zurückgewiesen.", "nimmt alle Blätter darunter mit",
                  "Sub-Tasks einer Story", "Alle Kinder zurückgewiesen."):
         assert part in text, part
 
@@ -303,7 +306,7 @@ def test_changed_status_weights_do_not_move_into_the_next_file_after_deleting_th
     assert not at.session_state["overrides"] if "overrides" in at.session_state else True
     at.file_uploader(key=f"upload_{at.session_state['upload_version']}").set_value(("zwei.csv", plan_csv(make_mini()), "text/csv")).run(timeout=TIMEOUT)
     _ok(at)
-    assert at.metric[0].value == "66.7 %"
+    assert at.metric[0].value == "45.7 %"          # die neue Datei beginnt mit der Voreinstellung c; mit a wären es 66.7 %
 
 
 def test_titles_with_dollar_signs_and_asterisks_are_escaped_in_the_markdown_texts():
