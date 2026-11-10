@@ -12,7 +12,6 @@ import jira_core as A
 @dataclass(frozen=True, kw_only=True)
 class Settings:
     unest_rule: str = C.DEFAULT_UNEST                    # Gewicht eines Tickets ohne Story Points
-    sub_rule: str = C.DEFAULT_SUB                        # Sub-Tasks einer Story: wie ungeschätzte Tickets, Story Points verteilen oder nur die Story zählen lassen
     level: int | None = None                             # Hierarchiestufe der Zusammenfassung (1 = oberste); ohne Angabe die Tickets direkt unter der Wurzel (siehe `summary_level`)
     root: str = C.ROOT_ALL                               # Teilprojekt: nur für den Graphen; die Tickets müssen schon mit `scope_issues` eingeschränkt sein
     overrides: tuple[tuple[str, float], ...] = ()        # geänderte Status-Gewichte: (Status, Gutschrift in 0..1)
@@ -106,19 +105,16 @@ class _Counted:
 
 def _count(issues, settings: Settings, plan, ctx: dict | None = None, plan_ctx: dict | None = None) -> _Counted:
     """Die zählenden Tickets nach `settings`. Mit `ctx` (siehe `A.cached`) werden Teile, die von der Regel für ungeschätzte Tickets nicht abhängen, bei gleichen `issues` und `plan` nur einmal berechnet."""
-    if settings.sub_rule not in C.SUB_RULES:
-        raise KeyError(settings.sub_rule)
     if ctx is not None and ctx.setdefault("size", len(issues)) != len(issues):
         raise ValueError("Der Zwischenspeicher gehört zu anderen Tickets")
-    subtasks_out = settings.sub_rule == C.SUB_SELF            # c: Sub-Tasks sind weder Atome noch Kinder
     credit_of = A.cached(ctx, ("credit_of", settings.overrides), lambda: A.status_credits(status_list(issues), settings.overrides))
     rejected = A.cached(ctx, "rejected", lambda: A.rejected_indices(issues))
-    subtasks = frozenset(i for i, t in enumerate(issues) if t.is_subtask) if subtasks_out else frozenset()
-    atoms = A.cached(ctx, ("atoms", subtasks_out), lambda: A.select_atoms(issues, skip=rejected | subtasks))
-    rejected_atoms = A.cached(ctx, ("rejected_atoms", subtasks_out), lambda: tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected))
+    subtasks = frozenset(i for i, t in enumerate(issues) if t.is_subtask)            # Sub-Tasks sind weder Atome noch Kinder: die Story zählt selbst
+    atoms = A.cached(ctx, "atoms", lambda: A.select_atoms(issues, skip=rejected | subtasks))
+    rejected_atoms = A.cached(ctx, "rejected_atoms", lambda: tuple(i for i in A.select_atoms(issues, skip=subtasks) if i in rejected))
     plan = A.cached(ctx, "plan", lambda: tuple(issues) if plan is None else tuple(plan))
-    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, distribute=settings.sub_rule == C.SUB_SHARE, ctx=ctx, subtasks_out=subtasks_out, plan_ctx=plan_ctx)
-    c, done, unest = A.cached(ctx, ("atom_arrays", subtasks_out, settings.overrides), lambda: (
+    w = A.atom_weights(issues, atoms, settings.unest_rule, plan=plan, ctx=ctx, subtasks_out=True, plan_ctx=plan_ctx)
+    c, done, unest = A.cached(ctx, ("atom_arrays", settings.overrides), lambda: (
         np.array([credit_of[issues[i].status] for i in atoms], dtype=float), np.array([A.is_done_status(issues[i].status) for i in atoms], dtype=bool),
         np.array([issues[i].points is None for i in atoms], dtype=bool)))
     return _Counted(credit_of, rejected, atoms, rejected_atoms, plan, w, c, done, unest, A.overall(w, c, done))

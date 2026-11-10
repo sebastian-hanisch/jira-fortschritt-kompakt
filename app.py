@@ -204,7 +204,7 @@ def root_labeller(issues_all, ctx):
 
 
 def render_sidebar(issues_all, root_label, ctx):
-    """Teilprojekt, Regel für Tickets ohne Story Points und Regel für Sub-Tasks. Rückgabe: Wurzel, die Tickets des Teilprojekts und die beiden Regeln."""
+    """Teilprojekt und Regel für Tickets ohne Story Points. Rückgabe: Wurzel, die Tickets des Teilprojekts und die Regel."""
     root_depth = dict(A.root_choices(issues_all, ctx))
     root_options = (C.ROOT_ALL, *root_depth)
     if st.session_state.get("root", C.ROOT_ALL) not in root_options:        # die Datei hat gewechselt: die alte Wurzel gibt es nicht mehr
@@ -226,12 +226,7 @@ def render_sidebar(issues_all, root_label, ctx):
         unest_rule = st.selectbox(
             "Tickets ohne Story Points", C.UNEST_RULES, key="unest_rule",
             help="Was ein Ticket ohne Story Points wiegt: ein Median geschätzter Tickets (Stufe, Typ, Geschwister, Team oder eine Kette davon), 1 Story Point oder nichts (das Ticket zählt dann nicht im Fortschritt, auch wenn es noch offen ist). Die Buchstaben gehören zu den Varianten im Ausklapper „Berechnungsmöglichkeiten“ oben, dort stehen Vor- und Nachteile.")
-        sub_rule = st.selectbox(
-            "Sub-Tasks einer Story", C.SUB_RULES, index=C.SUB_RULES.index(C.DEFAULT_SUB), key="sub_rule",
-            help="Zählende Tickets sind die Blätter des Baums, bei einer Story also ihre Sub-Tasks. a: Sub-Tasks ohne Story Points bekommen das Gewicht nach der Regel oben, die Story Points der Story fallen weg. "
-                 "b: Hat keine Sub-Task eigene Story Points, teilen sie sich die Story Points der Story gleichmäßig. c: Die Story zählt selbst mit ihren Story Points und ihrem Status, die Sub-Tasks bleiben außen vor. "
-                 "Voreinstellung ist c. Vor- und Nachteile stehen im Ausklapper „Berechnungsmöglichkeiten“ oben.")
-    return root, issues, unest_rule, sub_rule
+    return root, issues, unest_rule
 
 
 # --- Auswertung ---------------------------------------------------------------------------------------------------------------------------------
@@ -350,8 +345,6 @@ def render_rule_effects(issues, a):
     st.markdown("#### Wirkung der wählbaren Regeln auf die geladenen Daten")
     st.caption("Alles andere wie in der aktuellen Auswertung (Teilprojekt, Status-Gewichte); die Auswahl in der Seitenleiste ändert nur, welche Zeile in „Ergebnis“ gilt.")
     show_table(T.unestimated_rule_comparison(issues, a), "rules", {"Fortschritt": "percent", "Gewicht gesamt": "%.2f"}, "wirkung-der-regeln")
-    st.markdown("#### Wirkung der Sub-Task-Regeln auf die geladenen Daten")
-    show_table(T.subtask_rule_comparison(issues, a), "subrules", {"Fortschritt": "percent", "Gewicht gesamt": "%.2f"}, "wirkung-der-sub-task-regeln")
 
 
 def render_explanations():
@@ -375,10 +368,10 @@ def main():
     render_loaded(file_name, issues_all, report)
     all_ctx: dict = {}            # Zwischenergebnisse zum ganzen Plan (Baumreihenfolge), nur für diesen Durchlauf
     root_label = root_labeller(issues_all, all_ctx)
-    root, issues, unest_rule, sub_rule = render_sidebar(issues_all, root_label, all_ctx)
+    root, issues, unest_rule = render_sidebar(issues_all, root_label, all_ctx)
     with guard("Auswertung"):
         overrides = render_status_weights(issues)
-        a = analyse(issues, Settings(root=root, unest_rule=unest_rule, sub_rule=sub_rule, overrides=overrides), issues_all, ctx=all_ctx if root == C.ROOT_ALL else None, plan_ctx=all_ctx)
+        a = analyse(issues, Settings(root=root, unest_rule=unest_rule, overrides=overrides), issues_all, ctx=all_ctx if root == C.ROOT_ALL else None, plan_ctx=all_ctx)
         render_headline(a, issues, issues_all, root, root_label, unest_rule)
         render_charts(a, root)
         render_matrix(issues, a, root)

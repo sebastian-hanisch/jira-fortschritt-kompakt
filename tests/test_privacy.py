@@ -142,7 +142,7 @@ def test_upload_lifecycle_loads_once_resets_the_uploader_and_can_be_deleted():
     _ok(at)
     assert any("Geladen: projekt.csv mit 9 Tickets" in s.value for s in at.success)
     assert not at.get("file_uploader") and at.button(key="clear_loaded")           # nach dem Laden gibt es kein Upload-Feld mit der Datei mehr
-    assert not at.checkbox and at.metric[0].value == "66.7 %"                        # keine Option zu Namen: Personen werden gar nicht gelesen
+    assert not at.checkbox and at.metric[0].value == "45.7 %"                        # keine Option zu Namen: Personen werden gar nicht gelesen
     at.button(key="clear_loaded").click().run(timeout=TIMEOUT)
     _ok(at)
     assert at.get("file_uploader") and not at.metric and any("Bitte den CSV-Export" in i.value for i in at.info)

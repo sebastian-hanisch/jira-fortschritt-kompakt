@@ -1,10 +1,10 @@
 """Orakel-Test für die Tabellen: Status-Matrix und Fortschritt je Sprint werden ein zweites Mal aus der Definition gerechnet und mit den Tabellen des Werkzeugs verglichen.
 
 Die Referenz nutzt nur Schleifen und Wörterbücher (Gewichte und Zählung stammen aus `solve` in `test_oracle_progress.py`, ebenfalls ohne Code des Werkzeugs). Verglichen wird für Zufallsprojekte
-mit allen Regeln für ungeschätzte Tickets und für Sub-Tasks sowie für den ganzen Plan und mehrere Wurzeln. Jeder Wert jeder Zelle muss übereinstimmen."""
+mit allen Regeln für ungeschätzte Tickets sowie für den ganzen Plan und mehrere Wurzeln. Jeder Wert jeder Zelle muss übereinstimmen."""
 
 import pytest
-from test_oracle_progress import CREDIT, DONE, SUBS, UNEST, _rejected, _roots, solve
+from test_oracle_progress import CREDIT, DONE, UNEST, _rejected, _roots, solve
 
 import jira_constants as C
 import jira_core as A
@@ -41,15 +41,15 @@ def _row_ticket(t, root, by_key):
     return (f"{top.key}: {top.summary}" if top.summary else top.key), top
 
 
-def _rejected_leaves(solved, sub):
-    """Zurückgewiesene Blätter: Tickets ohne Kinder (egal in welchem Status), keine Epics, bei Regel c ohne Sub-Tasks."""
-    candidates = [t for t in solved.scope if not (sub == "c" and t.is_subtask)]
+def _rejected_leaves(solved):
+    """Zurückgewiesene Blätter: Tickets ohne Kinder (egal in welchem Status), keine Epics, keine Sub-Tasks."""
+    candidates = [t for t in solved.scope if not t.is_subtask]
     parents = {t.parent for t in candidates}
     return [t for t in candidates if t.type.lower() != "epic" and t.key not in parents and _rejected(t, solved.by_key)]
 
 
-def expected_matrix(plan, root, unest, sub):
-    solved = solve(plan, root, unest, sub)
+def expected_matrix(plan, root, unest):
+    solved = solve(plan, root, unest)
     rows = {}
 
     def entry(t):
@@ -60,7 +60,7 @@ def expected_matrix(plan, root, unest, sub):
         w = solved.weights[t.key]
         row["by_status"][t.status] = row["by_status"].get(t.status, 0.0) + w
         row["credited"] += w * CREDIT[t.status]
-    for t in _rejected_leaves(solved, sub):
+    for t in _rejected_leaves(solved):
         entry(t)["rejected"] += t.points if t.points is not None else solved.fallback(t)
     statuses = {t.status for t in solved.atoms}
     done_statuses = {s for s in statuses if CREDIT[s] >= 0.9}
@@ -92,8 +92,8 @@ def _sprints_of(t, by_key):
     return t.sprints
 
 
-def expected_sprints(plan, root, unest, sub):
-    solved = solve(plan, root, unest, sub)
+def expected_sprints(plan, root, unest):
+    solved = solve(plan, root, unest)
     groups = {}
     for t in solved.atoms:
         sprints = _sprints_of(t, solved.by_key)
@@ -125,19 +125,18 @@ def _check_sprints(got_rows, expected):
 
 
 @pytest.mark.parametrize("seed", range(8))
-def test_the_tables_match_the_reference_for_every_rule_combination_and_root(seed):
+def test_the_tables_match_the_reference_for_every_rule_and_root(seed):
     plan = random_project(seed, n_epics=4)
     for root in _roots(plan):
         scoped = A.scope_issues(plan, root)
         for letter, unest in UNEST.items():
-            for sub_letter, sub in SUBS.items():
-                a = ev.analyse(scoped, ev.Settings(root=root, unest_rule=unest, sub_rule=sub), plan)
-                context = (seed, root, letter, sub_letter)
-                try:
-                    _check_matrix(T.status_matrix(scoped, a)[0], expected_matrix(plan, root, letter, sub_letter))
-                    _check_sprints(T.sprint_rows(scoped, a), expected_sprints(plan, root, letter, sub_letter))
-                except AssertionError as exc:
-                    raise AssertionError(f"{context}: {exc}") from exc
+            a = ev.analyse(scoped, ev.Settings(root=root, unest_rule=unest), plan)
+            context = (seed, root, letter)
+            try:
+                _check_matrix(T.status_matrix(scoped, a)[0], expected_matrix(plan, root, letter))
+                _check_sprints(T.sprint_rows(scoped, a), expected_sprints(plan, root, letter))
+            except AssertionError as exc:
+                raise AssertionError(f"{context}: {exc}") from exc
     assert C.NO_SPRINT == NO_SPRINT
 
 

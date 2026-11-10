@@ -18,12 +18,6 @@ UNEST_ONE = "H. als 1 Story Point"
 UNEST_IGNORE = "I. nicht zählen"
 UNEST_RULES = (UNEST_MEDIAN, UNEST_PLAN, UNEST_TYPE, UNEST_SIBLINGS, UNEST_TEAM, UNEST_CHAIN, UNEST_ONE, UNEST_IGNORE)
 DEFAULT_UNEST = UNEST_MEDIAN
-# Sub-Tasks einer Story (die Buchstaben entsprechen Teil 2 im Ausklapper „Berechnungsmöglichkeiten“)
-SUB_RULE = "a. Sub-Tasks zählen wie ungeschätzte Tickets"
-SUB_SHARE = "b. Story Points der Story auf ihre Sub-Tasks verteilen"
-SUB_SELF = "c. Story zählt selbst, Sub-Tasks bleiben außen vor"
-SUB_RULES = (SUB_RULE, SUB_SHARE, SUB_SELF)
-DEFAULT_SUB = SUB_SELF
 COMPLETED_MIN_CREDIT = 0.9      # „Completed“ der Status-Matrix: alle Status ab diesem Gewicht
 
 NO_SPRINT = "(ohne Sprint)"      # Gruppe der Tickets, die weder selbst noch über ein übergeordnetes Ticket einen Sprint haben (die Klammer sortiert sie ans Ende)

@@ -6,7 +6,6 @@ import pytest
 import jira_constants as C
 import jira_core as A
 import jira_evaluation as ev
-from conftest import analyse_with_sub_tasks_counted as analyse_a
 from conftest import random_project
 from jira_charts import (
     MAX_BARS,
@@ -28,24 +27,24 @@ from jira_core import Issue
 
 
 def test_progress_bars_show_one_bar_per_group_with_the_weights(mini):
-    a = analyse_a(mini)
+    a = ev.analyse(mini)
     fig = build_progress_bars(a.stats, "SP")
     assert list(fig.data[0].y) == ["B1", "E1: Epic A", "E2: Epic B"]
     total = sum(np.array(t.x) for t in fig.data)
-    assert total.tolist() == pytest.approx([1.0, 5.0, 4.5])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
+    assert total.tolist() == pytest.approx([1.0, 8.0, 5.0])                       # erledigt + angerechnet + offen = Gewicht der Gruppe
     assert len(fig.layout.annotations) == 3 and fig.layout.xaxis.fixedrange and fig.layout.yaxis.fixedrange
 
 
 def test_progress_bars_show_at_most_the_heaviest_groups():
     items = tuple(Issue(key=f"S-{n}", points=float(n + 1)) for n in range(MAX_BARS + 10))
-    a = analyse_a(items, ev.Settings(level=1))
+    a = ev.analyse(items, ev.Settings(level=1))
     assert len(a.stats.labels) == MAX_BARS + 10
     shown = list(build_progress_bars(a.stats, "SP").data[0].y)
     assert len(shown) == MAX_BARS and "S-39" in shown and "S-0" not in shown                 # die schwersten Gruppen (Gewicht n + 1), in natürlicher Reihenfolge
 
 
 def test_tree_graph_has_one_marker_per_node_and_names_unmeasurable_nodes_grey(mini):
-    g = analyse_a(mini, ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
+    g = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
     fig = build_tree_graph(g, "SP")
     markers = sum(len(t.x) for t in fig.data[1:])
     assert markers == len(g.keys) and fig.layout.yaxis.autorange == "reversed"
@@ -55,7 +54,7 @@ def test_tree_graph_has_one_marker_per_node_and_names_unmeasurable_nodes_grey(mi
 def test_all_charts_build_for_random_projects_on_every_level(seed):
     project = random_project(seed, n_epics=3 + seed)
     for level in range(1, 6):
-        a = analyse_a(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
+        a = ev.analyse(project, ev.Settings(level=level, unest_rule=C.UNEST_RULES[seed % 3]))
         assert build_progress_bars(a.stats, "SP") is not None and build_tree_graph(a.tree, "SP") is not None and build_tiles(a.tree, "SP") is not None
 
 
@@ -90,13 +89,13 @@ def test_squarify_tiles_the_rectangle_without_overlap_in_the_order_of_the_values
 
 
 def test_tile_layout_of_the_mini_project_by_hand(mini):
-    g = analyse_a(mini).tree
+    g = ev.analyse(mini).tree
     tiles = tile_layout(g)
     level1 = [t for t in tiles if t.level == 1]
-    assert [t.key for t in level1] == ["E1", "E2", "B1"] and [t.weight for t in level1] == [5.0, 4.5, 1.0]            # nach Gewicht, Kinder der Wurzel (Projekt)
+    assert [t.key for t in level1] == ["E1", "E2", "B1"] and [t.weight for t in level1] == [8.0, 5.0, 1.0]            # nach Gewicht, Kinder der Wurzel (Projekt)
     assert sum(t.w * t.h for t in level1) == pytest.approx(TILE_W * TILE_H) and [t.framed for t in level1] == [True, True, False]
     level2 = {(t.key): t for t in tiles if t.level == 2}
-    assert sorted(level2) == ["S1", "S2", "S3", "S4"] and level2["S2"].weight == 2.0 and level2["S2"].progress == pytest.approx(0.5)
+    assert sorted(level2) == ["S1", "S2", "S3", "S4"] and level2["S2"].weight == 5.0 and level2["S2"].progress == pytest.approx(0.0) and level2["S4"].weight == 3.0 and level2["S4"].progress == pytest.approx(0.8)
     for t in level2.values():                                                                                         # die kleinen Kacheln liegen in ihrer großen
         outer = next(o for o in level1 if o.key == ("E1" if t.key in ("S1", "S2") else "E2"))
         assert outer.x <= t.x + 1e-9 and outer.y <= t.y + 1e-9 and t.x + t.w <= outer.x + outer.w + 1e-9 and t.y + t.h <= outer.y + outer.h + 1e-9
@@ -107,21 +106,21 @@ def test_tile_layout_of_the_mini_project_by_hand(mini):
 def test_tile_layout_of_a_subproject_starts_below_its_root(mini):
     from jira_core import scope_issues
     sub = scope_issues(mini, "E1")
-    g = analyse_a(sub, ev.Settings(root="E1")).tree
+    g = ev.analyse(sub, ev.Settings(root="E1")).tree
     tiles = tile_layout(g)
-    assert [t.key for t in tiles if t.level == 1] == ["S1", "S2"] and [t.key for t in tiles if t.level == 2] == ["T1", "T2"]
+    assert [t.key for t in tiles if t.level == 1] == ["S2", "S1"] and [t.key for t in tiles if t.level == 2] == []          # nach Gewicht (5 und 3); die Sub-Tasks von S2 zählen nicht
 
 
 def test_tile_layout_leaves_out_tiles_without_weight(mini):
-    g = analyse_a(mini, ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
+    g = ev.analyse(mini, ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
     keys = {t.key for t in tile_layout(g)}
     assert "S4" not in keys and "T1" not in keys and {"E1", "E2", "B1", "S1", "S3"} <= keys
-    empty = analyse_a((Issue(key="A", status="Done"),), ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
+    empty = ev.analyse((Issue(key="A", status="Done"),), ev.Settings(unest_rule=C.UNEST_IGNORE)).tree
     assert tile_layout(empty) == []
 
 
 def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
-    g = analyse_a(mini).tree
+    g = ev.analyse(mini).tree
     fig = build_tiles(g, "SP")
     assert [t.type for t in fig.data] == ["bar", "bar"] and fig.layout.barmode == "overlay"
     large, small = fig.data
@@ -134,7 +133,7 @@ def test_build_tiles_makes_every_tile_a_clickable_bar_with_its_key(mini):
 
 
 def test_build_tiles_without_weight_is_an_empty_figure():
-    fig = build_tiles(analyse_a((Issue(key="A", status="Done"),), ev.Settings(unest_rule=C.UNEST_IGNORE)).tree, "SP")
+    fig = build_tiles(ev.analyse((Issue(key="A", status="Done"),), ev.Settings(unest_rule=C.UNEST_IGNORE)).tree, "SP")
     assert len(fig.data) == 0
 
 
@@ -145,7 +144,7 @@ def test_progress_color_runs_from_red_over_yellow_to_green():
 
 
 def test_only_tiles_with_children_are_drillable(mini):
-    tiles = {t.key: t for t in tile_layout(analyse_a(mini).tree)}
+    tiles = {t.key: t for t in tile_layout(ev.analyse(mini).tree)}
     assert [tiles[k].drillable for k in ("E1", "E2", "B1")] == [True, True, False] and tiles["S2"].drillable and not tiles["S1"].drillable          # S2 hat Sub-Tasks, S1 und B1 sind Blätter
 
 
@@ -157,13 +156,13 @@ def test_selected_key_reads_the_key_from_the_customdata_of_a_clicked_point():
 
 
 def test_graph_markers_carry_the_keys_for_clicks(mini):
-    g = analyse_a(mini).tree
+    g = ev.analyse(mini).tree
     keys = [k for t in build_tree_graph(g, "SP").data[1:] for k in t.customdata]
     assert sorted(keys) == sorted(g.keys)
 
 
 def test_labels_are_annotations_so_that_a_selection_cannot_dim_them(mini):
-    g = analyse_a(mini).tree
+    g = ev.analyse(mini).tree
     tiles = build_tiles(g, "SP")
     assert all(t.text is None for t in tiles.data)                                                  # kein Text an den Balken (er würde bei einer Auswahl abgedunkelt)
     wanted = [t.key for t in tile_layout(g) if tile_label(t)]
@@ -174,14 +173,14 @@ def test_labels_are_annotations_so_that_a_selection_cannot_dim_them(mini):
 
 
 def test_graph_labels_sit_right_of_leaves_and_above_nodes_with_children(mini):
-    g = analyse_a(mini).tree
+    g = ev.analyse(mini).tree
     by_key = {a.text: a for a in build_tree_graph(g, "SP").layout.annotations}
     assert by_key["S1"].xanchor == "left" and by_key["S1"].xshift > 0 and by_key["E1"].yanchor == "bottom" and by_key["E1"].yshift > 0
 
 
 def test_large_graphs_label_only_the_nodes_with_children():
     items = (Issue(key="E", type="Epic"),) + tuple(Issue(key=f"S-{n}", parent="E", points=1.0) for n in range(C.GRAPH_LABEL_MAX + 5))
-    g = analyse_a(items).tree
+    g = ev.analyse(items).tree
     labels = [a.text for a in build_tree_graph(g, "SP").layout.annotations]
     assert sorted(labels) == ["E", "Projekt"]
 
@@ -211,7 +210,7 @@ def test_no_tile_overlaps_another_and_the_tiles_fill_the_whole_area_so_that_ever
     plan = random_project(seed, n_epics=4)
     for root in ("", plan[0].key):
         issues = A.scope_issues(plan, root)
-        rects = _rectangles(build_tiles(analyse_a(issues, ev.Settings(root=root), plan).tree, "SP"))
+        rects = _rectangles(build_tiles(ev.analyse(issues, ev.Settings(root=root), plan).tree, "SP"))
         assert rects
         for i, (ax0, ax1, ay0, ay1, _, _) in enumerate(rects):
             for bx0, bx1, by0, by1, _, _ in rects[i + 1:]:
@@ -221,7 +220,7 @@ def test_no_tile_overlaps_another_and_the_tiles_fill_the_whole_area_so_that_ever
 
 
 def test_the_frame_of_a_large_tile_is_four_bars_around_its_small_tiles(mini):
-    fig = build_tiles(analyse_a(mini).tree, "SP")
+    fig = build_tiles(ev.analyse(mini).tree, "SP")
     frame = [r for r in _rectangles(fig) if r[4] == "E1"]
     assert len(frame) == 4
     top = min(frame, key=lambda r: r[2])
@@ -231,7 +230,7 @@ def test_the_frame_of_a_large_tile_is_four_bars_around_its_small_tiles(mini):
 def test_html_characters_in_titles_are_shown_as_text_in_tooltips_and_labels_and_keys_for_clicks_stay_raw():
     from jira_charts import _plain
     issues = (Issue(key="E", type="Epic", summary="Titel <b>fett</b> & <i>x</i>"), Issue(key="S", parent="E", points=2.0, status="Done", summary="a < b > c"))
-    a = analyse_a(issues, ev.Settings(), issues)
+    a = ev.analyse(issues, ev.Settings(), issues)
     assert _plain("<b>x</b> & y") == "&lt;b&gt;x&lt;/b&gt; &amp; y" and _plain("Plain äöü 'q' \"d\"") == "Plain äöü 'q' \"d\""
     tiles = build_tiles(a.tree, "SP")
     texts = [h for trace in tiles.data for h in trace.hovertext]

@@ -105,7 +105,7 @@ def test_subtree_survives_a_cycle():
 
 
 def test_root_choices_are_containers_in_tree_order_with_their_depth(mini):
-    assert A.root_choices(mini) == [("E1", 0), ("S2", 1), ("E2", 0)]
+    assert A.root_choices(mini) == [("E1", 0), ("E2", 0)]                      # S2 hat nur Sub-Tasks darunter, und die zählen nicht: keine Wurzel
 
 
 def test_tree_order_is_depth_first_and_scoped(mini):
@@ -258,7 +258,7 @@ def test_parent_root_goes_one_level_up_to_a_ticket_that_can_be_a_root(mini):
 
 
 def test_root_for_click_accepts_containers_and_the_whole_project_only(mini):
-    assert A.root_for_click(mini, "E2") == "E2" and A.root_for_click(mini, "S2") == "S2" and A.root_for_click(mini, C.ROOT_ALL) == C.ROOT_ALL
+    assert A.root_for_click(mini, "E2") == "E2" and A.root_for_click(mini, "S2") is None and A.root_for_click(mini, C.ROOT_ALL) == C.ROOT_ALL
     assert A.root_for_click(mini, "S1") is None and A.root_for_click(mini, "T1") is None and A.root_for_click(mini, "Projekt") is None and A.root_for_click(mini, "gibt-es-nicht") is None          # Blätter bewirken nichts
 
 
@@ -309,23 +309,6 @@ def test_the_fallback_chain_goes_from_siblings_to_type_to_level_to_the_plan_to_o
     assert w["U1"] == 6.5                    # keine geschätzten Geschwister, kein Sub-Task, keine geschätzte Stufe 2 im Teilbaum: der Median aller geschätzten Blätter des Plans (K1 = 3, O1 = 10; T1 hat Kinder)
     empty = (Issue(key="A"),)
     assert A.atom_weights(empty, [0], C.UNEST_CHAIN).tolist() == [1.0]                                    # nirgends etwas geschätzt: 1
-
-
-def test_story_points_of_a_story_are_distributed_over_its_unestimated_sub_tasks(mini):
-    atoms = A.select_atoms(mini)
-    assert A.atom_weights(mini, atoms, C.UNEST_MEDIAN, distribute=True).tolist() == [3.0, 2.0, 2.5, 1.0, 2.5, 2.5]          # S2 (5) teilt sich auf T1 und T2
-    assert A.atom_weights(mini, atoms, C.UNEST_MEDIAN).tolist() == [3.0, 2.0, 2.5, 1.0, 1.0, 1.0]                              # ohne: Regel der Stufe
-
-
-def test_distribution_needs_an_estimated_story_and_no_estimated_sub_task():
-    def weights(*items):
-        atoms = A.select_atoms(items)
-        return {items[i].key: w for i, w in zip(atoms, A.atom_weights(items, atoms, C.UNEST_MEDIAN, distribute=True).tolist())}
-    sub = lambda key, parent, points=None: Issue(key=key, type="Sub-task", is_subtask=True, parent=parent, points=points)       # noqa: E731
-    assert weights(Issue(key="S", points=6.0), sub("U1", "S"), sub("U2", "S"), sub("U3", "S")) == {"U1": 2.0, "U2": 2.0, "U3": 2.0}
-    assert weights(Issue(key="S", points=5.0), sub("U1", "S", 2.0), sub("U2", "S")) == {"U1": 2.0, "U2": 2.0}                 # gemischt: die Regel (Median der Stufe 2)
-    assert weights(Issue(key="S"), sub("U1", "S"), sub("U2", "S")) == {"U1": 1.0, "U2": 1.0}                                    # die Story ist ungeschätzt: die Regel
-    assert weights(Issue(key="E", type="Epic", points=10.0), Issue(key="S1", parent="E"), Issue(key="S2", parent="E")) == {"S1": 1.0, "S2": 1.0}      # ein Epic verteilt nichts
 
 
 # ---------------------------------------------------------------- Sprints

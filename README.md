@@ -47,9 +47,8 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 
 ## Was zählt
 
-* **Zählende Tickets:** die Blätter des Ticket-Baums, also Tickets ohne Kinder (Stories, Tasks und Bugs ohne Sub-Tasks und, wenn sie einzeln zählen, die Sub-Tasks), in der Voreinstellung auch eine Story mit Sub-Tasks. Story Points und Status kommen allein von ihnen, alles darüber wird nur
-  aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen, bei a und b auch Stories mit Sub-Tasks) gehen nicht ein. Ausnahmen: Ein zurückgewiesenes Zwischenticket nimmt alle Blätter darunter mit; im Menü „Sub-Tasks
-  einer Story“ verteilt b die Story Points der Story auf ihre Sub-Tasks und lässt c die Story selbst zählen; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
+* **Zählende Tickets:** die Blätter des Ticket-Baums, also Tickets ohne Kinder (Stories, Tasks und Bugs ohne Sub-Tasks), dazu eine Story mit Sub-Tasks: Ihre Sub-Tasks bleiben außen vor. Story Points und Status kommen allein von ihnen, alles darüber wird nur
+  aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen) gehen nicht ein. Ausnahmen: Ein zurückgewiesenes Zwischenticket nimmt alle Blätter darunter mit; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
 * **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %.
@@ -64,7 +63,6 @@ Sonst gibt es nichts einzustellen.
 
 * **Teilprojekt (Wurzel):** macht ein Ticket mit allem darunter zu einem eigenständigen Datensatz; auch Median, Status und Hierarchiestufen beziehen sich dann nur auf diesen Teilbaum.
 * **Tickets ohne Story Points:** acht Varianten (A Median der Stufe im Teilbaum, Voreinstellung; B Median der Stufe im ganzen Plan; C je Ticket-Typ; D der Geschwister; E je Team; F Rückfallkette; H als 1 Story Point; I nicht zählen). Die Meldung unter den Kennzahlen nennt, wie viele Tickets betroffen sind.
-* **Sub-Tasks einer Story:** a Sub-Tasks zählen wie ungeschätzte Tickets; b die Story Points der Story verteilen sich gleichmäßig auf ihre Sub-Tasks, wenn keine eigene Story Points hat; c die Story zählt selbst, die Sub-Tasks bleiben außen vor (Voreinstellung).
 * **Zusammenfassung:** Die Balken fassen immer die Tickets direkt unter der Wurzel zusammen (im ganzen Plan die obersten), jedes Ticket mit allem darunter; ein Klick auf eine Kachel oder einen Knoten mit Kindern macht es zur neuen Wurzel.
 
 ## Hoch und runter im Baum
@@ -102,8 +100,8 @@ Mit `--server.address localhost` hört die App nur auf dem eigenen Rechner (`htt
 ## Berechnungsmöglichkeiten für Tickets ohne Story Points
 
 Der Ausklapper „Tickets ohne Story Points: Berechnungsmöglichkeiten“ in der App (nach „Welche Status zählen wie viel?“) stellt die Varianten mit Vor- und Nachteilen gegenüber (Median der Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team,
-Rückfallkette, Mittelwert, 1 Story Point, nicht zählen; dazu drei Möglichkeiten für Sub-Tasks ohne Story Points) und zeigt, wie sich der Fortschritt unter den drei wählbaren Regeln an den geladenen Daten verschiebt.
-Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Points“); G (Mittelwert) ist nur ein Vorschlag. Die drei Möglichkeiten für Sub-Tasks (a bis c) stehen in der Auswahl „Sub-Tasks einer Story“ zur Wahl.
+Rückfallkette, Mittelwert, 1 Story Point, nicht zählen) und zeigt, wie sich der Fortschritt unter den wählbaren Regeln an den geladenen Daten verschiebt.
+Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Points“); G (Mittelwert) ist nur ein Vorschlag.
 
 ## Annahmen, Grenzen und bekannte Probleme
 
@@ -128,8 +126,7 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 ### Bekannte Probleme und Unsicherheiten
 
 - **Die Spaltennamen des Exports sind erschlossen.** Erkannt werden die Namen aus früheren Exporten (Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element, Story Points …); der Export einer anderen Jira-Version oder -Sprache kann abweichen. Fehlende Spalten meldet die App.
-- **Sub-Tasks** bleiben in der Voreinstellung (c) außen vor: Die Story zählt selbst mit ihren Story Points und ihrem Status, der Fortschritt ihrer Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt. Zählen die Sub-Tasks einzeln (a), bekommen die ohne Story Points Ersatzwerte, während die Story Points der Story wegfallen; die Summe der Sub-Tasks weicht dann von der Story ab. Variante b verteilt die Story Points der Story, hat aber eigene Nachteile (siehe „Berechnungsmöglichkeiten“).
-- **Zählung nach Blättern.** Eine Story mit vielen Sub-Tasks wiegt mehr als eine mit wenigen, wenn die Sub-Tasks einzeln gezählt werden (Variante a).
+- **Sub-Tasks** zählen nicht einzeln: Die Story zählt selbst mit ihren Story Points und ihrem Status, der Fortschritt ihrer Sub-Tasks bleibt unsichtbar, bis der Status der Story wechselt.
 - **Klick in die Diagramme.** Der Wechsel der Wurzel per Mausklick ist in Kachelansicht und Teilprojektbaum an einem erfundenen Plan mit 37 Tickets in einem Chromium-basierten Browser geprüft (Streamlit 1.64, Plotly 7.1); andere Browser und Streamlit-Versionen nicht. Die Auswahl „Teilprojekt“ und die Hoch-Knöpfe funktionieren unabhängig davon.
 - **Jiras eigener Fortschritt wird nicht verwendet.** Die Spalten „Fortschritt (%)“, „Fortschritt abgeschlossen (SP)“ und „Verbleibender Fortschritt (SP)“ des Exports liest das Werkzeug nicht. Laut [Atlassian](https://support.atlassian.com/jira-software-cloud/docs/track-progress-using-estimates-in-advanced-roadmaps/) bezieht Jiras Fortschritt die Schätzungen aller Hierarchieebenen und auch im Plan ausgeblendete Vorgänge ein, die Seite nennt keine Formel, und die Roll-up-Schätzung eines Elternvorgangs kann vom Fortschrittsbalken abweichen. In einem Export aus der eigenen Jira-Instanz stimmten die drei Spalten untereinander nicht überein (bis zu 0 % gegen 100 % von der Formel abgeschlossen ÷ (abgeschlossen + verbleibend)). Ein Vergleich mit der Zahl dieses Werkzeugs wäre deshalb nicht aussagekräftig. Was der Export nicht liefert, zeigt das Werkzeug nicht: Der Fortschritt hier folgt allein Status und Story Points der zählenden Tickets.
 - **Zahlenformat der Story Points.** Ein Komma gilt als Dezimaltrenner: „1,000“ liest das Werkzeug als 1, nicht als tausend. Werte, die keine Zahl sind, nicht endlich (nan, inf) oder negativ sind, zählen als nicht geschätzt, und die App meldet ihre Zahl.

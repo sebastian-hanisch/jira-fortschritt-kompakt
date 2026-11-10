@@ -1,9 +1,9 @@
 """Orakel-Test: Der Fortschritt wird ein zweites Mal aus der Definition gerechnet, ohne Code des Werkzeugs (kein numpy, keine Hilfsfunktionen aus `jira_core`), und mit `analyse` verglichen.
 
-Die Definition (Abschnitt „So wird gerechnet“): Zählende Tickets sind die Blätter des Ticket-Baums (keine Epics; zurückgewiesene Tickets samt allem darunter fallen heraus). Gewicht ist
+Die Definition (Abschnitt „So wird gerechnet“): Zählende Tickets sind die Blätter des Ticket-Baums (keine Epics, keine Sub-Tasks: eine Story zählt selbst; zurückgewiesene Tickets samt allem darunter fallen heraus). Gewicht ist
 die Story-Points-Zahl, bei fehlender Zahl entscheidet die Regel A bis F, H oder I. Die Gutschrift folgt dem Statusnamen. Fortschritt = Summe(Gewicht · Gutschrift) / Summe(Gewicht).
 
-Verglichen wird für Zufallsprojekte in allen Kombinationen aus Regel für ungeschätzte Tickets (8), Regel für Sub-Tasks (3) und Wurzel (ganzer Plan, Epics, Stories mit Sub-Tasks).
+Verglichen wird für Zufallsprojekte in allen Kombinationen aus Regel für ungeschätzte Tickets (8) und Wurzel (ganzer Plan, Epics, Stories mit Sub-Tasks).
 Die Statusnamen stammen aus `conftest.STATUSES`; ihre Gutschriften stehen hier ausdrücklich, damit auch die Erkennung der Namen unabhängig geprüft wird."""
 
 import dataclasses
@@ -21,7 +21,6 @@ from conftest import random_project
 CREDIT = {"Backlog": 0.0, "Specification": 0.0, "In Arbeit": 0.0, "In Review": 0.8, "Merged": 0.8, "Ready4Test": 0.9, "Ready4Prod": 1.0}
 DONE = {"Ready4Prod"}
 UNEST = {"A": C.UNEST_MEDIAN, "B": C.UNEST_PLAN, "C": C.UNEST_TYPE, "D": C.UNEST_SIBLINGS, "E": C.UNEST_TEAM, "F": C.UNEST_CHAIN, "H": C.UNEST_ONE, "I": C.UNEST_IGNORE}
-SUBS = {"a": C.SUB_RULE, "b": C.SUB_SHARE, "c": C.SUB_SELF}
 
 
 def _depth(t, by_key):
@@ -43,10 +42,10 @@ def _rejected(t, by_key):
     return False
 
 
-def _atoms(items, sub):
+def _atoms(items):
     """Zählende Tickets nach der Definition."""
     by_key = {t.key: t for t in items}
-    live = [t for t in items if not _rejected(t, by_key) and not (sub == "c" and t.is_subtask)]
+    live = [t for t in items if not _rejected(t, by_key) and not t.is_subtask]
     parents_with_live_child = {t.parent for t in live}
     return [t for t in live if t.type.lower() != "epic" and t.key not in parents_with_live_child]
 
@@ -59,7 +58,7 @@ def _or_one(value):
     return 1.0 if value is None else value
 
 
-def solve(plan, root, unest, sub):
+def solve(plan, root, unest):
     """Bestimmt aus der Definition den Ausschnitt (`scope`: die Tickets unter der Wurzel, die Wurzel ohne Eltern), die zählenden Tickets (`atoms`), ihre Gewichte (`weights`, nach Schlüssel) und die
     Ersatzregel (`fallback(ticket)`), auch für Tickets, die selbst nicht zählen. `plan` sind alle Tickets, `root` der Schlüssel der Wurzel oder leer."""
     plan_by_key = {t.key: t for t in plan}
@@ -75,9 +74,9 @@ def solve(plan, root, unest, sub):
     else:
         scope = list(plan)
     by_key = {t.key: t for t in scope}
-    atoms = _atoms(scope, sub)
+    atoms = _atoms(scope)
     pool = [a for a in atoms if a.points is not None]
-    plan_pool = [a for a in _atoms(plan, sub) if a.points is not None]
+    plan_pool = [a for a in _atoms(plan) if a.points is not None]
 
     def level(t):
         return _depth(t, by_key)
@@ -109,19 +108,13 @@ def solve(plan, root, unest, sub):
         if t.points is not None:
             weights[t.key] = t.points
             continue
-        shared = None
-        if sub == "b":
-            parent = by_key.get(t.parent)
-            siblings = [a for a in atoms if a.parent == t.parent]
-            if parent is not None and parent.type.lower() != "epic" and parent.points is not None and all(a.points is None for a in siblings):
-                shared = parent.points / len(siblings)
-        weights[t.key] = shared if shared is not None else fallback(t)
+        weights[t.key] = fallback(t)
     return types.SimpleNamespace(scope=scope, by_key=by_key, atoms=atoms, weights=weights, fallback=fallback)
 
 
-def reference(plan, root, unest, sub):
+def reference(plan, root, unest):
     """Rechnet Gewicht, Fortschritt, „nur Done“ und Anzahl aus der Definition (siehe `solve`)."""
-    solved = solve(plan, root, unest, sub)
+    solved = solve(plan, root, unest)
     atoms, weights = solved.atoms, solved.weights
     total = sum(weights.values())
     if total <= 0:
@@ -143,15 +136,14 @@ def _same(a, b):
 
 
 @pytest.mark.parametrize("seed", range(12))
-def test_analyse_matches_the_reference_for_every_rule_combination_and_root(seed):
+def test_analyse_matches_the_reference_for_every_rule_and_root(seed):
     plan = random_project(seed, n_epics=4)
     for root in _roots(plan):
         scoped = A.scope_issues(plan, root)
         for letter, unest in UNEST.items():
-            for sub_letter, sub in SUBS.items():
-                got = ev.analyse(scoped, ev.Settings(root=root, unest_rule=unest, sub_rule=sub), plan)
-                want = reference(plan, root, letter, sub_letter)
-                context = (seed, root, letter, sub_letter)
-                assert got.n_atoms == want["n"] and got.n_unestimated == want["unestimated"], context
-                assert _same(got.weight, want["weight"]) and _same(got.progress, want["progress"]), context
-                assert _same(got.progress_done, want["done"]), context
+            got = ev.analyse(scoped, ev.Settings(root=root, unest_rule=unest), plan)
+            want = reference(plan, root, letter)
+            context = (seed, root, letter)
+            assert got.n_atoms == want["n"] and got.n_unestimated == want["unestimated"], context
+            assert _same(got.weight, want["weight"]) and _same(got.progress, want["progress"]), context
+            assert _same(got.progress_done, want["done"]), context

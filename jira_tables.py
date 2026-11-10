@@ -39,7 +39,7 @@ def status_matrix(issues, a: Analysis) -> tuple[list[dict], list[str], str]:
     („Completed“) und den nach Status und Gewicht gewichteten Fortschritt. Die Matrix folgt Teilprojekt und Status-Gewichten der Auswertung. Rückgabe: Zeilen, die Statusspalten und der Name
     der Completed-Spalte."""
     keep, rej = list(a.atoms), list(a.rejected_atoms)
-    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan, subtasks_out=a.settings.sub_rule == C.SUB_SELF)
+    w_rej = A.atom_weights(issues, rej, a.settings.unest_rule, basis=keep, plan=a.plan, subtasks_out=True)
     statuses = sorted({issues[i].status for i in keep}, key=lambda st: (a.credits[st], A.new_rank(st), st.lower()))
     heads = {st: st + (f" ({credit_text(a.credits[st])})" if a.credits[st] > 0 else "") for st in statuses}
     done_statuses = [st for st in statuses if a.credits[st] >= C.COMPLETED_MIN_CREDIT - 1e-9]
@@ -155,18 +155,6 @@ def unestimated_rule_comparison(issues, a: Analysis) -> list[dict]:
         else:
             progress, weight, n_unestimated, _ = headline(issues, replace(a.settings, unest_rule=rule), a.plan, a.ctx, a.plan_ctx)
         rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Tickets ohne Story Points": n_unestimated})
-    return rows
-
-
-def subtask_rule_comparison(issues, a: Analysis) -> list[dict]:
-    """Wirkung der Regeln für Sub-Tasks auf die vorliegenden Daten: je Regel der Gesamtfortschritt, das Gesamtgewicht und die Zahl der zählenden Tickets. Alles andere wie in der aktuellen Auswertung."""
-    rows = []
-    for rule in C.SUB_RULES:
-        if rule == a.settings.sub_rule:
-            progress, weight, n_atoms = a.progress, a.weight, a.n_atoms
-        else:
-            progress, weight, _, n_atoms = headline(issues, replace(a.settings, sub_rule=rule), a.plan, a.ctx, a.plan_ctx)
-        rows.append({"Regel": rule, "Fortschritt": None if np.isnan(progress) else float(progress), "Gewicht gesamt": float(weight), "Zählende Tickets": n_atoms})
     return rows
 
 
