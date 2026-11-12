@@ -28,7 +28,9 @@ CSV-Export aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma
 | Lösung (optional) | Lösung oder Resolution: ein Wert wie Abgelehnt, Duplikat, Won't do oder Rejected nimmt das Ticket aus der Rechnung, auch bei Status „Done“; unter „Was wurde erkannt?“ steht eine Tabelle der vorkommenden Lösungen und ihrer Wirkung |
 | weitere | Titel, Sprint, Team (alle anderen Spalten, auch Personen, werden nicht gelesen) |
 
-Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten. Der Export enthält weder Statusverlauf noch Lösungsdatum:
+Im Vorgangsexport aus Jira (Komma als Trennzeichen) heißen die Spalten Vorgangstyp, Zusammenfassung, Status, Übergeordneter Schlüssel (nicht die Spalte Übergeordnet, die nur die interne ID enthält), Lösung sowie Benutzerdefinierte Felder (Story Points) und Benutzerdefinierte Felder (Prozent erledigt (manuell)); auch sie werden erkannt. 
+
+Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten (auch die Beschreibung). Der Export enthält weder Statusverlauf noch Lösungsdatum:
 Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gelesen werden konnte, meldet die App oben, bevor sie eine Zahl zeigt.
 
 ## Daten aus Jira Plans exportieren

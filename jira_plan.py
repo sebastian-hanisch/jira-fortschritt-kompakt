@@ -1,6 +1,6 @@
 """Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
 
-Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie (als Ticket-Typ), Übergeordnetes Element,
+Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie bzw. Vorgangstyp (als Ticket-Typ), Übergeordnetes Element bzw. Übergeordneter Schlüssel,
 Story Points, Sprint, Team, Lösung und „Prozent erledigt (manuell)“. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
 Schätzungsspalten) werden bewusst nicht gelesen: Atlassian nennt keine Formel, und die Werte beziehen auch im Plan ausgeblendete Vorgänge und alle Hierarchieebenen ein. Spalten mit „(hochrechnen)“ sind Summen über die
 Kinder und werden übergangen, ebenso alle weiteren Spalten des Exports."""
@@ -40,7 +40,7 @@ _ALIASES = {
     "type": ("hierarchie", "issue type", "vorgangstyp", "type", "typ"),
     "status": ("vorgangsstatus", "status"),
     "points": ("story points", "story point", "storypoints", "story point estimate", "storypunkte", "story-punkte", "story-points", "custom field (story points)"),
-    "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang"),
+    "parent": ("übergeordnetes element", "parent", "parent key", "übergeordneter vorgang", "übergeordneter schlüssel"),
     "sprint": ("sprint",),
     "team": ("team",),
     "manual": ("prozent erledigt (manuell)",),
@@ -101,9 +101,19 @@ def _decode(data: bytes) -> str:
     return data.decode("latin-1")
 
 
+_CUSTOM_FIELD = re.compile(r"^(?:benutzerdefinierte felder|custom fields?)\s*\((.*)\)$")
+
+
+def _field_name(header: str) -> str:
+    """Name einer Spalte für den Vergleich: klein geschrieben; bei „Benutzerdefinierte Felder (Story Points)“ (Vorgangsexport) bzw. „Custom field (Story Points)“ der Name in der Klammer."""
+    name = _norm(header)
+    found = _CUSTOM_FIELD.match(name)
+    return found.group(1).strip() if found else name
+
+
 def _columns(header: list[str]) -> dict[str, list[int]]:
     """Spaltenindizes je Feld; mehrfach vorkommende Spalten (Sprint) liefern alle Indizes."""
-    normed = [_norm(h) for h in header]
+    normed = [_field_name(h) for h in header]
     found: dict[str, list[int]] = {}
     for fieldname, names in _ALIASES.items():
         idx = [n for n, h in enumerate(normed) if h in names]

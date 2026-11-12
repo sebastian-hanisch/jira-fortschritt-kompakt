@@ -6,7 +6,7 @@ import jira_core as A
 UPLOAD_NOTICE = f"""
 **Bitte vor dem Hochladen lesen.** Die Datei geht zur Berechnung an den Server, auf dem diese App läuft (bei einer Veröffentlichung z. B. Streamlit Community Cloud, USA), und liegt dort nur für Ihre
 Sitzung im Arbeitsspeicher. Das Werkzeug speichert sie nicht, legt sie nicht zwischen und gibt sie nicht weiter; den Server betreibt aber, wer die App bereitstellt. Laden Sie keine vertraulichen Daten
-ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element
+ohne Freigabe hoch. Höchstens {C.MAX_UPLOAD_MB} MB und {C.MAX_IMPORT_ISSUES} Tickets je Datei. Gebraucht werden nur diese Spalten: Vorgangsschlüssel, Vorgangsstatus (im Vorgangsexport: Status), Hierarchie (Vorgangstyp), Übergeordnetes Element (Übergeordneter Schlüssel)
 und Story Points (optional Titel, Sprint, Team, Lösung und Prozent erledigt (manuell)). Alle anderen Spalten, besonders Personen, Beschreibungen und Kommentare, gehören vor dem Hochladen gelöscht; das Werkzeug liest sie nicht, sie erreichen
 den Server aber mit der Datei. Für sensible Projekte das Werkzeug lokal ausführen: Es ist Open Source (MIT-Lizenz), Code und Anleitung stehen im [Repository]({C.REPO_URL}).
 """
@@ -36,7 +36,7 @@ Die deutsche Oberfläche und neuere Versionen können anders heißen; an einer e
 
 DATA_SOURCE_MARKDOWN = """
 **Plan-Export.** Wie man ihn erzeugt, steht oben unter „So kommt die Datei zustande“. Erkannt werden deutsche und englische Spaltenköpfe: *Vorgangsschlüssel*, *Vorgangsstatus*, *Titel*, *Hierarchie* (als Ticket-Typ; Epic,
-Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Team*, *Lösung* (*Resolution*) und *Prozent erledigt (manuell)*. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
+Initiative und Thema fassen Tickets zusammen), *Übergeordnetes Element* (als Schlüssel, mit dem Schlüssel am Anfang oder als eindeutiger Titel), *Story Points*, *Sprint*, *Team*, *Lösung* (*Resolution*) und *Prozent erledigt (manuell)*. Im Vorgangsexport aus Jira (Komma als Trennzeichen) heißen die Spalten *Vorgangstyp*, *Zusammenfassung*, *Status*, *Übergeordneter Schlüssel* (nicht die Spalte *Übergeordnet*, die nur die interne ID enthält), *Lösung* sowie *Benutzerdefinierte Felder (Story Points)* und *Benutzerdefinierte Felder (Prozent erledigt (manuell))*; auch sie werden erkannt. Pflicht sind nur Schlüssel und Status; was fehlt, wird oben gemeldet. Spalten mit *(hochrechnen)* sind Summen über die Kinder und werden
 übergangen, ebenso die Schätzung in Tagen und alle weiteren Spalten, darunter Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten: Sie werden nicht einmal eingelesen. Der Export enthält weder eine Statuskategorie noch ein Lösungsdatum: Was erledigt ist, folgt dem Statusnamen oder, wenn eines eingetragen ist, dem Wert aus *Prozent erledigt (manuell)*.
 
 **Datenschutz.** Die Datei geht zur Berechnung an den Server der App und wird nur für die Sitzung im Arbeitsspeicher gehalten, nie gespeichert und nie zwischengespeichert; die Plattform kann sie bis zum

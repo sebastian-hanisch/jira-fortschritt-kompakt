@@ -284,6 +284,30 @@ def test_the_resolutions_in_the_data_are_listed_with_their_effect():
     assert J.resolution_rows((J.Issue(key="A"),)) == []
 
 
+ISSUE_EXPORT_HEADER = ("Vorgangstyp,Vorgangsschlüssel,Vorgangs-ID,Zusammenfassung,Beschreibung,Priorität,Lösung,Benutzerdefinierte Felder (Prozent erledigt (manuell)),"
+                       "Benutzerdefinierte Felder (Story Points),Status,Übergeordnet,Übergeordneter Schlüssel,Parent summary")
+
+
+def test_the_issue_export_with_comma_separator_and_custom_field_columns_is_read():
+    """Der Vorgangsexport aus Jira: Komma als Trennzeichen, Beschreibung mit Komma und Zeilenumbruch, die Felder heißen „Benutzerdefinierte Felder (…)“, die Eltern stehen als Schlüssel und als ID."""
+    rows = [ISSUE_EXPORT_HEADER,
+            'Epic,E-1,1001,Epic Eins,"Beschreibung, mit Komma\nund Zeilenumbruch",Hoch,,,,In Arbeit,,,',
+            "Story,P-2,1002,Story A,,Mittel,,50,5,In Arbeit,1001,E-1,Epic Eins",
+            "Story,P-3,1003,Story B,,Niedrig,Abgelehnt,,3,Done,1001,E-1,Epic Eins",
+            "Story,P-4,1004,Story C,,Niedrig,Fertig,,2.5,Done,1001,E-1,Epic Eins"]
+    issues, report = J.read_plan(("\n".join(rows) + "\n").encode("utf-8"))
+    by ={i.key: i for i in issues}
+    assert list(by) == ["E-1", "P-2", "P-3", "P-4"] and by["E-1"].type == "Epic" and by["E-1"].summary == "Epic Eins" and by["E-1"].status == "In Arbeit"
+    assert [by[k].parent for k in ("P-2", "P-3", "P-4")] == ["E-1"] * 3                                    # der Schlüssel, nicht die ID der Spalte „Übergeordnet“
+    assert [by[k].points for k in ("P-2", "P-3", "P-4")] == [5.0, 3.0, 2.5] and by["P-2"].manual_pct == 50.0 and by["P-3"].resolution == "Abgelehnt"
+    found = {row["Feld"]: row["Gefunden in"] for row in report.columns}
+    assert found["Story Points"] == "Benutzerdefinierte Felder (Story Points)" and found["Prozent erledigt (manuell)"] == "Benutzerdefinierte Felder (Prozent erledigt (manuell))"
+    assert found["Lösung"] == "Lösung" and found["Übergeordnetes Ticket"] == "Übergeordneter Schlüssel" and found["Ticket-Typ"] == "Vorgangstyp" and found["Titel"] == "Zusammenfassung"
+    import jira_evaluation as ev
+    a = ev.analyse(issues)
+    assert a.n_atoms == 2 and a.n_excluded == 1 and a.progress == pytest.approx((5 * 0.5 + 2.5) / 7.5)          # P-3 ist abgelehnt; P-2 zählt zu 50 % von Hand, P-4 ist Done
+
+
 # ---------------------------------------------------------------- Kodierung, Trennzeichen und CSV-Fehler
 
 CSV_TEXT = "Vorgangsschlüssel;Vorgangsstatus;Titel;Story Points\nA-1;Done;Über 100 %;3\n"
