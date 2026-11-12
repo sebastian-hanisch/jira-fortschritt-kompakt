@@ -6,17 +6,17 @@ import jira_core as A
 from jira_core import Issue
 
 CLASSES = {
-    "done": ["Done", "Closed", "Resolved", "Fertig", "Erledigt", "Abgeschlossen", "Geschlossen", "Released", "Deployed", "Live", "Ready4Prod", "In Production", "Produktion", "Completed",
+    "done": ["Done", "Closed - Done", "Resolved", "Fertig", "Erledigt", "Abgeschlossen", "Released", "Deployed", "Live", "Ready4Prod", "In Production", "Produktion", "Completed",
              "Finished", "Fertiggestellt", "Done (QA ok)", "In Prod"],
     "merged": ["Merged", "Gemerged", "Merged to main", "Zusammengeführt", "MERGED"],
     "test": ["In Test", "Testing", "Ready4Test", "Ready for Test", "QA", "UAT", "Abnahme", "In Abnahme", "Verification", "Verifiziert", "Getestet", "Test", "In QA", "Test Review",
              "Abnahmeprüfung"],
     "rejected": ["Rejected", "Zurückgewiesen", "Won't do", "Wont do", "Won’t Do", "Will not do", "Abgelehnt", "Cancelled", "Canceled", "Abgebrochen", "Duplicate", "Duplikat",
-                 "Obsolete", "Invalid", "Declined", "Abandoned", "Verworfen", "Won't fix", "ZURÜCKGEWIESEN"],
+                 "Obsolete", "Invalid", "Declined", "Abandoned", "Verworfen", "Won't fix", "ZURÜCKGEWIESEN", "Closed", "CLOSED", " closed ", "Geschlossen", "GESCHLOSSEN"],
     "review": ["In Review", "Review", "Code Review", "Ready for Review", "Reviewed", "Product Review", "Wird überprüft", "Überprüfung", "Zu überprüfen", "Geprüft", "In Prüfung", "Prüfung",
                "Begutachtung", "IN REVIEW"],
     "other": ["To Do", "Backlog", "In Progress", "In Arbeit", "On Hold", "Specification", "Open", "Product Backlog", "Not done", "Nicht fertig", "Unreviewed", "Nicht überprüft", "Ungeprüft",
-              "Untested", "Ungetestet", "Incomplete", "Unresolved", "Blocked", "Ready for Development", "Estimate", "Reopened", "Olive", "Nicht abgeschlossen", "Undone", ""],
+              "Untested", "Ungetestet", "Incomplete", "Unresolved", "Blocked", "Ready for Development", "Estimate", "Reopened", "Olive", "Nicht abgeschlossen", "Undone", "Not closed", "Nicht geschlossen", ""],
 }
 
 

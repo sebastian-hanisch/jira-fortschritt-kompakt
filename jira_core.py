@@ -53,6 +53,8 @@ def name_key(name: str) -> str:
 _REJECTED_KEYS = (
     "rejected", "declined", "zuruckgewiesen", "zueruckgewiesen", "zurueckgewiesen", "abgelehnt", "wontdo", "willnotdo", "wontfix", "wontimplement", "nichtumgesetzt",
     "cancel", "abgebrochen", "verworfen", "storniert", "abandon", "duplicate", "duplikat", "obsolete", "obsolet", "invalid", "ungultig")
+# Namen, die erst als ganzer Name zurückweisen: „Closed“ und „Geschlossen“ heißen hier „ohne Umsetzung geschlossen“; „Closed - Done“, „Not closed“ oder „Abgeschlossen“ sind etwas anderes (der Vergleich nutzt `name_key`)
+_REJECTED_EXACT = ("closed", "geschlossen")
 # Verneinungen vor den Positivwörtern: „Not done“ ist nicht fertig, „Untested“ nicht getestet
 _NEGATED_KEYS = (
     "notdone", "undone", "nichtfertig", "unfertig", "nichterledigt", "unresolved", "notresolved", "unreleased", "notreleased", "notclosed", "nichtgeschlossen",
@@ -69,22 +71,22 @@ _REVIEW_KEYS = ("review", "uberpruf", "gepruft", "prufung", "prufen", "begutacht
 
 # Beispielnamen je Klasse für die Beschreibung in der App; tests/test_status.py prüft, dass jeder Name wirklich in seine Klasse fällt
 STATUS_EXAMPLES = {
-    "done": ("Done", "Closed", "Resolved", "Fertig", "Erledigt", "Abgeschlossen", "Released", "Deployed", "Live", "Ready4Prod", "In Production"),
+    "done": ("Done", "Resolved", "Fertig", "Erledigt", "Abgeschlossen", "Released", "Deployed", "Live", "Ready4Prod", "In Production"),
     "test": ("In Test", "Testing", "Ready4Test", "QA", "UAT", "Abnahme", "Verification", "Getestet"),
     "merged": ("Merged", "Gemerged", "Zusammengeführt"),
     "review": ("In Review", "Code Review", "Wird überprüft", "Geprüft", "In Prüfung"),
     "other": ("Backlog", "To Do", "Specification", "Estimate", "In Arbeit", "In Progress", "On Hold", "Not done", "Nicht fertig", "Untested"),
-    "rejected": ("Rejected", "Zurückgewiesen", "Won't do", "Abgelehnt", "Cancelled", "Duplicate", "Obsolete"),
+    "rejected": ("Rejected", "Zurückgewiesen", "Won't do", "Abgelehnt", "Closed", "Geschlossen", "Cancelled", "Duplicate", "Obsolete"),
 }
 
 
 @lru_cache(maxsize=2048)       # siehe name_key
 def status_class(name: str) -> str:
-    """Klasse eines Status nach seinem Namen (deutsch und englisch): rejected, done, merged, test, review oder other. Reihenfolge: zurückgewiesen; Verneinungen
-    („Not done“) sind other; dann fertig-klingende Namen („Done“, „Closed“, „Erledigt“, „Released“, „…Prod“), merged, Test („In Test“, „Testing“, „QA“, „Abnahme“) und
+    """Klasse eines Status nach seinem Namen (deutsch und englisch; „Closed“ und „Geschlossen“ als ganzer Name gelten als rejected): rejected, done, merged, test, review oder other. Reihenfolge: zurückgewiesen; Verneinungen
+    („Not done“) sind other; dann fertig-klingende Namen („Done“, „Erledigt“, „Released“, „…Prod“), merged, Test („In Test“, „Testing“, „QA“, „Abnahme“) und
     Review („In Review“, „Wird überprüft“); alles Übrige ist other."""
     key = name_key(name)
-    if any(w in key for w in _REJECTED_KEYS):
+    if key in _REJECTED_EXACT or any(w in key for w in _REJECTED_KEYS):
         return "rejected"
     if any(w in key for w in _NEGATED_KEYS):
         return "other"

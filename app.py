@@ -246,8 +246,8 @@ def render_status_weights(issues):
     shown = tuple(A.status_credits(statuses, overrides).items())
     version = st.session_state.get("weights_version", 0)
     with st.expander(f"⚖️ Gewichte der Status ({len(statuses)}) – aus dem Namen abgeleitet, änderbar"):
-        st.caption("Anteil der Arbeit, der bei diesem Status als getan gilt: Namen, die nach fertig klingen (Done, Closed, Fertig, Ready4Prod …), zählen 100 %, nach Test 90 %, nach Merged oder Review 80 %, "
-                   "alles andere 0 %. Die Regeln und Beispielnamen stehen oben unter „Welche Status zählen wie viel?“. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
+        st.caption("Anteil der Arbeit, der bei diesem Status als getan gilt: Namen, die nach fertig klingen (Done, Fertig, Ready4Prod …), zählen 100 %, nach Test 90 %, nach Merged oder Review 80 %, "
+                   "alles andere 0 %. Die Regeln und Beispielnamen stehen oben unter „Welche Status zählen wie viel?“. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do, Closed, Geschlossen …) zählen nicht mit, egal was hier steht.")
         rejected_names = [s for s in statuses if A.is_rejected_status(s)]
         if rejected_names:
             st.caption(f"Als abgelehnt erkannt und deshalb nicht mitgezählt: {', '.join(rejected_names)}.")

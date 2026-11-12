@@ -69,9 +69,9 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 * **Zählende Tickets:** die Blätter des Ticket-Baums, also Tickets ohne Kinder (Stories, Tasks und Bugs ohne Sub-Tasks), dazu eine Story mit Sub-Tasks: Ihre Sub-Tasks bleiben außen vor. Story Points und Status kommen allein von ihnen, alles darüber wird nur
   aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen) gehen nicht ein. Zwei Ausnahmen: Ist ein Epic oder eine andere Zusammenfassung abgelehnt, fallen alle Tickets darunter heraus; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
 * **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
-* **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
+* **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Steht in der Spalte „Prozent erledigt (manuell)“ ein Wert, gilt er statt dieser Gutschrift.
-* **Abgelehnt oder zurückgewiesen** (Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate, Duplikat …, auch bei Status „Done“): Das Ticket zählt weder im Gewicht noch in der Anzahl; bei einem Epic oder einer anderen Zusammenfassung gilt das für alles darunter.
+* **Abgelehnt oder zurückgewiesen** (Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Closed, Geschlossen, Cancelled, Duplicate, Duplikat …, auch bei Status „Done“): Das Ticket zählt weder im Gewicht noch in der Anzahl; bei einem Epic oder einer anderen Zusammenfassung gilt das für alles darunter.
 * **Fortschritt** einer Gruppe: Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte.
 
 Die Regeln stehen auch in der App (Ausklapper „Welche Status zählen wie viel?“). Reihenfolge der Prüfung, der erste Treffer gilt: zurückgewiesen (zählt nicht), Verneinung (0 %), fertig (100 %), Merged (80 %),

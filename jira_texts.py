@@ -70,13 +70,13 @@ Themen) gehen nicht ein; ein Epic auf „Done“ mit offenen Kindern bringt also
 
 Wo es Ausnahmen gibt:
 
-- **Abgelehnt oder zurückgewiesen.** Ein Ticket, dessen Status oder Lösung nach „abgelehnt“ klingt (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate, Duplikat; auch ein Ticket im Status „Done“ mit der Lösung „Abgelehnt“), zählt nicht: Sein Gewicht fehlt im Fortschritt, und es wird nicht mitgezählt. Ist ein Epic oder eine andere Zusammenfassung abgelehnt, fallen alle Tickets darunter mit heraus. Die App nennt unter „Ergebnis“, wie viele Tickets so ausgeschlossen sind und warum.
+- **Abgelehnt oder zurückgewiesen.** Ein Ticket, dessen Status oder Lösung nach „abgelehnt“ klingt (Rejected, Zurückgewiesen, Won't do, Abgelehnt, Closed, Geschlossen, Cancelled, Duplicate, Duplikat; auch ein Ticket im Status „Done“ mit der Lösung „Abgelehnt“), zählt nicht: Sein Gewicht fehlt im Fortschritt, und es wird nicht mitgezählt. Ist ein Epic oder eine andere Zusammenfassung abgelehnt, fallen alle Tickets darunter mit heraus. Die App nennt unter „Ergebnis“, wie viele Tickets so ausgeschlossen sind und warum.
 - **Sub-Tasks einer Story.** Die Story zählt selbst mit ihren Story Points und ihrem Status, und ihre Sub-Tasks bleiben außen vor.
 - **Alle Kinder zurückgewiesen.** Eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt und zählt mit ihren eigenen Story Points und ihrem Status.
 
 **Gewicht** eines Tickets sind seine Story Points. Fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets (A bis F: je Stufe im Teilbaum oder im ganzen Plan, je Ticket-Typ, je Geschwistergruppe, je Team oder eine Rückfallkette; gibt es in der Gruppe kein geschätztes Ticket, gilt 1), 1 Story Point (H) oder nicht zählen, Gewicht 0 (I). Stufe heißt Tiefe im Ticket-Baum ab der Wurzel. Die Varianten mit Vor- und Nachteilen stehen im Ausklapper „Berechnungsmöglichkeiten“.
 
-**Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Closed, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
+**Gutschrift** eines Tickets ist der Anteil, den sein Status als getan zählt, nach dem Namen: fertig (Done, Resolved, Fertig, Erledigt, Released, Deployed, Live, …Prod) 100 %, Test (In Test,
 Testing, QA, UAT, Abnahme, Verification) 90 %, Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Das ist eine Lesart des Namens, keine Messung;
 Status, die anders heißen, lassen sich oben in der Tabelle der Gewichte ändern. Steht bei einem zählenden Ticket ein Wert (0 bis 100, mit oder ohne %-Zeichen) in der Spalte *Prozent erledigt (manuell)*, gilt dieser statt der Gutschrift des Status; ohne Wert bleibt es beim Status.
 
@@ -101,10 +101,10 @@ def status_rules_markdown() -> str:
 („Test Review“ zählt also als Test, nicht als Review):
 
 1. **Zurückgewiesen → zählt nicht.** Der Name des Status (oder, wenn die Datei eine Spalte „Lösung“ oder „Resolution“ hat, der Wert dieser Lösung, auch bei Status „Done“) enthält Rejected, Declined, Zurückgewiesen, Abgelehnt, Won't do, Will not do, Wontfix, Cancel…, Abgebrochen, Verworfen, Storniert, Abandon…, Duplicate, Duplikat,
-   Obsolete, Invalid, Ungültig, Nicht umgesetzt oder Won't implement. Das Ticket und alles unter ihm fällt aus Gewicht und Anzahl.
+   Obsolete, Invalid, Ungültig, Nicht umgesetzt oder Won't implement, oder der ganze Name ist „Closed“ oder „Geschlossen“ („Closed - Done“, „Not closed“ und „Abgeschlossen“ gehören nicht dazu). Das Ticket und alles unter ihm fällt aus Gewicht und Anzahl.
 2. **Verneinung → 0 %.** Not done, Nicht fertig, Unfertig, Nicht erledigt, Unresolved, Unreleased, Not closed, Nicht abgeschlossen, Incomplete, Unvollständig, Unfinished, Not merged, Untested, Ungetestet,
    Unreviewed, Ungeprüft, Nicht überprüft, Not reviewed, Not tested, Not resolved, Not finished, Unmerged, Nicht geschlossen, Unabgeschlossen u. ä.
-3. **Fertig → {pct_of['done']}.** Der Name enthält Done, Closed, Resolved, Fertig, Erledigt, Abgeschlossen, Geschlossen, Released, Deployed, Delivered, Ausgeliefert, Complete, Finished, Production, Produktion oder
+3. **Fertig → {pct_of['done']}.** Der Name enthält Done, Resolved, Fertig, Erledigt, Abgeschlossen, Released, Deployed, Delivered, Ausgeliefert, Complete, Finished, Production, Produktion oder
    Produktiv, endet auf „Prod“ (Ready4Prod) oder enthält das Wort „Live“.
 4. **Merged → {pct_of['merged']}.** Merged, Gemerged, Zusammengeführt.
 5. **Test → {pct_of['test']}.** Der Name enthält Test (In Test, Testing, Ready4Test), Abnahme, Acceptance, Verif… oder Validat…, oder ist das Wort QA oder UAT.
