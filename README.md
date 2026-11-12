@@ -1,6 +1,6 @@
 # Jira-Fortschritt kompakt
 
-Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur den CSV-Export aus Jira Plans**, rechnet den Fortschritt eines Plans oder
+Schlanke Fassung eines ausführlicheren Auswertungswerkzeugs für den täglichen Gebrauch: Sie liest **nur einen CSV-Export aus Jira** (eine JQL-Suche oder Jira Plans), rechnet den Fortschritt eines Plans oder
 Teilbaums nach **Status und Story Points** gewichtet und zeigt ihn als Kennzahlen, Balken, Kachelansicht, Teilprojektbaum (zwei Ebenen unter der Wurzel, bei vielen Tickets nur die schwersten, der Rest in einem Eintrag „Rest“) und die Status-Matrix, die sich direkt in Jira oder Confluence einfügen lässt.
 Es gibt keine Beispieldaten und nur wenige Rechenoptionen: Die Annahmen stehen fest und sind unten beschrieben.
 
@@ -15,7 +15,7 @@ Tests: `pip install -r requirements-dev.txt`, dann `python -m pytest tests`.
 
 ## Eingabe
 
-CSV-Export aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma oder Tab als Trennzeichen; UTF-8, Windows-1252 oder UTF-16); wie man ihn erzeugt, steht im nächsten Abschnitt. Die Spalten werden an ihren Köpfen erkannt:
+CSV-Export aus Jira, aus einer JQL-Suche oder aus Jira Plans (deutsche oder englische Oberfläche; Semikolon, Komma oder Tab als Trennzeichen; UTF-8, Windows-1252 oder UTF-16); wie man ihn erzeugt, steht im nächsten Abschnitt. Die Spalten werden an ihren Köpfen erkannt:
 
 | Feld | Spalte (deutsch) |
 |---|---|
@@ -33,9 +33,24 @@ Im Vorgangsexport aus Jira (Komma als Trennzeichen) heißen die Spalten Vorgangs
 Spalten mit „(hochrechnen)“ sind Summen über die Kinder und werden übergangen, ebenso alle anderen Spalten (auch die Beschreibung). Der Export enthält weder Statusverlauf noch Lösungsdatum:
 Es gibt deshalb keinen Verlauf über die Zeit und keine Prognose. Was nicht gelesen werden konnte, meldet die App oben, bevor sie eine Zahl zeigt.
 
-## Daten aus Jira Plans exportieren
+## Daten aus Jira exportieren
 
-Die App zeigt diese Anleitung auch vor dem Hochladen. Menünamen nach der Dokumentation von Atlassian (englische Oberfläche); die deutsche Oberfläche und neuere Versionen können anders heißen, an einer eigenen
+Die App zeigt diese Anleitung auch vor dem Hochladen.
+
+### Mit einer JQL-Suche
+
+1. **Suche einschränken.** In Jira unter Vorgänge die erweiterte Suche (JQL) öffnen und den auszuwertenden Teil auswählen, z. B. alle Vorgänge eines Projekts oder eines Epics. Die übergeordneten Tickets (Epics, Initiativen) müssen in der Trefferliste
+   stehen, wenn sie als Wurzel wählbar sein sollen; ein Ticket, dessen Eltern fehlen, steht als eigene Wurzel da (die App meldet es).
+2. **Spalten wählen.** Mindestens Vorgangsschlüssel und Status, außerdem Story Points (Gewicht), Vorgangstyp und Übergeordneter Schlüssel (Aufbau des Baums) und, wenn gewünscht, Zusammenfassung, Lösung, Sprint und Prozent erledigt (manuell). Story Points und
+   Prozent erledigt (manuell) heißen im Export „Benutzerdefinierte Felder (…)“. Die Spalte „Übergeordnet“ enthält nur die interne ID und wird nicht gelesen.
+3. **Exportieren:** Exportieren → CSV, die Datei in der App hochladen. Beschreibung, Kommentare und Personen besser nicht exportieren: Sie erreichen sonst den Server, auch wenn das Werkzeug sie nicht liest.
+4. **Prüfen:** Unter „Was wurde erkannt?“ zeigt die App, welche Spalte wofür gelesen wurde.
+
+Die Menünamen können je Jira-Version und Sprache abweichen; geprüft ist das Einlesen der Spalten, nicht die Menüführung in Jira.
+
+### Aus Jira Plans
+
+Menünamen nach der Dokumentation von Atlassian (englische Oberfläche); die deutsche Oberfläche und neuere Versionen können anders heißen, an einer eigenen
 Instanz geprüft ist das nicht.
 
 1. **Story Points als Schätzung des Plans einstellen.** Neben dem Namen des Plans **•••** (More actions) → **Plan settings** → **Estimation and scheduling** → **Story Points**; falls nötig, das Schätzfeld dem Plan
@@ -52,11 +67,11 @@ Quellen: [Export](https://support.atlassian.com/jira-software-cloud/docs/export-
 ## Was zählt
 
 * **Zählende Tickets:** die Blätter des Ticket-Baums, also Tickets ohne Kinder (Stories, Tasks und Bugs ohne Sub-Tasks), dazu eine Story mit Sub-Tasks: Ihre Sub-Tasks bleiben außen vor. Story Points und Status kommen allein von ihnen, alles darüber wird nur
-  aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen) gehen nicht ein. Ausnahmen: Ein zurückgewiesenes Zwischenticket nimmt alle Blätter darunter mit; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
+  aufsummiert: Story Points und Status der Zwischentickets (Epics, Initiativen, Themen) gehen nicht ein. Zwei Ausnahmen: Ist ein Epic oder eine andere Zusammenfassung abgelehnt, fallen alle Tickets darunter heraus; eine Story, deren Sub-Tasks alle zurückgewiesen sind, ist selbst ein Blatt.
 * **Gewicht:** die Story Points des Tickets; fehlen sie, entscheidet die Auswahl „Tickets ohne Story Points“: ein Median geschätzter Tickets, 1 Story Point oder nicht zählen (die Varianten stehen unten).
 * **Gutschrift nach Statusname** (deutsch und englisch): fertig (Done, Closed, Fertig, Released, Ready4Prod …) 100 %, Test (In Test, QA, Abnahme, Ready4Test …) 90 %,
   Merged sowie Review und Überprüfung 80 %, alles andere 0 %. Verneinungen („Not done“, „Untested“) zählen 0 %. Steht in der Spalte „Prozent erledigt (manuell)“ ein Wert, gilt er statt dieser Gutschrift.
-* **Zurückgewiesen** (Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate, Duplikat …, auch bei Status „Done“): das Ticket und alles darunter zählen nicht, weder im Gewicht noch in der Anzahl.
+* **Abgelehnt oder zurückgewiesen** (Status oder Lösung wie Rejected, Zurückgewiesen, Won't do, Abgelehnt, Cancelled, Duplicate, Duplikat …, auch bei Status „Done“): Das Ticket zählt weder im Gewicht noch in der Anzahl; bei einem Epic oder einer anderen Zusammenfassung gilt das für alles darunter.
 * **Fortschritt** einer Gruppe: Summe aus Gewicht mal Gutschrift, geteilt durch die Summe der Gewichte.
 
 Die Regeln stehen auch in der App (Ausklapper „Welche Status zählen wie viel?“). Reihenfolge der Prüfung, der erste Treffer gilt: zurückgewiesen (zählt nicht), Verneinung (0 %), fertig (100 %), Merged (80 %),
@@ -113,16 +128,16 @@ Eingebaut sind die Varianten A bis F, H und I (Auswahl „Tickets ohne Story Poi
 
 - **Die Gutschrift nach Statusname stimmt.** Fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %: Das ist eine Lesart des Namens und eine Verabredung, keine Messung. Angefangene Arbeit („In Arbeit“) zählt 0 %, der Fortschritt springt also erst mit dem Statuswechsel; für laufende Arbeit ist die Zahl eher vorsichtig.
 - **Story Points sind vergleichbar und additiv.** Ein Ticket mit 4 Story Points zählt doppelt so viel wie eines mit 2, über alle Teams und Epics hinweg. Story Points sind aber teamintern kalibriert; ein Gesamtwert über mehrere Teams mischt Maßstäbe.
-- **Die Blätter bilden die Arbeit vollständig ab.** Was nicht als Blatt im Export steht (nicht angelegte oder aus dem Plan herausgefilterte Tickets), fehlt im Fortschritt. Die Story Points der Zwischentickets gelten als nicht maßgeblich, auch wenn ein Epic oder eine Story eine eigene Schätzung hat, die von der Summe der Blätter abweicht; die Tabelle prüft das nicht.
+- **Die Blätter bilden die Arbeit vollständig ab.** Was nicht als Blatt im Export steht (nicht angelegte oder herausgefilterte Tickets), fehlt im Fortschritt. Die Story Points der Zwischentickets gelten als nicht maßgeblich, auch wenn ein Epic oder eine Story eine eigene Schätzung hat, die von der Summe der Blätter abweicht; die Tabelle prüft das nicht.
 - **Ersatzwerte für Tickets ohne Story Points sind Annahmen.** Jede Variante (A bis F, H, I) nimmt etwas anderes an; die Tabelle im Ausklapper „Berechnungsmöglichkeiten“ zeigt, wie weit die Zahl an den geladenen Daten schwankt.
-- **Der Export ist der Plan.** Was die Filter und Spalten der Timeline-Ansicht nicht enthalten, kennt das Werkzeug nicht. Eltern außerhalb der Datei werden verworfen (die App meldet es), das Ticket steht dann als eigene Wurzel da.
+- **Der Export ist die Trefferliste.** Was die JQL-Suche (oder bei einem Export aus Jira Plans die Filter und Spalten der Timeline-Ansicht) nicht enthält, kennt das Werkzeug nicht. Eltern außerhalb der Datei werden verworfen (die App meldet es), das Ticket steht dann als eigene Wurzel da.
 
 ### Grenzen
 
-- **Nur ein Stichtag.** Der Plan-Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
+- **Nur ein Stichtag.** Der Export enthält weder Statusverlauf noch Lösungsdatum: kein Verlauf, kein Tempo, keine Prognose, kein Vergleich mit einem früheren Stand.
 - **Hierarchiestufe heißt Tiefe im Baum, nicht Typ.** Ein Bug ohne Epic liegt auf Stufe 1, Stories unter einem Epic auf Stufe 2; „Median der Stufe“ vergleicht deshalb unter Umständen Ungleiches, und ein Ticket ohne Eltern bekommt nie den Median der Stories unter Epics.
 - **Ein Teilprojekt ist ein eigener Datensatz.** Die Mediane (außer bei B und F), die Stufen und die Auswahl der Status beziehen sich nur auf den Teilbaum; dasselbe Epic kann im Teilprojekt eine andere Zahl haben als in der Gesamtansicht, wenn Tickets ohne Story Points darunter liegen.
-- **Zurückgewiesen wird am Statusnamen und an der Lösung erkannt.** Die Lösung („Resolution“) wird nur gelesen, wenn der Export eine Spalte „Lösung“ oder „Resolution“ enthält; ob der Export aus Jira Plans sie liefert, ist an einer eigenen Jira-Instanz nicht geprüft. Steht ein Status wie „Done“ mit einer Lösung wie „Abgelehnt“ oder „Duplikat“, fehlt die Spalte der Datei und das Ticket zählt als fertig. Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
+- **Zurückgewiesen wird am Statusnamen und an der Lösung erkannt.** Die Lösung („Resolution“) wird nur gelesen, wenn der Export eine Spalte „Lösung“ oder „Resolution“ enthält; der Vorgangsexport enthält sie; ob der Export aus Jira Plans sie liefert, ist an einer eigenen Jira-Instanz nicht geprüft. Steht ein Status wie „Done“ mit einer Lösung wie „Abgelehnt“ oder „Duplikat“, fehlt die Spalte der Datei und das Ticket zählt als fertig. Heißt ein Status anders („Entfällt“, „Nicht weiterverfolgt“), bleibt das Ticket im Gewicht und zählt 0 %. Die Tabelle der Status-Gewichte zeigt jeden Status der Daten; ein Status ohne erkannte Bedeutung (weder fertig, Test, Merged oder Review noch ein bekannter Name für „noch nicht fertig“ wie Backlog, To Do, In Arbeit oder On Hold) zählt 0 %; die App weist unter den Kennzahlen darauf hin.
 - **Obergrenzen.** Höchstens 30 Balken (die gewichtsstärksten), im Teilprojektbaum und in den Kacheln zwei Ebenen unter der Wurzel mit höchstens 60 Einträgen in der ersten und 200 in der zweiten (die schwersten, wobei von jedem Knoten mindestens die drei schwersten Kinder einzeln dastehen, soweit die Grenze reicht; die leichtesten Kinder eines Knotens stehen zusammen in einem Eintrag „Rest“, und wo es wenige sind, auch kleine einzeln; was tiefer liegt, öffnet ein Klick), höchstens 20000 Tickets und 50 MB je Datei.
 - **Sprint heißt der letzte Sprint.** Ein Ticket, das in mehreren Sprints stand, zählt in der Auswertung je Sprint nur im letzten (als „mitgenommen“ ausgewiesen); die Zeit davor ist im Export nicht als Verlauf abgebildet. Die Zahlen je Sprint zeigen den Stand heute, nicht den am Sprintende, und ein Ticket ohne Sprint übernimmt den Sprint seines nächsten übergeordneten Tickets mit Sprint.
 - **Gerundete Anzeige.** Prozent mit einer, Gewichte mit zwei Nachkommastellen; gerechnet wird ungerundet.
@@ -149,7 +164,7 @@ Treemap, Verlauf (Burn-up), Sensitivitätsprüfung, JQL-Hilfe, Zusammenfassung z
 |---|---|
 | `app.py` | Oberfläche (Streamlit): `main()` setzt die Seite aus `render_*`-Schritten zusammen |
 | `jira_texts.py` | Die langen Erklärtexte der App |
-| `jira_plan.py` | Einlesen des Plan-Exports |
+| `jira_plan.py` | Einlesen des CSV-Exports |
 | `jira_core.py` | Statusklassen, Hierarchie, Gewichte, Gruppen, Teilprojektbaum |
 | `jira_evaluation.py` | `analyse`: Kennzahlen aus Auswahl und Gewichten, interne Konsistenzprüfung |
 | `jira_tables.py` | Tabellen (Status-Matrix, Fortschritt je Sprint, Wirkung der Regeln) und Ausgabe als CSV und HTML (CSV, HTML-Tabelle und die Wirkung der Regeln entstehen erst auf Klick) |

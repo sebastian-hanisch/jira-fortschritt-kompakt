@@ -1,4 +1,4 @@
-"""Einlesen des CSV-Exports aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
+"""Einlesen des CSV-Exports aus Jira, aus einer JQL-Suche oder aus Jira Plans (deutsche oder englische Oberfläche; Trennzeichen Semikolon, Komma oder Tab; Kodierung UTF-8, Windows-1252 oder UTF-16). Das Ergebnis ist eine Liste von `Issue`.
 
 Fehlendes wird nicht erraten, sondern im `ImportReport` gemeldet. Gelesen werden Vorgangsschlüssel, Status, Titel, Hierarchie bzw. Vorgangstyp (als Ticket-Typ), Übergeordnetes Element bzw. Übergeordneter Schlüssel,
 Story Points, Sprint, Team, Lösung und „Prozent erledigt (manuell)“. Alle anderen Spalten (besonders Personen, Releases, Bereiche, Prioritäten, Stichwörter und Komponenten) werden nicht gelesen. Jiras eigene Fortschrittsspalten („Fortschritt (%)“ und die zugehörigen
@@ -226,7 +226,7 @@ def _report_notes(cols: dict[str, list[int]], header: list[str], lost_parents: i
 
 
 def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple[Issue, ...], ImportReport]:
-    """Liest den CSV-Export aus Jira Plans (Trennzeichen Semikolon, Komma oder Tab). Pflicht sind Schlüssel und Status; alles andere ist optional."""
+    """Liest den CSV-Export aus Jira (Trennzeichen Semikolon, Komma oder Tab). Pflicht sind Schlüssel und Status; alles andere ist optional."""
     text = _decode(data)
     first, _, rest = text.partition("\n")
     if first.strip().lower().startswith("sep="):          # Excel schreibt manchmal „sep=;“ als erste Zeile: sie nennt das Trennzeichen und ist keine Kopfzeile
@@ -244,7 +244,7 @@ def read_plan(data: bytes, max_issues: int = C.MAX_IMPORT_ISSUES) -> tuple[tuple
         if "field larger than field limit" in str(exc):
             raise PlanImportError("Eine Zelle der Datei ist größer als 128 KB: Das ist wahrscheinlich eine Beschreibung oder ein Kommentar. Bitte solche Spalten vor dem Hochladen löschen "
                                   "(nur Vorgangsschlüssel, Vorgangsstatus, Hierarchie, Übergeordnetes Element und Story Points werden gebraucht).") from exc
-        raise PlanImportError(f"Die Datei lässt sich nicht als CSV lesen ({exc}). Erwartet wird der CSV-Export aus Jira Plans.") from exc
+        raise PlanImportError(f"Die Datei lässt sich nicht als CSV lesen ({exc}). Erwartet wird der CSV-Export aus Jira.") from exc
 
 
 def _read_rows(text: str, delimiter: str, max_issues: int) -> tuple[tuple[Issue, ...], ImportReport]:
@@ -256,13 +256,13 @@ def _read_rows(text: str, delimiter: str, max_issues: int) -> tuple[tuple[Issue,
     cols = _columns(header)
     for needed, label in (("key", "Vorgangsschlüssel"), ("status", "Vorgangsstatus")):
         if needed not in cols:
-            raise PlanImportError(f"Die Spalte „{label}“ fehlt. Gefunden: {', '.join(h for h in header if h) or '(keine Kopfzeile)'}. Erwartet wird der CSV-Export aus Jira Plans.")
+            raise PlanImportError(f"Die Spalte „{label}“ fehlt. Gefunden: {', '.join(h for h in header if h) or '(keine Kopfzeile)'}. Erwartet wird der CSV-Export aus Jira.")
     body = []
     for r in reader:          # zeilenweise und mit Abbruch an der Obergrenze: Eine riesige Datei soll nicht erst ganz im Speicher stehen, bevor sie abgelehnt wird
         if any(c.strip() for c in r):
             body.append(r)
             if len(body) > max_issues:
-                raise PlanImportError(f"Die Datei hat mehr Tickets als die Obergrenze von {max_issues}. Bitte den Plan einschränken (Filter in Jira Plans) und neu exportieren.")
+                raise PlanImportError(f"Die Datei hat mehr Tickets als die Obergrenze von {max_issues}. Bitte die Suche (JQL) oder den Plan einschränken und neu exportieren.")
 
     issues, bad_points, bad_manual = [], 0, 0
     for row in body:

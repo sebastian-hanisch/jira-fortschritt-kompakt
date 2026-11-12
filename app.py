@@ -1,4 +1,4 @@
-"""Jira-Fortschritt kompakt: Export aus Jira Plans einlesen und den nach Status und Story Points gewichteten Fortschritt zeigen.
+"""Jira-Fortschritt kompakt: CSV-Export aus Jira einlesen und den nach Status und Story Points gewichteten Fortschritt zeigen.
 
 Lauffähig mit: streamlit run app.py
 
@@ -6,6 +6,7 @@ Aufbau: Die Seite entsteht in `main()` aus einzelnen `render_*`-Schritten in der
 """
 
 import contextlib
+from collections import Counter
 from functools import partial
 
 import numpy as np
@@ -138,11 +139,11 @@ def render_intro():
     Auswertung hinein) und der Bereich für das Upload-Feld: Es steht gleich unter dem Hinweis, vor den Anleitungen."""
     st.title("📊 Jira-Fortschritt")
     st.caption("Wie weit ist ein Teilbaum eines Plans? Gewichtet mit den Story Points der Tickets und ihrem Status: fertig 100 %, Test 90 %, Merged oder Review 80 %, alles andere 0 %; "
-               "zurückgewiesene Tickets zählen nicht.")
+               "abgelehnte oder zurückgewiesene Tickets zählen nicht.")
     st.caption(f"🔓 Open Source (MIT-Lizenz): Code und Anleitung im [Repository]({C.REPO_URL}). Mit eigenen, vertraulichen Daten besser lokal ausführen: Dann verlassen sie Ihren Rechner nicht.")
     st.warning(texts.UPLOAD_NOTICE)
     upload_box = st.container()
-    with st.expander("📤 Wie exportiere ich die Datei? Export aus Jira Plans, mit Story Points"):
+    with st.expander("📤 Wie exportiere ich die Datei? Export aus Jira (JQL-Suche oder Jira Plans), mit Story Points"):
         st.markdown(texts.EXPORT_GUIDE)
     with st.expander("📖 Welche Status zählen wie viel? Standard nach Namen"):
         st.markdown(texts.status_rules_markdown())
@@ -154,11 +155,11 @@ def render_intro():
 
 def load_file():
     """Upload-Feld, Einlesen und Ablegen in der Sitzung. Endet immer mit `st.stop()` (keine Datei, Fehler) oder `st.rerun()` (Datei geladen)."""
-    upload = st.file_uploader("Export aus Jira Plans (CSV)", type=["csv"], key=f"upload_{st.session_state['upload_version']}",
-                              help="In Jira Plans: Plan öffnen → Export → CSV. Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
+    upload = st.file_uploader("Export aus Jira (CSV)", type=["csv"], key=f"upload_{st.session_state['upload_version']}",
+                              help="In Jira: Vorgänge per JQL suchen → Exportieren → CSV (oder in Jira Plans: Plan öffnen → Export → CSV). Die Spalten werden an ihren Köpfen erkannt (deutsch oder englisch).")
     if upload is None:
-        st.info("Bitte den CSV-Export aus Jira Plans wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Vorgangsstatus“; für die Gewichte „Story Points“, "
-                "für die Hierarchie „Hierarchie“ und „Übergeordnetes Element“. Wie der Export entsteht, steht unten unter „Wie exportiere ich die Datei?“.")
+        st.info("Bitte den CSV-Export aus Jira wählen. Gebraucht werden mindestens „Vorgangsschlüssel“ und „Status“ (im Plans-Export „Vorgangsstatus“); für die Gewichte „Story Points“, "
+                "für die Hierarchie „Vorgangstyp“ und „Übergeordneter Schlüssel“ (im Plans-Export „Hierarchie“ und „Übergeordnetes Element“). Wie der Export entsteht, steht unten unter „Wie exportiere ich die Datei?“.")
         st.stop()
     try:
         issues_all, report = _read(upload.getvalue())
@@ -166,7 +167,7 @@ def load_file():
         st.error(str(exc))
         st.stop()
     except Exception as exc:  # noqa: BLE001 - bewusst breit: nur der Typ, nie die Meldung
-        st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte Format und Spalten prüfen: Erwartet wird der CSV-Export aus Jira Plans.")
+        st.error(f"Die Datei konnte nicht gelesen werden ({type(exc).__name__}). Bitte Format und Spalten prüfen: Erwartet wird der CSV-Export aus Jira.")
         st.stop()
     st.session_state["loaded"] = (upload.name, issues_all, report)
     st.session_state["upload_version"] += 1       # neues Upload-Feld: die Datei steht danach nicht mehr im Formular
@@ -249,12 +250,20 @@ def render_status_weights(issues):
                    "alles andere 0 %. Die Regeln und Beispielnamen stehen oben unter „Welche Status zählen wie viel?“. Heißt ein Status anders, hier ändern. Zurückgewiesene Status (Rejected, Zurückgewiesen, Won't do …) zählen nicht mit, egal was hier steht.")
         rejected_names = [s for s in statuses if A.is_rejected_status(s)]
         if rejected_names:
-            st.caption(f"Zurückgewiesen: {', '.join(rejected_names)}.")
+            st.caption(f"Als abgelehnt erkannt und deshalb nicht mitgezählt: {', '.join(rejected_names)}.")
         if overrides:
             st.button("↩️ Gewichte nach Namen wiederherstellen", on_click=_reset_weights, key="reset_weights")
         st.data_editor([{"Status": s, "Gewicht (%)": round(100 * c, 1)} for s, c in shown], disabled=["Status"], hide_index=True, key=f"weights_{version}",
                        on_change=_on_weight_edit, args=(version, shown, base), column_config={"Gewicht (%)": st.column_config.NumberColumn(min_value=0, max_value=100, step=5, format="%.0f")})
     return overrides
+
+
+def _rejection_label(issue):
+    """Grund, aus dem ein Ticket nicht zählt, für die Meldung unter „Ergebnis“: sein Status, seine Lösung oder ein abgelehntes Ticket darüber."""
+    reason = A.rejected_reason(issue)
+    if not reason:
+        return "unter einem abgelehnten Ticket"
+    return f"Lösung „{md_escape(reason.removeprefix('Lösung: '))}“" if reason.startswith("Lösung: ") else f"Status „{md_escape(reason)}“"
 
 
 def render_headline(a, issues, issues_all, root, root_label, unest_rule):
@@ -266,8 +275,10 @@ def render_headline(a, issues, issues_all, root, root_label, unest_rule):
     if root != C.ROOT_ALL:
         st.info(f"Die Auswertung ist auf **{md_escape(root_label(root).lstrip('↳ '))}** und alles darunter beschränkt: {len(issues)} von {len(issues_all)} Tickets, davon {a.n_atoms} zählende.")
     if a.n_excluded:
-        bad = sorted({A.rejected_reason(issues[i]) for i in a.rejected_atoms} - {""})
-        st.caption(f"{a.n_excluded} zurückgewiesene Tickets" + (f" ({', '.join(md_escape(s) for s in bad)})" if bad else " (unter einem zurückgewiesenen Ticket)") + " zählen nicht: weder im Gewicht noch in der Anzahl.")
+        reasons = Counter(_rejection_label(issues[i]) for i in a.rejected_atoms)
+        shown = "; ".join(f"{label}: {n}" for label, n in reasons.most_common(5)) + (f"; weitere Gründe: {sum(n for _, n in reasons.most_common()[5:])}" if len(reasons) > 5 else "")
+        st.caption(f"{'Ein Ticket zählt' if a.n_excluded == 1 else f'{a.n_excluded} Tickets zählen'} nicht mit, weil {'es abgelehnt oder zurückgewiesen ist' if a.n_excluded == 1 else 'sie abgelehnt oder zurückgewiesen sind'} ({shown}). "
+                   "Sie fehlen im Gewicht und in der Anzahl, auch bei Status „Done“.")
     if a.n_manual:
         st.caption(("Bei einem zählenden Ticket gilt" if a.n_manual == 1 else f"Bei {a.n_manual} zählenden Tickets gilt") + " „Prozent erledigt (manuell)“ statt der Gutschrift des Status.")
     conflicts = manual_conflicts(issues, a)

@@ -119,7 +119,7 @@ def test_privacy_explanation_is_in_the_data_expander():
     at = _open(plan_csv(make_mini()))
     _ok(at)
     explanation = next(m.value for e in at.expander if "Datenquelle und Datenschutz" in e.label for m in e.markdown)
-    for part in ("**Plan-Export.**", "Vorgangsschlüssel", "Story Points", "(hochrechnen)", "**Datenschutz.**", "nie gespeichert und nie zwischengespeichert", "nur der Fehlertyp",
+    for part in ("**Export.**", "Vorgangsschlüssel", "Story Points", "(hochrechnen)", "**Datenschutz.**", "nie gespeichert und nie zwischengespeichert", "nur der Fehlertyp",
                  "nicht im Protokoll der App", "Zugangsdaten", "50 MB und 20000 Tickets", "eigenen Rechner oder im eigenen Netz"):
         assert part in explanation or part.replace("nur der", "nur den") in explanation, part
 
@@ -161,14 +161,14 @@ def test_names_of_people_are_never_read_and_the_titles_stay():
 
 def test_the_upload_field_stands_before_the_collapsed_export_guide_which_names_the_steps():
     at = _open()
-    guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
+    guide = next(e for e in at.expander if "Export aus Jira" in e.label)
     assert not guide.proto.expanded                                              # die Anleitung ist eingeklappt: Das Upload-Feld ist ohne Scrollen zu sehen
     kinds = [type(child).__name__ for child in at.main.children.values()]
     labels = [getattr(child, "label", "") for child in at.main.children.values()]
     assert kinds.index("Block") < labels.index(guide.label) and kinds.index("Warning") < kinds.index("Block")      # Hinweis, dann Upload-Feld, dann die Anleitung
     assert at.get("file_uploader")
     text = " ".join(m.value for m in guide.markdown)
-    for part in ("Plan settings", "Estimation and scheduling", "Story Points", "Scrum-Teams", "Timeline-Ansicht", "Add fields", "Export data (.csv)", "Schätzung (T)",
+    for part in ("JQL", "Benutzerdefinierte Felder", "Übergeordneter Schlüssel", "Alternativ: Export aus Jira Plans", "Plan settings", "Estimation and scheduling", "Story Points", "Scrum-Teams", "Timeline-Ansicht", "Add fields", "Export data (.csv)", "Schätzung (T)",
                  "Plans administrator", "Premium", "geprüft ist das nicht",
                  "support.atlassian.com/jira-software-cloud/docs/export-advanced-roadmaps-plan-data-as-csv"):
         assert part in text, part
@@ -176,7 +176,7 @@ def test_the_upload_field_stands_before_the_collapsed_export_guide_which_names_t
 
 def test_export_guide_is_collapsed_once_a_file_is_loaded():
     at = _open(plan_csv(make_mini()))
-    guide = next(e for e in at.expander if "Export aus Jira Plans" in e.label)
+    guide = next(e for e in at.expander if "Export aus Jira" in e.label)
     assert not guide.proto.expanded
 
 

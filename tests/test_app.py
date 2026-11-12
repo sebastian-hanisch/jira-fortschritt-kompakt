@@ -31,7 +31,7 @@ def _ok(at, *context):
 def test_without_a_file_the_app_asks_for_one_and_stops():
     at = _open()
     _ok(at)
-    assert not at.metric and not at.sidebar.selectbox and any("Plans" in i.value for i in at.info)
+    assert not at.metric and not at.sidebar.selectbox and any("CSV-Export aus Jira" in i.value for i in at.info)
 
 
 def test_the_headline_numbers_of_the_mini_project():
@@ -246,7 +246,7 @@ def test_a_done_ticket_with_a_rejecting_resolution_does_not_count_and_is_named()
     at = _open(data)
     _ok(at)
     assert at.metric[0].value == "50.0 %" and at.metric[2].label == "Offenes Gewicht (SP, gesamt 8.00)"                    # S-2 (6) fällt heraus: 4 von 8
-    assert any("1 zurückgewiesene Tickets" in c.value and "Lösung: Abgelehnt" in c.value for c in at.caption)
+    assert any("Ein Ticket zählt nicht mit, weil es abgelehnt oder zurückgewiesen ist (Lösung „Abgelehnt“: 1)" in c.value and "auch bei Status „Done“" in c.value for c in at.caption)
     table = next(t.value for t in at.dataframe if "Wirkung" in t.value.columns and "Lösung" in t.value.columns)                  # die Übersicht der Lösungen im Erkennungsbericht
     assert dict(zip(table["Lösung"], table["Wirkung"], strict=True)) == {"Fertig": "keine", "Abgelehnt": "zurückgewiesen: zählt nicht"} and table["Tickets"].tolist() == [1, 1]
 
@@ -261,7 +261,7 @@ def test_the_explanation_says_that_only_leaves_count_and_names_the_exceptions():
     at = _open(plan_csv(make_mini()))
     box = next(e for e in at.expander if e.label == "📐 So wird gerechnet")
     text = " ".join(m.value for m in box.markdown)
-    for part in ("Die **Blätter** des Ticket-Baums", "Zwischentickets", "gehen nicht ein", "ein Epic auf „Done“ mit offenen Kindern bringt also nichts", "Zurückgewiesen.", "nimmt alle Blätter darunter mit",
+    for part in ("Die **Blätter** des Ticket-Baums", "Zwischentickets", "gehen nicht ein", "ein Epic auf „Done“ mit offenen Kindern bringt also nichts", "Abgelehnt oder zurückgewiesen.", "fallen alle Tickets darunter mit heraus",
                  "Sub-Tasks einer Story", "Alle Kinder zurückgewiesen."):
         assert part in text, part
 
